@@ -91,9 +91,24 @@ class SettingsManager {
         api_call_delay: 2000
       },
       api: {
+        api_key: process.env.PERPLEXITY_API_KEY || '',
+        api_base_url: 'https://api.perplexity.ai',
         model_name: 'sonar-pro',
-        api_timeout: 60000,
-        max_retries: 3
+        temperature: 0.7,
+        top_p: 0.9,
+        max_tokens: 4000,
+        max_retries: 3,
+        api_timeout_seconds: 60,
+        retry_delay_seconds: 2,
+        rate_limit_requests_per_min: 60
+      },
+      deepseek: {
+        api_key: process.env.DEEPSEEK_API_KEY || '',
+        api_base_url: 'https://api.deepseek.com',
+        model_name: 'deepseek-chat',
+        temperature: 0.7,
+        max_tokens: 4000,
+        timeout_seconds: 60
       }
     };
     

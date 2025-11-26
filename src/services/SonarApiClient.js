@@ -49,7 +49,9 @@ class SonarApiClient {
       modelType: this.modelType,
       model: this.model,
       maxTokens: this.maxTokens,
-      rateLimit: this.rateLimit
+      rateLimit: this.rateLimit,
+      hasApiKey: !!this.apiKey,
+      apiKeyLength: this.apiKey ? this.apiKey.length : 0
     });
   }
 
