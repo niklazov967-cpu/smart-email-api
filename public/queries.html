@@ -500,14 +500,29 @@
             <!-- Next Step Instructions -->
             <div class="next-step" id="nextStepInstructions" style="display: none;">
                 <h3>✅ Запросы сохранены!</h3>
-                <p><strong>Следующий шаг:</strong></p>
-                <ol>
-                    <li>Скопируйте Session ID: <code id="displaySessionId" style="background: #fff; padding: 3px 8px; border-radius: 4px;"></code></li>
-                    <li>Вернитесь на <a href="/" style="color: #f57c00; font-weight: 600;">главную страницу</a></li>
-                    <li>Вставьте Session ID в поле "Session ID"</li>
-                    <li>Нажмите кнопку "🚀 Запустить обработку"</li>
-                    <li>Следите за прогрессом на странице <a href="/progress.html" style="color: #f57c00; font-weight: 600;">Прогресс обработки</a></li>
-                </ol>
+                <p><strong>Что делать дальше?</strong></p>
+                <div style="margin: 15px 0; padding: 15px; background: white; border-radius: 8px;">
+                    <p style="margin-bottom: 10px;"><strong>Session ID:</strong></p>
+                    <code id="displaySessionId" style="background: #f0f0f0; padding: 8px 12px; border-radius: 4px; display: block; font-size: 14px; word-break: break-all;"></code>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button id="startProcessingBtn" class="button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); flex: 1;">
+                        🚀 Запустить обработку сейчас
+                    </button>
+                    <button id="viewProgressBtn" class="button secondary" style="flex: 1;">
+                        📊 Открыть прогресс
+                    </button>
+                </div>
+                
+                <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.7); border-radius: 5px; font-size: 14px;">
+                    <p style="margin-bottom: 5px;">💡 <strong>Совет:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 5px;">
+                        <li>Нажмите "Запустить обработку" для немедленного старта</li>
+                        <li>Или откройте "Прогресс" для мониторинга</li>
+                        <li>Обработка займет 5-10 минут для 10 компаний</li>
+                    </ul>
+                </div>
             </div>
         </div>
 
@@ -874,6 +889,49 @@
             }
         });
 
+        async function startProcessingNow() {
+            if (!currentSessionId) {
+                showMessage('Session ID не найден', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('startProcessingBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Запуск...';
+
+            try {
+                const response = await fetch(`/api/sessions/${currentSessionId}/process`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('✅ Обработка запущена! Перенаправление...', 'success');
+                    setTimeout(() => {
+                        window.location.href = `/progress.html?session=${currentSessionId}`;
+                    }, 1500);
+                } else {
+                    showMessage('Ошибка: ' + data.error, 'error');
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Запустить обработку сейчас';
+                }
+            } catch (error) {
+                showMessage('Ошибка: ' + error.message, 'error');
+                btn.disabled = false;
+                btn.textContent = '🚀 Запустить обработку сейчас';
+            }
+        }
+
+        function openProgressPage() {
+            if (!currentSessionId) {
+                showMessage('Session ID не найден', 'error');
+                return;
+            }
+            window.location.href = `/progress.html?session=${currentSessionId}`;
+        }
+
         async function loadExistingQueries(sessionId) {
             try {
                 showLoading('Загрузка запросов...');
@@ -942,6 +1000,18 @@
                 });
                 console.log('Save button listener attached');
             }
+
+            // Start Processing button (will be shown after save)
+            document.addEventListener('click', async (e) => {
+                if (e.target && e.target.id === 'startProcessingBtn') {
+                    console.log('Start Processing button clicked');
+                    await startProcessingNow();
+                }
+                if (e.target && e.target.id === 'viewProgressBtn') {
+                    console.log('View Progress button clicked');
+                    openProgressPage();
+                }
+            });
 
             console.log('All event listeners attached successfully');
         });

@@ -329,11 +329,36 @@
 
         <!-- Input for Session ID -->
         <div class="card">
+            <h2>🎯 Выбор сессии</h2>
             <div class="input-group">
-                <label>Session ID для мониторинга:</label>
-                <input type="text" id="sessionIdInput" placeholder="Введите UUID сессии">
+                <label>Выберите сессию для мониторинга:</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <select id="sessionIdInput" style="flex: 1; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px;">
+                        <option value="">-- Загрузка сессий... --</option>
+                    </select>
+                    <button class="button secondary" onclick="loadSessions()">🔄 Обновить</button>
+                </div>
+                <div id="sessionInfoCard" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; display: none;">
+                    <p style="margin-bottom: 8px;"><strong>Запрос:</strong> <span id="sessionQuery" style="color: #667eea;"></span></p>
+                    <p style="margin-bottom: 8px;"><strong>Статус:</strong> <span id="sessionStatus"></span></p>
+                    <p style="margin-bottom: 0;"><strong>Создано:</strong> <span id="sessionDate"></span></p>
+                </div>
             </div>
-            <button class="button" onclick="startMonitoring()">🚀 Начать мониторинг</button>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="button" id="startMonitoringBtn">📊 Начать мониторинг</button>
+                <button class="button secondary" id="startProcessingBtn" style="display: none;">🚀 Запустить обработку</button>
+            </div>
+            
+            <!-- Context Help -->
+            <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 8px;">
+                <p style="margin-bottom: 10px;"><strong>💡 Что делать:</strong></p>
+                <ol style="margin-left: 20px; line-height: 1.8;">
+                    <li>Выберите сессию из списка выше</li>
+                    <li>Нажмите "Начать мониторинг" чтобы увидеть прогресс</li>
+                    <li>Если обработка еще не запущена, появится кнопка "Запустить обработку"</li>
+                    <li>Следите за прогрессом в реальном времени ниже</li>
+                </ol>
+            </div>
         </div>
 
         <!-- Overall Progress -->
@@ -407,11 +432,89 @@
         let eventSource = null;
         let startTime = null;
 
+        async function loadSessions() {
+            console.log('Loading sessions...');
+            const select = document.getElementById('sessionIdInput');
+            const sessionInfo = document.getElementById('sessionInfoCard');
+            
+            select.innerHTML = '<option value="">⏳ Загрузка...</option>';
+            sessionInfo.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/sessions?limit=100');
+                const data = await response.json();
+                
+                if (data.success && data.data.length > 0) {
+                    select.innerHTML = '<option value="">-- Выберите сессию --</option>';
+                    
+                    data.data.forEach(session => {
+                        const option = document.createElement('option');
+                        option.value = session.session_id;
+                        
+                        const date = new Date(session.created_at).toLocaleDateString('ru-RU');
+                        const status = session.status === 'pending' ? '⏳' : 
+                                     session.status === 'processing' ? '🔄' :
+                                     session.status === 'completed' ? '✅' : '❌';
+                        
+                        option.textContent = `${status} ${session.search_query} (${date})`;
+                        option.dataset.query = session.search_query;
+                        option.dataset.status = session.status;
+                        option.dataset.date = session.created_at;
+                        
+                        select.appendChild(option);
+                    });
+                    
+                    console.log(`Loaded ${data.data.length} sessions`);
+                } else {
+                    select.innerHTML = '<option value="">Нет доступных сессий</option>';
+                    console.warn('No sessions found');
+                }
+            } catch (error) {
+                console.error('Failed to load sessions:', error);
+                select.innerHTML = '<option value="">Ошибка загрузки</option>';
+            }
+        }
+
+        function updateSessionInfoDisplay() {
+            const select = document.getElementById('sessionIdInput');
+            const sessionInfo = document.getElementById('sessionInfoCard');
+            const selectedOption = select.options[select.selectedIndex];
+            const startProcessingBtn = document.getElementById('startProcessingBtn');
+            
+            if (selectedOption && selectedOption.value) {
+                document.getElementById('sessionQuery').textContent = selectedOption.dataset.query || 'N/A';
+                
+                const statusMap = {
+                    'pending': '⏳ Ожидание',
+                    'processing': '🔄 Обработка',
+                    'completed': '✅ Завершена',
+                    'failed': '❌ Ошибка'
+                };
+                document.getElementById('sessionStatus').textContent = statusMap[selectedOption.dataset.status] || selectedOption.dataset.status;
+                
+                const date = new Date(selectedOption.dataset.date);
+                document.getElementById('sessionDate').textContent = date.toLocaleString('ru-RU');
+                
+                sessionInfo.style.display = 'block';
+                
+                // Show "Start Processing" button if status is pending
+                if (selectedOption.dataset.status === 'pending') {
+                    startProcessingBtn.style.display = 'inline-block';
+                } else {
+                    startProcessingBtn.style.display = 'none';
+                }
+            } else {
+                sessionInfo.style.display = 'none';
+                startProcessingBtn.style.display = 'none';
+            }
+        }
+
         async function startMonitoring() {
-            const sessionId = document.getElementById('sessionIdInput').value.trim();
+            const sessionSelect = document.getElementById('sessionIdInput');
+            const sessionId = sessionSelect.value.trim();
             
             if (!sessionId) {
-                alert('Введите Session ID');
+                alert('Выберите сессию из списка');
                 return;
             }
 
@@ -430,6 +533,47 @@
             
             // Также загрузить валидацию отдельно
             updateValidationStats(sessionId);
+        }
+
+        async function startProcessingFromProgress() {
+            if (!currentSessionId) {
+                const sessionSelect = document.getElementById('sessionIdInput');
+                currentSessionId = sessionSelect.value.trim();
+            }
+
+            if (!currentSessionId) {
+                alert('Выберите сессию из списка');
+                return;
+            }
+
+            const btn = document.getElementById('startProcessingBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Запуск...';
+
+            try {
+                const response = await fetch(`/api/sessions/${currentSessionId}/process`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Обработка запущена! Мониторинг начнется автоматически.');
+                    btn.style.display = 'none';
+                    
+                    // Автоматически начать мониторинг
+                    startMonitoring();
+                } else {
+                    alert('Ошибка: ' + data.error);
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Запустить обработку';
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '🚀 Запустить обработку';
+            }
         }
 
         function setupSSE(sessionId) {
@@ -554,9 +698,32 @@
             const params = new URLSearchParams(window.location.search);
             const sessionId = params.get('session');
             
-            if (sessionId) {
-                document.getElementById('sessionIdInput').value = sessionId;
-                startMonitoring();
+            // Load sessions list
+            loadSessions().then(() => {
+                if (sessionId) {
+                    const select = document.getElementById('sessionIdInput');
+                    select.value = sessionId;
+                    updateSessionInfoDisplay();
+                    startMonitoring();
+                }
+            });
+        });
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            const sessionSelect = document.getElementById('sessionIdInput');
+            if (sessionSelect) {
+                sessionSelect.addEventListener('change', updateSessionInfoDisplay);
+            }
+
+            const startMonitoringBtn = document.getElementById('startMonitoringBtn');
+            if (startMonitoringBtn) {
+                startMonitoringBtn.addEventListener('click', startMonitoring);
+            }
+
+            const startProcessingBtn = document.getElementById('startProcessingBtn');
+            if (startProcessingBtn) {
+                startProcessingBtn.addEventListener('click', startProcessingFromProgress);
             }
         });
     </script>

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Smart Email API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .step-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .step-card.active {
+            border: 3px solid #667eea;
+        }
+
+        .step-card.completed {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+        }
+
+        .step-card.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .step-number {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .step-card.completed .step-number {
+            background: #4caf50;
+        }
+
+        .step-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 15px;
+            padding-right: 70px;
+        }
+
+        .step-description {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .button.secondary {
+            background: #6b7280;
+        }
+
+        .button.success {
+            background: #4caf50;
+        }
+
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .sessions-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .session-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .session-item:hover {
+            background: #e3f2fd;
+            transform: translateX(5px);
+        }
+
+        .session-item.selected {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+
+        .progress-indicator {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: #4caf50;
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+
+        .help-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 8px;
+        }
+
+        .help-box strong {
+            color: #f57c00;
+            display: block;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" style="display: inline-block; color: white; text-decoration: none; padding: 10px 20px; background: rgba(255,255,255,0.2); border-radius: 8px; margin-bottom: 20px;">
+            ← Назад на главную
+        </a>
+
+        <div class="header">
+            <h1>📊 Единая панель управления</h1>
+            <p>Все этапы работы в одном месте</p>
+        </div>
+
+        <!-- Step 1: Generate Queries -->
+        <div class="step-card active" id="step1">
+            <div class="step-number">1</div>
+            <h2 class="step-title">🔍 Генерация поисковых запросов</h2>
+            <p class="step-description">Введите основную тему на китайском языке, и система создаст 10-50 похожих под-запросов для эффективного поиска.</p>
+            
+            <div class="input-group">
+                <label>Основная тема (на китайском):</label>
+                <input type="text" id="mainTopic" placeholder="不锈钢数控车铣加工" value="不锈钢数控车铣加工">
+            </div>
+            
+            <div class="input-group">
+                <label>Количество под-запросов (5-50):</label>
+                <input type="number" id="queryCount" value="10" min="5" max="50">
+            </div>
+
+            <button class="button" id="generateQueriesBtn">🚀 Сгенерировать запросы</button>
+            
+            <div id="step1Progress" style="display: none; margin-top: 20px;">
+                <p>⏳ Генерация... Это может занять до 30 секунд</p>
+                <div class="progress-indicator">
+                    <div class="progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Select Queries -->
+        <div class="step-card disabled" id="step2">
+            <div class="step-number">2</div>
+            <h2 class="step-title">✅ Выбор запросов</h2>
+            <p class="step-description">Выберите нужные запросы для поиска компаний. Можно выбрать все или только самые релевантные.</p>
+            
+            <div id="queriesList" style="max-height: 400px; overflow-y: auto;"></div>
+
+            <div style="margin-top: 20px;">
+                <button class="button secondary" id="selectAllQueriesBtn" disabled>✓ Выбрать все</button>
+                <button class="button success" id="saveQueriesBtn" disabled>💾 Сохранить выбор</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Select or Create Session -->
+        <div class="step-card disabled" id="step3">
+            <div class="step-number">3</div>
+            <h2 class="step-title">🎯 Выбор сессии</h2>
+            <p class="step-description">Текущая сессия готова к обработке. Нажмите кнопку для запуска.</p>
+            
+            <div id="currentSessionInfo" style="padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px;">
+                <p><strong>Session ID:</strong> <code id="displaySessionId"></code></p>
+                <p><strong>Запросов выбрано:</strong> <span id="selectedQueriesCount">0</span></p>
+            </div>
+
+            <button class="button" id="startProcessingBtn" disabled>🚀 Запустить обработку</button>
+        </div>
+
+        <!-- Step 4: Monitor Progress -->
+        <div class="step-card disabled" id="step4">
+            <div class="step-number">4</div>
+            <h2 class="step-title">📊 Мониторинг прогресса</h2>
+            <p class="step-description">Следите за прогрессом обработки в реальном времени.</p>
+            
+            <div id="progressDisplay" style="display: none;">
+                <div class="progress-indicator" style="height: 40px; margin-bottom: 10px;">
+                    <div class="progress-fill" id="overallProgress" style="width: 0%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;"></div>
+                </div>
+                <p id="progressText" style="text-align: center; color: #666;"></p>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="button secondary" id="viewProgressBtn" disabled>📊 Открыть полный прогресс</button>
+            </div>
+        </div>
+
+        <!-- Help Box -->
+        <div class="help-box">
+            <strong>💡 Нужна помощь?</strong>
+            <ul style="margin-left: 20px; line-height: 1.8;">
+                <li>Каждый шаг становится активным только после завершения предыдущего</li>
+                <li>Прогресс сохраняется автоматически - можно закрыть страницу и вернуться позже</li>
+                <li>Обработка 10 компаний занимает 5-10 минут</li>
+                <li>После завершения результаты можно экспортировать в CSV или JSON</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let allQueries = [];
+        let selectedQueriesIds = [];
+
+        // Step 1: Generate Queries
+        document.getElementById('generateQueriesBtn').addEventListener('click', async () => {
+            const mainTopic = document.getElementById('mainTopic').value.trim();
+            const queryCount = parseInt(document.getElementById('queryCount').value);
+
+            if (!mainTopic) {
+                alert('Введите основную тему');
+                return;
+            }
+
+            const btn = document.getElementById('generateQueriesBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Генерация...';
+
+            document.getElementById('step1Progress').style.display = 'block';
+
+            try {
+                const response = await fetch('/api/topics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        main_topic: mainTopic,
+                        target_count: queryCount
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    allQueries = data.data.queries;
+                    currentSessionId = data.data.session_id;
+
+                    // Mark step 1 as completed
+                    document.getElementById('step1').classList.add('completed');
+                    document.getElementById('step1').classList.remove('active');
+
+                    // Activate step 2
+                    document.getElementById('step2').classList.remove('disabled');
+                    document.getElementById('step2').classList.add('active');
+
+                    // Display queries
+                    displayQueries(allQueries);
+
+                    alert(`✅ Сгенерировано ${allQueries.length} запросов!`);
+                } else {
+                    alert('Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Сгенерировать запросы';
+                document.getElementById('step1Progress').style.display = 'none';
+            }
+        });
+
+        function displayQueries(queries) {
+            const list = document.getElementById('queriesList');
+            list.innerHTML = '';
+
+            queries.forEach((query, index) => {
+                const item = document.createElement('div');
+                item.style.cssText = 'padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 8px; cursor: pointer; border-left: 3px solid transparent;';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `query-${index}`;
+                checkbox.dataset.queryId = query.query_id;
+                checkbox.checked = query.is_selected || query.is_main;
+                checkbox.disabled = query.is_main;
+
+                checkbox.addEventListener('change', () => {
+                    item.style.borderLeftColor = checkbox.checked ? '#4caf50' : 'transparent';
+                    updateSelectedCount();
+                });
+
+                const label = document.createElement('label');
+                label.htmlFor = `query-${index}`;
+                label.style.cssText = 'margin-left: 10px; cursor: pointer;';
+                label.innerHTML = `<strong>${query.query_cn}</strong><br><span style="color: #666; font-size: 13px;">${query.query_ru}</span>`;
+
+                item.appendChild(checkbox);
+                item.appendChild(label);
+                list.appendChild(item);
+
+                if (checkbox.checked) {
+                    item.style.borderLeftColor = '#4caf50';
+                }
+            });
+
+            document.getElementById('selectAllQueriesBtn').disabled = false;
+            document.getElementById('saveQueriesBtn').disabled = false;
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('#queriesList input[type="checkbox"]:checked');
+            document.getElementById('selectedQueriesCount').textContent = checkboxes.length;
+        }
+
+        // Select All Queries
+        document.getElementById('selectAllQueriesBtn').addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('#queriesList input[type="checkbox"]:not(:disabled)');
+            checkboxes.forEach(cb => {
+                cb.checked = true;
+                cb.parentElement.style.borderLeftColor = '#4caf50';
+            });
+            updateSelectedCount();
+        });
+
+        // Save Queries
+        document.getElementById('saveQueriesBtn').addEventListener('click', async () => {
+            const checkboxes = document.querySelectorAll('#queriesList input[type="checkbox"]:checked');
+            selectedQueriesIds = Array.from(checkboxes).map(cb => cb.dataset.queryId);
+
+            if (selectedQueriesIds.length === 0) {
+                alert('Выберите хотя бы один запрос');
+                return;
+            }
+
+            const btn = document.getElementById('saveQueriesBtn');
+            btn.disabled = true;
+            btn.textContent = '💾 Сохранение...';
+
+            try {
+                const response = await fetch(`/api/topics/${currentSessionId}/select`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ selected_query_ids: selectedQueriesIds })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Mark step 2 as completed
+                    document.getElementById('step2').classList.add('completed');
+                    document.getElementById('step2').classList.remove('active');
+
+                    // Activate step 3
+                    document.getElementById('step3').classList.remove('disabled');
+                    document.getElementById('step3').classList.add('active');
+
+                    // Update session info
+                    document.getElementById('displaySessionId').textContent = currentSessionId;
+                    document.getElementById('startProcessingBtn').disabled = false;
+
+                    alert(`✅ Сохранено ${selectedQueriesIds.length} запросов!`);
+                } else {
+                    alert('Ошибка: ' + data.error);
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+                btn.disabled = false;
+            } finally {
+                btn.textContent = '💾 Сохранить выбор';
+            }
+        });
+
+        // Start Processing
+        document.getElementById('startProcessingBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('startProcessingBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Запуск...';
+
+            try {
+                const response = await fetch(`/api/sessions/${currentSessionId}/process`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Mark step 3 as completed
+                    document.getElementById('step3').classList.add('completed');
+                    document.getElementById('step3').classList.remove('active');
+
+                    // Activate step 4
+                    document.getElementById('step4').classList.remove('disabled');
+                    document.getElementById('step4').classList.add('active');
+
+                    document.getElementById('progressDisplay').style.display = 'block';
+                    document.getElementById('viewProgressBtn').disabled = false;
+
+                    alert('✅ Обработка запущена! Следите за прогрессом ниже.');
+
+                    // Start progress monitoring
+                    monitorProgress();
+                } else {
+                    alert('Ошибка: ' + data.error);
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Запустить обработку';
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '🚀 Запустить обработку';
+            }
+        });
+
+        // View Progress Page
+        document.getElementById('viewProgressBtn').addEventListener('click', () => {
+            window.open(`/progress.html?session=${currentSessionId}`, '_blank');
+        });
+
+        // Monitor Progress (Simple polling)
+        let progressInterval;
+        function monitorProgress() {
+            progressInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/sessions/${currentSessionId}/progress`);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        const percent = data.data.progress_percent || 0;
+                        document.getElementById('overallProgress').style.width = percent + '%';
+                        document.getElementById('overallProgress').textContent = percent + '%';
+                        document.getElementById('progressText').textContent = `Обработано: ${data.data.companies_added || 0} / ${data.data.target_count || 0} компаний`;
+
+                        if (percent >= 100) {
+                            clearInterval(progressInterval);
+                            document.getElementById('step4').classList.add('completed');
+                            alert('🎉 Обработка завершена! Результаты готовы.');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch progress:', error);
+                }
+            }, 5000); // Update every 5 seconds
+        }
+    </script>
+</body>
+</html>
+
