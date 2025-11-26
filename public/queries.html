@@ -786,27 +786,6 @@
             }
         }
 
-                const response = await fetch(`/api/topics/${currentSessionId}/select`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query_ids: selectedIds })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showMessage(`Выбор сохранен! Выбрано запросов: ${data.selected_count}`, 'success');
-                } else {
-                    showMessage('Ошибка: ' + data.error, 'error');
-                }
-
-            } catch (error) {
-                showMessage('Ошибка: ' + error.message, 'error');
-            } finally {
-                hideLoading();
-            }
-        }
-
         // Credits monitoring
         function startCreditsMonitoring(sessionId) {
             const creditsDisplay = document.getElementById('creditsDisplay');
