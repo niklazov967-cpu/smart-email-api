@@ -422,8 +422,18 @@
 
         <!-- Logs -->
         <div class="card" id="logsCard" style="display: none;">
-            <h2>Логи выполнения</h2>
-            <div class="logs-container" id="logsContainer"></div>
+            <h2>📝 Логи выполнения (Live)</h2>
+            <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 5px;">
+                <p style="margin: 0; color: #1565c0;">
+                    💡 Здесь отображаются все действия системы в реальном времени
+                </p>
+            </div>
+            <div class="logs-container" id="logsContainer">
+                <div class="log-entry" style="border-left-color: #2196f3;">
+                    <span class="log-timestamp">[Ожидание]</span>
+                    <span class="log-message">Подключение к системе логирования...</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -431,6 +441,8 @@
         let currentSessionId = null;
         let eventSource = null;
         let startTime = null;
+        let logUpdateInterval = null;
+        let lastLogIndex = 0;
 
         async function loadSessions() {
             console.log('Loading sessions...');
@@ -528,11 +540,97 @@
             document.getElementById('logsCard').style.display = 'block';
             document.getElementById('validationCard').style.display = 'block';
 
+            // Добавить начальные логи
+            addLog('info', 'Начат мониторинг сессии: ' + sessionId);
+            addLog('info', 'Запрос данных о прогрессе...');
+
             // Начать получать обновления
             setupSSE(sessionId);
             
             // Также загрузить валидацию отдельно
             updateValidationStats(sessionId);
+            
+            // Запустить опрос логов каждую секунду
+            startLogPolling(sessionId);
+        }
+
+        function addLog(type, message) {
+            const logsContainer = document.getElementById('logsContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            
+            const timestamp = new Date().toLocaleTimeString('ru-RU');
+            
+            let borderColor = '#2196f3';
+            let icon = '📝';
+            if (type === 'success') {
+                borderColor = '#4caf50';
+                icon = '✅';
+            } else if (type === 'error') {
+                borderColor = '#f44336';
+                icon = '❌';
+            } else if (type === 'warning') {
+                borderColor = '#ff9800';
+                icon = '⚠️';
+            } else if (type === 'stage') {
+                borderColor = '#9c27b0';
+                icon = '🎯';
+            }
+            
+            logEntry.style.borderLeftColor = borderColor;
+            logEntry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span class="log-message">${icon} ${message}</span>
+            `;
+            
+            logsContainer.appendChild(logEntry);
+            
+            // Auto-scroll to bottom
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+            
+            // Limit logs to last 100 entries
+            const logs = logsContainer.querySelectorAll('.log-entry');
+            if (logs.length > 100) {
+                logs[0].remove();
+            }
+        }
+
+        async function startLogPolling(sessionId) {
+            // Опрашивать прогресс каждую секунду для логирования
+            if (logUpdateInterval) {
+                clearInterval(logUpdateInterval);
+            }
+            
+            logUpdateInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/sessions/${sessionId}/progress`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const progress = data.data;
+                        
+                        // Логировать изменения
+                        if (progress.companies_found > 0 && lastLogIndex !== progress.companies_found) {
+                            addLog('success', `Найдено компаний: ${progress.companies_found}`);
+                            lastLogIndex = progress.companies_found;
+                        }
+                        
+                        if (progress.companies_analyzed > 0) {
+                            addLog('info', `Проанализировано: ${progress.companies_analyzed}/${progress.companies_found}`);
+                        }
+                        
+                        if (progress.errors_count > 0) {
+                            addLog('error', `Ошибок: ${progress.errors_count}`);
+                        }
+                        
+                        if (progress.perplexity_api_calls > 0) {
+                            addLog('info', `API вызовов: ${progress.perplexity_api_calls}, токенов: ${progress.perplexity_tokens_used}`);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to poll progress:', error);
+                }
+            }, 2000); // Каждые 2 секунды
         }
 
         async function startProcessingFromProgress() {
@@ -600,6 +698,8 @@
         }
 
         function updateUI(progress) {
+            console.log('[updateUI] Progress update:', progress);
+            
             // Overall progress
             const progressBar = document.getElementById('progressBar');
             const progressPercent = document.getElementById('progressPercent');
@@ -609,9 +709,12 @@
             progressPercent.textContent = progress.overall_progress + '%';
 
             if (progress.current_stage) {
-                progressText.textContent = `${progress.current_stage.step_name}: ${progress.current_stage.message || ''}`;
+                const stageText = `${progress.current_stage.step_name}: ${progress.current_stage.message || ''}`;
+                progressText.textContent = stageText;
+                addLog('stage', stageText);
             } else if (progress.overall_progress >= 100) {
                 progressText.textContent = '✅ Обработка завершена!';
+                addLog('success', 'Обработка завершена!');
             }
 
             // Stats
@@ -629,6 +732,7 @@
             // Если завершено, обновить валидацию
             if (progress.overall_progress >= 100) {
                 updateValidationStats(currentSessionId);
+                addLog('success', 'Загружаем результаты валидации...');
             }
         }
 
@@ -648,6 +752,21 @@
                 };
 
                 const progressPercent = stage.progress_percent || 0;
+                
+                // Логировать изменения статуса этапа
+                const stageKey = `stage_${stage.step_name}_${stage.status}`;
+                if (!window.loggedStages) window.loggedStages = {};
+                
+                if (!window.loggedStages[stageKey]) {
+                    window.loggedStages[stageKey] = true;
+                    if (stage.status === 'in_progress') {
+                        addLog('stage', `Начат этап: ${stage.step_name}`);
+                    } else if (stage.status === 'completed') {
+                        addLog('success', `Завершён этап: ${stage.step_name} - ${stage.message || ''}`);
+                    } else if (stage.status === 'failed') {
+                        addLog('error', `Ошибка на этапе: ${stage.step_name} - ${stage.message || ''}`);
+                    }
+                }
 
                 stageItem.innerHTML = `
                     <div class="stage-header">
