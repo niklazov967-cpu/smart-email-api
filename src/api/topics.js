@@ -24,12 +24,35 @@ router.post('/', async (req, res) => {
       target_count 
     });
 
+    // Создать новую сессию
+    const { v4: uuidv4 } = require('uuid');
+    const sessionId = uuidv4();
+    
+    await req.db.query(
+      `INSERT INTO search_sessions (session_id, search_query, target_count, status, created_at)
+       VALUES ($1, $2, $3, 'pending', NOW())`,
+      [sessionId, main_topic, target_count]
+    );
+
     // Генерировать под-запросы
     const result = await req.queryExpander.expandTopic(main_topic, target_count);
 
+    // Сохранить запросы в БД
+    await req.queryExpander.saveQueries(sessionId, main_topic, result.queries);
+
+    req.logger.info('Topics API: Session created and queries saved', { 
+      sessionId, 
+      count: result.queries.length 
+    });
+
     res.json({
       success: true,
-      data: result
+      data: {
+        session_id: sessionId,
+        main_topic: result.main_topic,
+        queries: result.queries,
+        total: result.total
+      }
     });
 
   } catch (error) {
@@ -122,8 +145,51 @@ router.get('/:sessionId/queries', async (req, res) => {
 });
 
 /**
- * PUT /api/topics/:sessionId/select
+ * POST /api/topics/:sessionId/select
  * Обновить выбранные запросы
+ */
+router.post('/:sessionId/select', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { selected_query_ids, query_ids } = req.body;
+    
+    // Поддержка обоих параметров
+    const ids = selected_query_ids || query_ids;
+
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({
+        success: false,
+        error: 'selected_query_ids or query_ids must be an array'
+      });
+    }
+
+    await req.queryExpander.updateSelectedQueries(sessionId, ids);
+
+    req.logger.info('Topics API: Selected queries updated', { 
+      sessionId, 
+      count: ids.length 
+    });
+
+    res.json({
+      success: true,
+      message: 'Selected queries updated',
+      selected_count: ids.length
+    });
+
+  } catch (error) {
+    req.logger.error('Topics API: Failed to update selected queries', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/topics/:sessionId/select
+ * Обновить выбранные запросы (альтернативный метод)
  */
 router.put('/:sessionId/select', async (req, res) => {
   try {

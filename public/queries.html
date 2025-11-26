@@ -566,14 +566,14 @@
                 if (data.success) {
                     updateProgress(80, 'Парсинг запросов...');
                     allQueries = data.data.queries;
-                    currentSessionId = data.data.session_id || currentSessionId;
+                    currentSessionId = data.data.session_id;
                     
                     updateProgress(100, 'Готово!');
                     
                     setTimeout(() => {
                         displayQueries(allQueries);
                         hideProgress();
-                        showMessage(`✅ Успешно сгенерировано ${allQueries.length} запросов!`, 'success');
+                        showMessage(`✅ Успешно сгенерировано ${allQueries.length} запросов! Session ID: ${currentSessionId}`, 'success');
                         
                         // Start credits monitoring if we have a session
                         if (currentSessionId) {
