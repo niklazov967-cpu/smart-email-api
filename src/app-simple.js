@@ -16,17 +16,23 @@ app.get('/api', (req, res) => {
   res.json({
     message: 'Smart Email API - Портал сбора и обработки контактов',
     status: 'running',
-    version: '1.0.0',
+    version: '1.3.0',
     endpoints: {
       health: '/health',
       settings: '/api/settings',
       sessions: '/api/sessions',
-      companies: '/api/companies'
+      companies: '/api/companies',
+      topics: '/api/topics',
+      credits: '/api/credits',
+      progress: '/api/progress'
     },
     documentation: {
       settings: 'GET /api/settings, GET /api/settings/:category, PUT /api/settings/:category/:key',
       sessions: 'POST /api/sessions, GET /api/sessions, GET /api/sessions/:id/progress',
-      companies: 'GET /api/companies, GET /api/companies/:id, POST /api/companies/export'
+      companies: 'GET /api/companies, GET /api/companies/:id, POST /api/companies/export',
+      topics: 'POST /api/topics/expand, GET /api/topics/:sessionId',
+      credits: 'GET /api/credits/:sessionId, GET /api/credits/:sessionId/realtime',
+      progress: 'GET /api/progress/:sessionId, GET /api/progress/:sessionId/realtime'
     }
   });
 });
@@ -42,7 +48,7 @@ app.get('/', (req, res, next) => {
         res.json({
           message: 'Smart Email API - Портал сбора и обработки контактов',
           status: 'running',
-          version: '1.0.0',
+          version: '1.3.0',
           note: 'HTML interface is available at /',
           api_info: '/api'
         });
@@ -53,7 +59,7 @@ app.get('/', (req, res, next) => {
     res.json({
       message: 'Smart Email API - Портал сбора и обработки контактов',
       status: 'running',
-      version: '1.0.0',
+      version: '1.3.0',
       api_info: '/api'
     });
   }

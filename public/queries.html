@@ -283,6 +283,119 @@
             font-weight: 700;
             color: #d63031;
         }
+
+        /* Progress Bar */
+        .progress-container {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        /* Button loading state */
+        .button.loading {
+            position: relative;
+            color: transparent;
+            pointer-events: none;
+        }
+
+        .button.loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            margin-left: -8px;
+            margin-top: -8px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Instructions */
+        .instructions {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        .instructions h3 {
+            color: #2e7d32;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+            color: #333;
+        }
+
+        .instructions li {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .instructions .highlight {
+            background: #fff59d;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .next-step {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 8px;
+        }
+
+        .next-step strong {
+            color: #f57c00;
+        }
     </style>
 </head>
 <body>
@@ -292,6 +405,29 @@
         <div class="header">
             <h1>🔍 Управление поисковыми запросами</h1>
             <p>Генерация и выбор под-запросов для темы поиска</p>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <h3>📋 Как использовать:</h3>
+            <ol>
+                <li><span class="highlight">Введите тему</span> на китайском языке (например: 不锈钢数控车铣加工)</li>
+                <li>Укажите <span class="highlight">количество под-запросов</span> (от 5 до 50)</li>
+                <li>Нажмите <span class="highlight">"Сгенерировать запросы"</span> и подождите (может занять до 30 секунд)</li>
+                <li><span class="highlight">Выберите нужные запросы</span> галочками или используйте "Выбрать все"</li>
+                <li>Нажмите <span class="highlight">"Сохранить выбор"</span></li>
+                <li>Скопируйте <span class="highlight">Session ID</span> и вернитесь на главную страницу</li>
+                <li>На главной вставьте Session ID и нажмите <span class="highlight">"Запустить обработку"</span></li>
+            </ol>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-container" id="progressContainer">
+            <h3>⏳ Генерация запросов...</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">Инициализация...</div>
         </div>
 
         <!-- Credits Display -->
@@ -313,7 +449,7 @@
 
         <!-- Step 1: Generate Queries -->
         <div class="card" id="generateCard">
-            <h2>Шаг 1: Сгенерировать запросы</h2>
+            <h2>Шаг 1️⃣: Сгенерировать запросы</h2>
             
             <div class="input-group">
                 <label>Основная тема (на китайском):</label>
@@ -322,22 +458,25 @@
 
             <div class="input-group">
                 <label>Количество под-запросов:</label>
-                <input type="number" id="queryCount" value="10" min="5" max="20">
+                <input type="number" id="queryCount" value="10" min="5" max="50">
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    ⚠️ Большое количество (30+) может занять до 30-40 секунд
+                </small>
             </div>
 
             <div class="input-group">
-                <label>Session ID (если есть):</label>
+                <label>Session ID (опционально):</label>
                 <input type="text" id="sessionId" placeholder="Оставьте пустым для создания новой сессии">
             </div>
 
-            <button class="button" onclick="generateQueries()">
+            <button class="button" id="generateBtn" onclick="generateQueries()">
                 ✨ Сгенерировать запросы
             </button>
         </div>
 
         <!-- Step 2: View and Select Queries -->
         <div class="card" id="queriesCard" style="display: none;">
-            <h2>Шаг 2: Просмотр и выбор запросов</h2>
+            <h2>Шаг 2️⃣: Просмотр и выбор запросов</h2>
 
             <div class="stats">
                 <div class="stat-card">
@@ -353,10 +492,23 @@
             <div style="margin-bottom: 15px;">
                 <button class="button secondary" onclick="selectAll()">✓ Выбрать все</button>
                 <button class="button secondary" onclick="deselectAll()">✗ Снять все</button>
-                <button class="button success" onclick="saveSelection()">💾 Сохранить выбор</button>
+                <button class="button success" id="saveBtn" onclick="saveSelection()">💾 Сохранить выбор</button>
             </div>
 
             <div class="queries-list" id="queriesList"></div>
+
+            <!-- Next Step Instructions -->
+            <div class="next-step" id="nextStepInstructions" style="display: none;">
+                <h3>✅ Запросы сохранены!</h3>
+                <p><strong>Следующий шаг:</strong></p>
+                <ol>
+                    <li>Скопируйте Session ID: <code id="displaySessionId" style="background: #fff; padding: 3px 8px; border-radius: 4px;"></code></li>
+                    <li>Вернитесь на <a href="/" style="color: #f57c00; font-weight: 600;">главную страницу</a></li>
+                    <li>Вставьте Session ID в поле "Session ID"</li>
+                    <li>Нажмите кнопку "🚀 Запустить обработку"</li>
+                    <li>Следите за прогрессом на странице <a href="/progress.html" style="color: #f57c00; font-weight: 600;">Прогресс обработки</a></li>
+                </ol>
+            </div>
         </div>
 
         <!-- Message area -->
@@ -373,6 +525,7 @@
             const mainTopic = document.getElementById('mainTopic').value.trim();
             const queryCount = parseInt(document.getElementById('queryCount').value);
             const sessionId = document.getElementById('sessionId').value.trim();
+            const generateBtn = document.getElementById('generateBtn');
 
             if (!mainTopic) {
                 showMessage('Введите основную тему', 'error');
@@ -380,11 +533,14 @@
             }
 
             try {
-                showLoading('Генерация запросов...');
+                // Show progress and disable button
+                generateBtn.classList.add('loading');
+                generateBtn.disabled = true;
+                showProgress('Инициализация DeepSeek API...');
 
                 let response;
                 if (sessionId) {
-                    // Generate for existing session
+                    updateProgress(20, 'Генерация под-запросов для существующей сессии...');
                     response = await fetch(`/api/topics/${sessionId}/generate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -392,7 +548,7 @@
                     });
                     currentSessionId = sessionId;
                 } else {
-                    // Generate new
+                    updateProgress(20, `Генерация ${queryCount} под-запросов...`);
                     response = await fetch('/api/topics', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -403,25 +559,38 @@
                     });
                 }
 
+                updateProgress(60, 'Обработка ответа от DeepSeek...');
+
                 const data = await response.json();
 
                 if (data.success) {
+                    updateProgress(80, 'Парсинг запросов...');
                     allQueries = data.data.queries;
-                    displayQueries(allQueries);
-                    showMessage('Запросы успешно сгенерированы!', 'success');
+                    currentSessionId = data.data.session_id || currentSessionId;
                     
-                    // Start credits monitoring if we have a session
-                    if (currentSessionId) {
-                        startCreditsMonitoring(currentSessionId);
-                    }
+                    updateProgress(100, 'Готово!');
+                    
+                    setTimeout(() => {
+                        displayQueries(allQueries);
+                        hideProgress();
+                        showMessage(`✅ Успешно сгенерировано ${allQueries.length} запросов!`, 'success');
+                        
+                        // Start credits monitoring if we have a session
+                        if (currentSessionId) {
+                            startCreditsMonitoring(currentSessionId);
+                        }
+                    }, 500);
                 } else {
+                    hideProgress();
                     showMessage('Ошибка: ' + data.error, 'error');
                 }
 
             } catch (error) {
+                hideProgress();
                 showMessage('Ошибка: ' + error.message, 'error');
             } finally {
-                hideLoading();
+                generateBtn.classList.remove('loading');
+                generateBtn.disabled = false;
             }
         }
 
@@ -515,6 +684,7 @@
 
             const checkboxes = document.querySelectorAll('.query-checkbox');
             const selectedIds = [];
+            const saveBtn = document.getElementById('saveBtn');
 
             checkboxes.forEach(checkbox => {
                 if (checkbox.checked) {
@@ -526,8 +696,45 @@
                 }
             });
 
+            if (selectedIds.length === 0) {
+                showMessage('⚠️ Выберите хотя бы один запрос', 'error');
+                return;
+            }
+
             try {
-                showLoading('Сохранение выбора...');
+                saveBtn.classList.add('loading');
+                saveBtn.disabled = true;
+                
+                const response = await fetch(`/api/topics/${currentSessionId}/select`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ selected_query_ids: selectedIds })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(`✅ Сохранено ${selectedIds.length} запросов!`, 'success');
+                    
+                    // Show next step instructions
+                    const nextStepDiv = document.getElementById('nextStepInstructions');
+                    const displaySessionIdEl = document.getElementById('displaySessionId');
+                    displaySessionIdEl.textContent = currentSessionId;
+                    nextStepDiv.style.display = 'block';
+                    
+                    // Scroll to instructions
+                    nextStepDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    showMessage('Ошибка: ' + data.error, 'error');
+                }
+
+            } catch (error) {
+                showMessage('Ошибка: ' + error.message, 'error');
+            } finally {
+                saveBtn.classList.remove('loading');
+                saveBtn.disabled = false;
+            }
+        }
 
                 const response = await fetch(`/api/topics/${currentSessionId}/select`, {
                     method: 'PUT',
@@ -604,6 +811,26 @@
         function hideLoading() {
             const messageArea = document.getElementById('messageArea');
             messageArea.innerHTML = '';
+        }
+
+        // Progress Bar Functions
+        function showProgress(message) {
+            const container = document.getElementById('progressContainer');
+            container.classList.add('active');
+            updateProgress(0, message);
+        }
+
+        function updateProgress(percent, message) {
+            const fill = document.getElementById('progressFill');
+            const text = document.getElementById('progressText');
+            fill.style.width = percent + '%';
+            fill.textContent = percent + '%';
+            text.textContent = message;
+        }
+
+        function hideProgress() {
+            const container = document.getElementById('progressContainer');
+            container.classList.remove('active');
         }
 
         // Load queries if session ID is in URL
