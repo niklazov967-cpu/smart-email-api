@@ -469,7 +469,7 @@
                 <input type="text" id="sessionId" placeholder="Оставьте пустым для создания новой сессии">
             </div>
 
-            <button class="button" id="generateBtn" onclick="generateQueries()">
+            <button class="button" id="generateBtn">
                 ✨ Сгенерировать запросы
             </button>
         </div>
@@ -490,9 +490,9 @@
             </div>
 
             <div style="margin-bottom: 15px;">
-                <button class="button secondary" onclick="selectAll()">✓ Выбрать все</button>
-                <button class="button secondary" onclick="deselectAll()">✗ Снять все</button>
-                <button class="button success" id="saveBtn" onclick="saveSelection()">💾 Сохранить выбор</button>
+                <button class="button secondary" id="selectAllBtn">✓ Выбрать все</button>
+                <button class="button secondary" id="deselectAllBtn">✗ Снять все</button>
+                <button class="button success" id="saveBtn">💾 Сохранить выбор</button>
             </div>
 
             <div class="queries-list" id="queriesList"></div>
@@ -522,33 +522,48 @@
 
         // Generate queries
         async function generateQueries() {
+            console.log('=== generateQueries START ===');
+            
             const mainTopic = document.getElementById('mainTopic').value.trim();
             const queryCount = parseInt(document.getElementById('queryCount').value);
             const sessionId = document.getElementById('sessionId').value.trim();
             const generateBtn = document.getElementById('generateBtn');
 
+            console.log('Input values:', { mainTopic, queryCount, sessionId });
+
             if (!mainTopic) {
+                console.warn('No main topic provided');
                 showMessage('Введите основную тему', 'error');
                 return;
             }
 
             try {
+                console.log('Starting generation process...');
+                
                 // Show progress and disable button
                 generateBtn.classList.add('loading');
                 generateBtn.disabled = true;
+                console.log('Button disabled, showing progress');
+                
                 showProgress('Инициализация DeepSeek API...');
 
                 let response;
                 if (sessionId) {
+                    console.log('Using existing session:', sessionId);
                     updateProgress(20, 'Генерация под-запросов для существующей сессии...');
+                    
                     response = await fetch(`/api/topics/${sessionId}/generate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ target_count: queryCount })
                     });
+                    
+                    console.log('Response status:', response.status);
                     currentSessionId = sessionId;
                 } else {
+                    console.log('Creating new session');
                     updateProgress(20, `Генерация ${queryCount} под-запросов...`);
+                    
                     response = await fetch('/api/topics', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -557,16 +572,23 @@
                             target_count: queryCount
                         })
                     });
+                    
+                    console.log('Response status:', response.status);
                 }
 
                 updateProgress(60, 'Обработка ответа от DeepSeek...');
 
                 const data = await response.json();
+                console.log('Response data:', data);
 
                 if (data.success) {
+                    console.log('Success! Processing results...');
                     updateProgress(80, 'Парсинг запросов...');
+                    
                     allQueries = data.data.queries;
                     currentSessionId = data.data.session_id;
+                    
+                    console.log('Queries:', allQueries.length, 'Session ID:', currentSessionId);
                     
                     updateProgress(100, 'Готово!');
                     
@@ -577,20 +599,25 @@
                         
                         // Start credits monitoring if we have a session
                         if (currentSessionId) {
+                            console.log('Starting credits monitoring');
                             startCreditsMonitoring(currentSessionId);
                         }
                     }, 500);
                 } else {
+                    console.error('API returned error:', data.error);
                     hideProgress();
                     showMessage('Ошибка: ' + data.error, 'error');
                 }
 
             } catch (error) {
+                console.error('Exception in generateQueries:', error);
                 hideProgress();
                 showMessage('Ошибка: ' + error.message, 'error');
             } finally {
+                console.log('Cleaning up...');
                 generateBtn.classList.remove('loading');
                 generateBtn.disabled = false;
+                console.log('=== generateQueries END ===');
             }
         }
 
@@ -677,7 +704,11 @@
         }
 
         async function saveSelection() {
+            console.log('=== saveSelection START ===');
+            console.log('Current session ID:', currentSessionId);
+            
             if (!currentSessionId) {
+                console.error('No session ID available');
                 showMessage('Session ID не найден', 'error');
                 return;
             }
@@ -685,6 +716,8 @@
             const checkboxes = document.querySelectorAll('.query-checkbox');
             const selectedIds = [];
             const saveBtn = document.getElementById('saveBtn');
+
+            console.log('Found checkboxes:', checkboxes.length);
 
             checkboxes.forEach(checkbox => {
                 if (checkbox.checked) {
@@ -696,24 +729,36 @@
                 }
             });
 
+            console.log('Selected IDs:', selectedIds);
+
             if (selectedIds.length === 0) {
+                console.warn('No queries selected');
                 showMessage('⚠️ Выберите хотя бы один запрос', 'error');
                 return;
             }
 
             try {
+                console.log('Saving selection...');
                 saveBtn.classList.add('loading');
                 saveBtn.disabled = true;
                 
-                const response = await fetch(`/api/topics/${currentSessionId}/select`, {
+                const url = `/api/topics/${currentSessionId}/select`;
+                const body = { selected_query_ids: selectedIds };
+                
+                console.log('POST', url, body);
+                
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ selected_query_ids: selectedIds })
+                    body: JSON.stringify(body)
                 });
 
+                console.log('Response status:', response.status);
                 const data = await response.json();
+                console.log('Response data:', data);
 
                 if (data.success) {
+                    console.log('Selection saved successfully');
                     showMessage(`✅ Сохранено ${selectedIds.length} запросов!`, 'success');
                     
                     // Show next step instructions
@@ -722,17 +767,22 @@
                     displaySessionIdEl.textContent = currentSessionId;
                     nextStepDiv.style.display = 'block';
                     
+                    console.log('Scrolling to instructions');
                     // Scroll to instructions
                     nextStepDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 } else {
+                    console.error('Save failed:', data.error);
                     showMessage('Ошибка: ' + data.error, 'error');
                 }
 
             } catch (error) {
+                console.error('Exception in saveSelection:', error);
                 showMessage('Ошибка: ' + error.message, 'error');
             } finally {
+                console.log('Cleaning up...');
                 saveBtn.classList.remove('loading');
                 saveBtn.disabled = false;
+                console.log('=== saveSelection END ===');
             }
         }
 
@@ -870,6 +920,51 @@
             if (creditsUpdateInterval) {
                 clearInterval(creditsUpdateInterval);
             }
+        });
+
+        // Event Listeners for buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, attaching event listeners...');
+            
+            // Generate button
+            const generateBtn = document.getElementById('generateBtn');
+            if (generateBtn) {
+                generateBtn.addEventListener('click', async () => {
+                    console.log('Generate button clicked');
+                    await generateQueries();
+                });
+                console.log('Generate button listener attached');
+            }
+
+            // Select All button
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            if (selectAllBtn) {
+                selectAllBtn.addEventListener('click', () => {
+                    console.log('Select All clicked');
+                    selectAll();
+                });
+            }
+
+            // Deselect All button
+            const deselectAllBtn = document.getElementById('deselectAllBtn');
+            if (deselectAllBtn) {
+                deselectAllBtn.addEventListener('click', () => {
+                    console.log('Deselect All clicked');
+                    deselectAll();
+                });
+            }
+
+            // Save button
+            const saveBtn = document.getElementById('saveBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    console.log('Save button clicked');
+                    await saveSelection();
+                });
+                console.log('Save button listener attached');
+            }
+
+            console.log('All event listeners attached successfully');
         });
     </script>
 </body>
