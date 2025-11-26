@@ -1,0 +1,165 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3030;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../public')));
+
+// API Info endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    message: 'Smart Email API - Портал сбора и обработки контактов',
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      settings: '/api/settings',
+      sessions: '/api/sessions',
+      companies: '/api/companies'
+    },
+    documentation: {
+      settings: 'GET /api/settings, GET /api/settings/:category, PUT /api/settings/:category/:key',
+      sessions: 'POST /api/sessions, GET /api/sessions, GET /api/sessions/:id/progress',
+      companies: 'GET /api/companies, GET /api/companies/:id, POST /api/companies/export'
+    }
+  });
+});
+
+// Главная страница - отдаем HTML (static middleware сделает это автоматически)
+// Но добавим fallback на случай если файл не найден
+app.get('/', (req, res, next) => {
+  // Проверяем заголовок Accept
+  if (req.accepts('html')) {
+    res.sendFile(path.join(__dirname, '../public/index.html'), (err) => {
+      if (err) {
+        // Если HTML не найден, отдаем JSON
+        res.json({
+          message: 'Smart Email API - Портал сбора и обработки контактов',
+          status: 'running',
+          version: '1.0.0',
+          note: 'HTML interface is available at /',
+          api_info: '/api'
+        });
+      }
+    });
+  } else {
+    // Для API клиентов отдаем JSON
+    res.json({
+      message: 'Smart Email API - Портал сбора и обработки контактов',
+      status: 'running',
+      version: '1.0.0',
+      api_info: '/api'
+    });
+  }
+});
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage()
+  });
+});
+
+// Подключение API роутов (с обработкой ошибок)
+try {
+  // Инициализация Mock DB и сервисов
+  const MockDatabase = require('./database/MockDatabase');
+  const SettingsManager = require('./services/SettingsManager');
+  const winston = require('winston');
+  
+  const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.simple(),
+    transports: [new winston.transports.Console()]
+  });
+  
+  const pool = new MockDatabase();
+  const settingsManager = new SettingsManager(pool, logger);
+  
+  // Инициализация SonarApiClient и QueryOrchestrator
+  const SonarApiClient = require('./services/SonarApiClient');
+  const QueryOrchestrator = require('./services/QueryOrchestrator');
+  const QueryExpander = require('./services/QueryExpander');
+  const CreditsTracker = require('./services/CreditsTracker');
+  
+  const sonarClient = new SonarApiClient(settingsManager, pool, logger);
+  const queryExpander = new QueryExpander(sonarClient, settingsManager, pool, logger);
+  const creditsTracker = new CreditsTracker(pool, logger);
+  
+  // Подключить creditsTracker к sonarClient для автоматического логирования
+  sonarClient.setCreditsTracker(creditsTracker);
+  
+  const orchestrator = new QueryOrchestrator({
+    database: pool,
+    settingsManager: settingsManager,
+    sonarApiClient: sonarClient,
+    logger: logger
+  });
+  
+  // Загрузить базовые настройки
+  (async () => {
+    const defaultSettings = [
+      ['api', 'api_key', '', 'string', '', 'Perplexity API ключ', '{}'],
+      ['api', 'model_name', 'llama-3.1-sonar-large-128k-online', 'string', 'llama-3.1-sonar-large-128k-online', 'Модель', '{}'],
+    ];
+    
+    for (const setting of defaultSettings) {
+      await pool.query(
+        `INSERT INTO settings (category, setting_key, setting_value, setting_type, default_value, description, validation_rules, is_editable, require_restart)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [...setting, true, false]
+      );
+    }
+  })();
+  
+  // Middleware для добавления сервисов в req
+  app.use((req, res, next) => {
+    req.db = pool;
+    req.settingsManager = settingsManager;
+    req.sonarClient = sonarClient;
+    req.orchestrator = orchestrator;
+    req.queryExpander = queryExpander;
+    req.creditsTracker = creditsTracker;
+    req.logger = logger;
+    next();
+  });
+  
+  // Подключить роуты
+  app.use('/api/settings', require('./api/settings'));
+  app.use('/api/sessions', require('./api/sessions'));
+  app.use('/api/companies', require('./api/companies'));
+  app.use('/api/topics', require('./api/topics'));
+  app.use('/api/credits', require('./api/credits'));
+  
+  console.log('✅ API routes loaded successfully');
+} catch (error) {
+  console.error('⚠️  Failed to load API routes:', error.message);
+  console.log('Running in basic mode only');
+}
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Smart Email API running on http://localhost:${PORT}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`✨ Server ready!`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT signal received: closing HTTP server');
+  process.exit(0);
+});
+
