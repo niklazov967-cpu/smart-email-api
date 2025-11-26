@@ -2,14 +2,16 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 /**
- * SonarApiClient - Клиент для Perplexity Sonar Pro API
+ * SonarApiClient - Клиент для Perplexity Sonar API
+ * Поддерживает обе модели: sonar (базовая) и sonar-pro
  * Управляет вызовами, rate limiting, повторами и кешированием
  */
 class SonarApiClient {
-  constructor(database, settingsManager, logger) {
+  constructor(database, settingsManager, logger, modelType = 'sonar-pro') {
     this.db = database;
     this.settingsManager = settingsManager;
     this.logger = logger;
+    this.modelType = modelType; // 'sonar' или 'sonar-pro'
     this.creditsTracker = null;  // Будет установлен позже
     
     this.requestQueue = [];
@@ -33,7 +35,8 @@ class SonarApiClient {
     
     this.apiKey = apiSettings.api_key;
     this.baseUrl = apiSettings.api_base_url;
-    this.model = apiSettings.model_name;
+    // Использовать указанную модель или из настроек
+    this.model = this.modelType || apiSettings.model_name;
     this.temperature = apiSettings.temperature;
     this.topP = apiSettings.top_p;
     this.maxTokens = apiSettings.max_tokens;
@@ -43,6 +46,7 @@ class SonarApiClient {
     this.retryDelay = apiSettings.retry_delay_seconds * 1000;
     
     this.logger.info('SonarApiClient initialized', {
+      modelType: this.modelType,
       model: this.model,
       maxTokens: this.maxTokens,
       rateLimit: this.rateLimit

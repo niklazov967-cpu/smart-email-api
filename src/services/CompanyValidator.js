@@ -1,10 +1,11 @@
 /**
  * CompanyValidator - Валидация компаний на соответствие теме поиска
  * Проверяет соответствие деятельности компании основной теме
+ * Использует DeepSeek API для экономии кредитов (не требует доступ к интернету)
  */
 class CompanyValidator {
-  constructor(sonarClient, settingsManager, database, logger) {
-    this.sonar = sonarClient;
+  constructor(deepseekClient, settingsManager, database, logger) {
+    this.deepseek = deepseekClient;
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
@@ -33,10 +34,10 @@ class CompanyValidator {
         mainTopic
       );
 
-      // Запросить анализ у Sonar
-      const response = await this.sonar.query(prompt, {
+      // Запросить анализ у DeepSeek
+      const response = await this.deepseek.query(prompt, {
         stage: 'company_validation',
-        useCache: true
+        maxTokens: 1500
       });
 
       // Парсить результат

@@ -84,7 +84,8 @@ try {
   const pool = new MockDatabase();
   const settingsManager = new SettingsManager(pool, logger);
   
-  // Инициализация SonarApiClient и QueryOrchestrator
+  // Инициализация API клиентов
+  const DeepSeekClient = require('./services/DeepSeekClient');
   const SonarApiClient = require('./services/SonarApiClient');
   const QueryOrchestrator = require('./services/QueryOrchestrator');
   const QueryExpander = require('./services/QueryExpander');
@@ -92,19 +93,34 @@ try {
   const CompanyValidator = require('./services/CompanyValidator');
   const ProgressTracker = require('./services/ProgressTracker');
   
-  const sonarClient = new SonarApiClient(settingsManager, pool, logger);
-  const queryExpander = new QueryExpander(sonarClient, settingsManager, pool, logger);
+  // DeepSeek клиент (для генерации без интернета)
+  const deepseekClient = new DeepSeekClient(
+    process.env.DEEPSEEK_API_KEY || 'sk-85323bc753cb4b25b02a2664e9367f8a',
+    logger
+  );
+  
+  // Sonar Basic клиент (для простого поиска - Stage 2, 3)
+  const sonarBasicClient = new SonarApiClient(pool, settingsManager, logger, 'sonar');
+  
+  // Sonar Pro клиент (для сложного анализа - Stage 1, 4)
+  const sonarProClient = new SonarApiClient(pool, settingsManager, logger, 'sonar-pro');
+  
+  // Сервисы с правильными клиентами
+  const queryExpander = new QueryExpander(deepseekClient, settingsManager, pool, logger);
   const creditsTracker = new CreditsTracker(pool, logger);
-  const companyValidator = new CompanyValidator(sonarClient, settingsManager, pool, logger);
+  const companyValidator = new CompanyValidator(deepseekClient, settingsManager, pool, logger);
   const progressTracker = new ProgressTracker(pool, logger);
   
-  // Подключить creditsTracker к sonarClient для автоматического логирования
-  sonarClient.setCreditsTracker(creditsTracker);
+  // Подключить creditsTracker к обоим Sonar клиентам для автоматического логирования
+  sonarBasicClient.setCreditsTracker(creditsTracker);
+  sonarProClient.setCreditsTracker(creditsTracker);
   
   const orchestrator = new QueryOrchestrator({
     database: pool,
     settingsManager: settingsManager,
-    sonarApiClient: sonarClient,
+    sonarApiClient: sonarProClient, // Оркестратор использует Pro для Stage 1, 4
+    sonarBasicClient: sonarBasicClient, // Передаем Basic для Stage 2, 3
+    deepseekClient: deepseekClient, // Для Stage 5
     progressTracker: progressTracker,
     companyValidator: companyValidator,
     logger: logger
@@ -130,7 +146,9 @@ try {
   app.use((req, res, next) => {
     req.db = pool;
     req.settingsManager = settingsManager;
-    req.sonarClient = sonarClient;
+    req.deepseekClient = deepseekClient;
+    req.sonarBasicClient = sonarBasicClient;
+    req.sonarProClient = sonarProClient;
     req.orchestrator = orchestrator;
     req.queryExpander = queryExpander;
     req.creditsTracker = creditsTracker;

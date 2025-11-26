@@ -1,10 +1,11 @@
 /**
  * QueryExpander - Генератор под-запросов из темы
  * Создает множество релевантных запросов на основе одной темы
+ * Использует DeepSeek API для экономии кредитов (не требует доступ к интернету)
  */
 class QueryExpander {
-  constructor(sonarClient, settingsManager, database, logger) {
-    this.sonar = sonarClient;
+  constructor(deepseekClient, settingsManager, database, logger) {
+    this.deepseek = deepseekClient;
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
@@ -26,10 +27,10 @@ class QueryExpander {
       // Создать промпт для генерации под-запросов
       const prompt = this._createExpansionPrompt(mainTopic, targetCount);
 
-      // Запросить у Sonar генерацию вариаций
-      const response = await this.sonar.query(prompt, {
+      // Запросить у DeepSeek генерацию вариаций
+      const response = await this.deepseek.query(prompt, {
         stage: 'query_expansion',
-        useCache: true
+        maxTokens: 2000
       });
 
       // Парсить результат
@@ -41,9 +42,9 @@ class QueryExpander {
         
         // Вторая попытка с другим промптом
         const retryPrompt = this._createRetryPrompt(mainTopic, targetCount);
-        const retryResponse = await this.sonar.query(retryPrompt, {
+        const retryResponse = await this.deepseek.query(retryPrompt, {
           stage: 'query_expansion_retry',
-          useCache: true
+          maxTokens: 2000
         });
         
         const moreQueries = this._parseQueries(retryResponse);
@@ -168,9 +169,9 @@ class QueryExpander {
   async _translate(chineseText) {
     try {
       const prompt = `Переведи на русский язык кратко (2-4 слова): ${chineseText}`;
-      const response = await this.sonar.query(prompt, {
+      const response = await this.deepseek.query(prompt, {
         stage: 'translation',
-        useCache: true
+        maxTokens: 100
       });
       
       return response.trim().replace(/["""]/g, '');

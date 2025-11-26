@@ -91,10 +91,9 @@ class Stage3AnalyzeContacts {
 САЙТ: ${company.website}
 
 ЗАДАЧА:
-1. Найди страницу контактов (Contact, About Us, Contact Us)
-2. Извлеки все email адреса
-3. Исключи общие адреса (info@, admin@, webmaster@)
-4. Приоритет: sales@, export@, international@
+1. Найди страницу контактов (Contact, About Us, Contact Us, 联系我们)
+2. Извлеки ВСЕ email адреса (включая info@, admin@, sales@, export@ и т.д.)
+3. Приоритет email: sales@, export@, international@, но включи все найденные
 
 РЕЗУЛЬТАТ: JSON массив email адресов:
 {

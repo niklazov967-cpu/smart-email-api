@@ -6,7 +6,8 @@ class QueryOrchestrator {
   constructor(services) {
     this.db = services.database;
     this.settings = services.settingsManager;
-    this.sonar = services.sonarApiClient;
+    this.sonarPro = services.sonarApiClient; // Pro для Stage 1, 4
+    this.sonarBasic = services.sonarBasicClient; // Basic для Stage 2, 3
     this.logger = services.logger;
     this.progressTracker = services.progressTracker || null;
     this.companyValidator = services.companyValidator || null;
@@ -18,13 +19,24 @@ class QueryOrchestrator {
     const Stage4AnalyzeServices = require('../stages/Stage4AnalyzeServices');
     const Stage5GenerateTags = require('../stages/Stage5GenerateTags');
     const Stage6Finalize = require('../stages/Stage6Finalize');
+    const Stage4_5ValidateCompanies = require('../stages/Stage4_5ValidateCompanies');
     
-    this.stage1 = new Stage1FindCompanies(this.sonar, this.settings, this.db, this.logger);
-    this.stage2 = new Stage2FindWebsites(this.sonar, this.settings, this.db, this.logger);
-    this.stage3 = new Stage3AnalyzeContacts(this.sonar, this.settings, this.db, this.logger);
-    this.stage4 = new Stage4AnalyzeServices(this.sonar, this.settings, this.db, this.logger);
-    this.stage5 = new Stage5GenerateTags(this.sonar, this.settings, this.db, this.logger);
-    this.stage6 = new Stage6Finalize(this.sonar, this.settings, this.db, this.logger);
+    // Stage 1, 4 используют Sonar Pro (сложный анализ)
+    this.stage1 = new Stage1FindCompanies(this.sonarPro, this.settings, this.db, this.logger);
+    this.stage4 = new Stage4AnalyzeServices(this.sonarPro, this.settings, this.db, this.logger);
+    
+    // Stage 2, 3 используют Sonar Basic (простой поиск)
+    this.stage2 = new Stage2FindWebsites(this.sonarBasic, this.settings, this.db, this.logger);
+    this.stage3 = new Stage3AnalyzeContacts(this.sonarBasic, this.settings, this.db, this.logger);
+    
+    // Stage 5 использует DeepSeek (уже в конструкторе Stage5)
+    this.stage5 = new Stage5GenerateTags(services.deepseekClient || this.sonarPro, this.settings, this.db, this.logger);
+    
+    // Stage 6 не использует AI
+    this.stage6 = new Stage6Finalize(this.sonarPro, this.settings, this.db, this.logger);
+    
+    // Stage 4.5 валидация (уже использует DeepSeek через companyValidator)
+    this.stage4_5 = new Stage4_5ValidateCompanies(this.sonarPro, this.settings, this.db, this.logger, this.companyValidator);
   }
 
   /**
@@ -175,19 +187,6 @@ class QueryOrchestrator {
           `Добавлено: ${stage6Result.finalized}, Пропущено: ${stage6Result.skipped}`
         );
       }
-      
-      this.logger.info('Orchestrator: Stage 6 completed', {
-        finalized: stage6Result.finalized,
-        skipped: stage6Result.skipped
-      });
-      
-      this.logger.info('Orchestrator: Stage 5 completed', {
-        processed: stage5Result.processed
-      });
-
-      // Stage 6: Финализация
-      this.logger.info('Orchestrator: Stage 6 - Finalization');
-      const stage6Result = await this.stage6.execute(sessionId);
       
       this.logger.info('Orchestrator: Stage 6 completed', {
         finalized: stage6Result.finalized,

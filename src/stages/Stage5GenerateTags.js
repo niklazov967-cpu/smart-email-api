@@ -1,10 +1,11 @@
 /**
  * Stage 5: Извлечение и генерация тегов
  * Создает теги на основе услуг, продуктов и возможностей компании
+ * Использует DeepSeek API для экономии кредитов
  */
 class Stage5GenerateTags {
-  constructor(sonarClient, settingsManager, database, logger) {
-    this.sonar = sonarClient;
+  constructor(deepseekClient, settingsManager, database, logger) {
+    this.deepseek = deepseekClient;
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
@@ -24,7 +25,7 @@ class Stage5GenerateTags {
 
       // Получить настройки
       const settings = await this.settings.getCategory('processing_stages');
-      const maxTags = settings.stage5_max_tags || 10;
+      const maxTags = settings.stage5_max_tags || 20;
 
       this.logger.info('Stage 5: Processing companies', {
         count: companies.length,
@@ -83,23 +84,23 @@ class Stage5GenerateTags {
 ПРОДУКТЫ: ${servicesData.products?.join(', ') || 'не указано'}
 
 ТРЕБОВАНИЯ:
-1. Создай ${maxTags} ключевых тегов на английском языке
+1. Создай ${maxTags} ключевых тегов на русском языке
 2. Теги должны быть краткими (1-3 слова)
 3. Теги должны отражать основные категории услуг
-4. Используй индустриальные термины
+4. Используй индустриальные термины на русском
 
 РЕЗУЛЬТАТ: JSON массив тегов:
 {
-  "tags": ["tag1", "tag2", "tag3", ...],
+  "tags": ["тег1", "тег2", "тег3", ...],
   "primary_category": "основная категория"
 }
 
-Примеры тегов: "cnc-machining", "metal-fabrication", "injection-molding"`;
+Примеры тегов: "ЧПУ обработка", "металлообработка", "литье пластика", "сварочные работы"`;
 
-      const response = await this.sonar.query(prompt, {
+      const response = await this.deepseek.query(prompt, {
         stage: 'stage5_generate_tags',
-        sessionId,
-        useCache: true
+        maxTokens: 1500,
+        temperature: 0.7
       });
 
       const result = this._parseResponse(response, maxTags);
@@ -149,9 +150,9 @@ class Stage5GenerateTags {
       
       let tags = Array.isArray(data.tags) ? data.tags : [];
       
-      // Нормализация тегов
+      // Нормализация тегов (оставляем русский текст как есть)
       tags = tags
-        .map(tag => tag.toLowerCase().trim().replace(/\s+/g, '-'))
+        .map(tag => tag.trim())
         .filter(tag => tag.length > 0)
         .slice(0, maxTags);
 
