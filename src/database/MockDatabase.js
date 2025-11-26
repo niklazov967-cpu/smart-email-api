@@ -15,8 +15,10 @@ class MockDatabase {
       perplexity_cache: [],
       sonar_api_calls: [],
       processing_logs: [],
-      session_queries: [],        // Новая таблица для запросов
-      api_credits_log: []         // Новая таблица для кредитов
+      session_queries: [],
+      api_credits_log: [],
+      validation_log: [],          // Новая таблица
+      processing_progress: []       // Новая таблица
     };
     
     this.connected = true;

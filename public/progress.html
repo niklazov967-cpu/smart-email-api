@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прогресс обработки - Smart Email API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .progress-container {
+            margin-bottom: 30px;
+        }
+
+        .progress-bar-wrapper {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 40px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .progress-text {
+            color: #666;
+            font-size: 14px;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        .stages-list {
+            margin-top: 20px;
+        }
+
+        .stage-item {
+            background: #f8f9fa;
+            border-left: 4px solid #e0e0e0;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .stage-item.completed {
+            border-left-color: #4caf50;
+            background: #e8f5e9;
+        }
+
+        .stage-item.in-progress {
+            border-left-color: #2196f3;
+            background: #e3f2fd;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .stage-item.failed {
+            border-left-color: #f44336;
+            background: #ffebee;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .stage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .stage-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .stage-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .stage-status.completed {
+            background: #4caf50;
+            color: white;
+        }
+
+        .stage-status.in-progress {
+            background: #2196f3;
+            color: white;
+        }
+
+        .stage-status.pending {
+            background: #9e9e9e;
+            color: white;
+        }
+
+        .stage-status.failed {
+            background: #f44336;
+            color: white;
+        }
+
+        .stage-message {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .stage-progress-bar {
+            background: #e0e0e0;
+            border-radius: 5px;
+            height: 8px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .stage-progress-fill {
+            background: #2196f3;
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .logs-container {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .log-entry {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background: white;
+            border-radius: 5px;
+            font-size: 13px;
+            border-left: 3px solid #2196f3;
+        }
+
+        .log-timestamp {
+            color: #999;
+            font-size: 11px;
+            margin-right: 10px;
+        }
+
+        .log-message {
+            color: #333;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-right: 10px;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+        }
+
+        .button.secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .validation-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .validation-stat {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .validation-stat.accept {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+        }
+
+        .validation-stat.review {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+        }
+
+        .validation-stat.reject {
+            background: #ffebee;
+            border: 2px solid #f44336;
+        }
+
+        .validation-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .validation-stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Назад на главную</a>
+
+        <div class="header">
+            <h1>📊 Мониторинг прогресса обработки</h1>
+            <p>Отслеживание в реальном времени</p>
+        </div>
+
+        <!-- Input for Session ID -->
+        <div class="card">
+            <div class="input-group">
+                <label>Session ID для мониторинга:</label>
+                <input type="text" id="sessionIdInput" placeholder="Введите UUID сессии">
+            </div>
+            <button class="button" onclick="startMonitoring()">🚀 Начать мониторинг</button>
+        </div>
+
+        <!-- Overall Progress -->
+        <div class="card" id="overallProgress" style="display: none;">
+            <h2>Общий прогресс</h2>
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar" id="progressBar" style="width: 0%;">
+                    <span id="progressPercent">0%</span>
+                </div>
+            </div>
+            <div class="progress-text" id="progressText">Инициализация...</div>
+        </div>
+
+        <!-- Stats -->
+        <div class="card" id="statsCard" style="display: none;">
+            <h2>Статистика</h2>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="statCompleted">0</div>
+                    <div class="stat-label">Завершено этапов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statTotal">0</div>
+                    <div class="stat-label">Всего этапов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statDuration">-</div>
+                    <div class="stat-label">Время</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Validation Stats -->
+        <div class="card" id="validationCard" style="display: none;">
+            <h2>Результаты валидации</h2>
+            <div class="validation-stats">
+                <div class="validation-stat accept">
+                    <div class="validation-stat-value" id="validAccepted">0</div>
+                    <div class="validation-stat-label">✅ Приняты</div>
+                </div>
+                <div class="validation-stat review">
+                    <div class="validation-stat-value" id="validReview">0</div>
+                    <div class="validation-stat-label">📋 На проверку</div>
+                </div>
+                <div class="validation-stat reject">
+                    <div class="validation-stat-value" id="validRejected">0</div>
+                    <div class="validation-stat-label">❌ Отклонены</div>
+                </div>
+                <div class="validation-stat">
+                    <div class="validation-stat-value" id="validAvgScore">0</div>
+                    <div class="validation-stat-label">Средний score</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stages -->
+        <div class="card" id="stagesCard" style="display: none;">
+            <h2>Этапы обработки</h2>
+            <div class="stages-list" id="stagesList"></div>
+        </div>
+
+        <!-- Logs -->
+        <div class="card" id="logsCard" style="display: none;">
+            <h2>Логи выполнения</h2>
+            <div class="logs-container" id="logsContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let eventSource = null;
+        let startTime = null;
+
+        async function startMonitoring() {
+            const sessionId = document.getElementById('sessionIdInput').value.trim();
+            
+            if (!sessionId) {
+                alert('Введите Session ID');
+                return;
+            }
+
+            currentSessionId = sessionId;
+            startTime = Date.now();
+
+            // Показать карточки
+            document.getElementById('overallProgress').style.display = 'block';
+            document.getElementById('statsCard').style.display = 'block';
+            document.getElementById('stagesCard').style.display = 'block';
+            document.getElementById('logsCard').style.display = 'block';
+            document.getElementById('validationCard').style.display = 'block';
+
+            // Начать получать обновления
+            setupSSE(sessionId);
+            
+            // Также загрузить валидацию отдельно
+            updateValidationStats(sessionId);
+        }
+
+        function setupSSE(sessionId) {
+            // Закрыть предыдущее соединение если есть
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            // Установить новое соединение
+            eventSource = new EventSource(`/api/progress/${sessionId}/realtime`);
+
+            eventSource.onmessage = (event) => {
+                const progress = JSON.parse(event.data);
+                updateUI(progress);
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('SSE Error:', error);
+                eventSource.close();
+                
+                // Попробовать переподключиться через 5 секунд
+                setTimeout(() => setupSSE(sessionId), 5000);
+            };
+        }
+
+        function updateUI(progress) {
+            // Overall progress
+            const progressBar = document.getElementById('progressBar');
+            const progressPercent = document.getElementById('progressPercent');
+            const progressText = document.getElementById('progressText');
+
+            progressBar.style.width = progress.overall_progress + '%';
+            progressPercent.textContent = progress.overall_progress + '%';
+
+            if (progress.current_stage) {
+                progressText.textContent = `${progress.current_stage.step_name}: ${progress.current_stage.message || ''}`;
+            } else if (progress.overall_progress >= 100) {
+                progressText.textContent = '✅ Обработка завершена!';
+            }
+
+            // Stats
+            document.getElementById('statCompleted').textContent = progress.completed_stages;
+            document.getElementById('statTotal').textContent = progress.total_stages;
+            
+            const duration = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(duration / 60);
+            const seconds = duration % 60;
+            document.getElementById('statDuration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+            // Stages
+            updateStages(progress.stages);
+
+            // Если завершено, обновить валидацию
+            if (progress.overall_progress >= 100) {
+                updateValidationStats(currentSessionId);
+            }
+        }
+
+        function updateStages(stages) {
+            const stagesList = document.getElementById('stagesList');
+            stagesList.innerHTML = '';
+
+            stages.forEach(stage => {
+                const stageItem = document.createElement('div');
+                stageItem.className = `stage-item ${stage.status}`;
+
+                const statusText = {
+                    'completed': 'Завершено',
+                    'in_progress': 'Выполняется',
+                    'pending': 'Ожидание',
+                    'failed': 'Ошибка'
+                };
+
+                const progressPercent = stage.progress_percent || 0;
+
+                stageItem.innerHTML = `
+                    <div class="stage-header">
+                        <div class="stage-name">${stage.step_name}</div>
+                        <div class="stage-status ${stage.status}">${statusText[stage.status] || stage.status}</div>
+                    </div>
+                    <div class="stage-message">${stage.message || ''}</div>
+                    ${stage.total_items > 0 ? `
+                        <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                            Обработано: ${stage.current_item} из ${stage.total_items}
+                        </div>
+                        <div class="stage-progress-bar">
+                            <div class="stage-progress-fill" style="width: ${progressPercent}%"></div>
+                        </div>
+                    ` : ''}
+                `;
+
+                stagesList.appendChild(stageItem);
+            });
+        }
+
+        async function updateValidationStats(sessionId) {
+            try {
+                const response = await fetch(`/api/progress/${sessionId}/validation`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const stats = data.data;
+                    document.getElementById('validAccepted').textContent = stats.accepted;
+                    document.getElementById('validReview').textContent = stats.review;
+                    document.getElementById('validRejected').textContent = stats.rejected;
+                    document.getElementById('validAvgScore').textContent = stats.avg_score;
+                }
+            } catch (error) {
+                console.error('Failed to update validation stats:', error);
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+
+        // Auto-start if session ID in URL
+        window.addEventListener('load', () => {
+            const params = new URLSearchParams(window.location.search);
+            const sessionId = params.get('session');
+            
+            if (sessionId) {
+                document.getElementById('sessionIdInput').value = sessionId;
+                startMonitoring();
+            }
+        });
+    </script>
+</body>
+</html>
+

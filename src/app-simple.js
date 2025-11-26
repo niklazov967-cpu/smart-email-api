@@ -89,10 +89,14 @@ try {
   const QueryOrchestrator = require('./services/QueryOrchestrator');
   const QueryExpander = require('./services/QueryExpander');
   const CreditsTracker = require('./services/CreditsTracker');
+  const CompanyValidator = require('./services/CompanyValidator');
+  const ProgressTracker = require('./services/ProgressTracker');
   
   const sonarClient = new SonarApiClient(settingsManager, pool, logger);
   const queryExpander = new QueryExpander(sonarClient, settingsManager, pool, logger);
   const creditsTracker = new CreditsTracker(pool, logger);
+  const companyValidator = new CompanyValidator(sonarClient, settingsManager, pool, logger);
+  const progressTracker = new ProgressTracker(pool, logger);
   
   // Подключить creditsTracker к sonarClient для автоматического логирования
   sonarClient.setCreditsTracker(creditsTracker);
@@ -101,6 +105,8 @@ try {
     database: pool,
     settingsManager: settingsManager,
     sonarApiClient: sonarClient,
+    progressTracker: progressTracker,
+    companyValidator: companyValidator,
     logger: logger
   });
   
@@ -128,6 +134,8 @@ try {
     req.orchestrator = orchestrator;
     req.queryExpander = queryExpander;
     req.creditsTracker = creditsTracker;
+    req.companyValidator = companyValidator;
+    req.progressTracker = progressTracker;
     req.logger = logger;
     next();
   });
@@ -138,6 +146,7 @@ try {
   app.use('/api/companies', require('./api/companies'));
   app.use('/api/topics', require('./api/topics'));
   app.use('/api/credits', require('./api/credits'));
+  app.use('/api/progress', require('./api/progress'));
   
   console.log('✅ API routes loaded successfully');
 } catch (error) {
