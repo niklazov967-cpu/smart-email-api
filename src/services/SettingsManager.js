@@ -61,13 +61,43 @@ class SettingsManager {
    * Получить все параметры категории
    */
   async getCategory(category) {
-    const settings = await this.getAllSettings();
-    
-    if (!settings[category]) {
-      throw new Error(`Category not found: ${category}`);
+    try {
+      const settings = await this.getAllSettings();
+      
+      if (!settings[category]) {
+        this.logger.warn(`Category not found in DB: ${category}, using defaults`);
+        return this._getDefaultSettings(category);
+      }
+      
+      return settings[category];
+    } catch (error) {
+      this.logger.error(`Failed to get category settings: ${category}`, error);
+      return this._getDefaultSettings(category);
     }
+  }
+
+  /**
+   * Получить дефолтные настройки для категории
+   */
+  _getDefaultSettings(category) {
+    const defaults = {
+      processing_stages: {
+        stage1_max_companies: 12,
+        stage1_min_companies: 8,
+        stage2_timeout: 30000,
+        stage3_max_emails: 5,
+        stage4_max_services: 10,
+        stage5_max_tags: 20,
+        api_call_delay: 2000
+      },
+      api: {
+        model_name: 'sonar-pro',
+        api_timeout: 60000,
+        max_retries: 3
+      }
+    };
     
-    return settings[category];
+    return defaults[category] || {};
   }
 
   /**
