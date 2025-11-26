@@ -131,12 +131,41 @@
             border-radius: 8px;
             cursor: pointer;
             font-size: 1em;
-            transition: background 0.3s ease;
+            transition: background 0.3s ease, transform 0.1s ease;
             margin: 5px;
+            position: relative;
         }
 
         .button:hover {
             background: #5568d3;
+        }
+
+        .button:active {
+            transform: scale(0.98);
+        }
+
+        .button.loading {
+            background: #9ca3af;
+            cursor: wait;
+            pointer-events: none;
+        }
+
+        .button.loading::after {
+            content: "";
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spinner 0.6s linear infinite;
+        }
+
+        @keyframes spinner {
+            to { transform: translateY(-50%) rotate(360deg); }
         }
 
         .button.secondary {
@@ -595,7 +624,7 @@
                 <input type="text" id="processSessionId" placeholder="UUID сессии">
             </div>
             
-            <button class="button tooltip" onclick="processSession()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <button id="processBtn" class="button tooltip" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                 🚀 Запустить обработку
                 <span class="tooltiptext" style="bottom: auto; top: 125%; margin-top: 10px;">
                     <strong>Запустить полную обработку</strong><br>
@@ -695,22 +724,76 @@
             });
         }
 
-        async function processSession() {
+        async function processSession(event) {
+            console.log('=== processSession START ===');
+            
             const sessionId = document.getElementById('processSessionId').value.trim();
+            console.log('Session ID:', sessionId);
 
             if (!sessionId) {
+                console.warn('No session ID provided');
                 const response = document.getElementById('response');
                 response.textContent = 'Ошибка: Введите session_id';
                 response.classList.add('show');
                 return;
             }
 
-            await makeRequest(`/api/sessions/${sessionId}/process`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
+            // Get button element
+            const button = event.target;
+            console.log('Button clicked:', button.textContent);
+
+            // Show loading state
+            button.classList.add('loading');
+            button.disabled = true;
+            const originalText = button.textContent;
+            button.textContent = '⏳ Запускается...';
+
+            // Show response area
+            const response = document.getElementById('response');
+            response.textContent = '🚀 Запуск обработки...\n\n';
+            response.classList.add('show', 'loading');
+
+            try {
+                console.log('Sending POST request to /api/sessions/' + sessionId + '/process');
+                
+                const res = await fetch(`/api/sessions/${sessionId}/process`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('Response status:', res.status);
+                const data = await res.json();
+                console.log('Response data:', data);
+
+                if (data.success) {
+                    response.textContent = '✅ ОБРАБОТКА ЗАПУЩЕНА!\n\n' + JSON.stringify(data, null, 2);
+                    response.textContent += '\n\n📊 Следите за прогрессом здесь:\n';
+                    response.textContent += `http://localhost:3030/progress.html?session=${sessionId}`;
+                    
+                    // Auto-redirect to progress page after 2 seconds
+                    console.log('Redirecting to progress page...');
+                    setTimeout(() => {
+                        window.location.href = `/progress.html?session=${sessionId}`;
+                    }, 2000);
+                } else {
+                    console.error('Error from API:', data.error);
+                    response.textContent = '❌ ОШИБКА:\n\n' + JSON.stringify(data, null, 2);
                 }
-            });
+
+                response.classList.remove('loading');
+            } catch (error) {
+                console.error('Exception during processSession:', error);
+                response.textContent = `❌ Ошибка: ${error.message}`;
+                response.classList.remove('loading');
+            } finally {
+                // Restore button state
+                button.classList.remove('loading');
+                button.disabled = false;
+                button.textContent = originalText;
+                console.log('=== processSession END ===');
+            }
         }
 
         async function getSessions() {
@@ -743,6 +826,22 @@
 
         checkStatus();
         setInterval(checkStatus, 30000); // Проверка каждые 30 секунд
+
+        // Attach event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, attaching event listeners...');
+
+            const processBtn = document.getElementById('processBtn');
+            if (processBtn) {
+                processBtn.addEventListener('click', async (event) => {
+                    console.log('Process button clicked');
+                    await processSession(event);
+                });
+                console.log('Process button listener attached');
+            }
+
+            console.log('All event listeners attached successfully');
+        });
     </script>
 </body>
 </html>
