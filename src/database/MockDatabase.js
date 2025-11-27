@@ -40,7 +40,17 @@ class MockDatabase {
         if (text.includes('WHERE') && params.length > 0) {
           // Для кеша проверяем prompt_hash
           if (text.includes('prompt_hash')) {
-                const filtered = data.filter(row => row.prompt_hash === params[0]);
+            const filtered = data.filter(row => row.prompt_hash === params[0]);
+            return { rows: filtered };
+          }
+          // Для session_id
+          if (text.includes('session_id')) {
+            const filtered = data.filter(row => row.session_id === params[0]);
+            return { rows: filtered };
+          }
+          // Для progress_id
+          if (text.includes('progress_id')) {
+            const filtered = data.filter(row => row.progress_id === params[0]);
             return { rows: filtered };
           }
           // Для настроек проверяем category и key
@@ -73,12 +83,57 @@ class MockDatabase {
         
         // Создать объект из параметров (упрощенно)
         const newRow = {};
-        const columnsMatch = text.match(/\((.*?)\)/);
-        if (columnsMatch) {
+        
+        // Извлечь колонки из INSERT INTO table (col1, col2, ...)
+        const columnsMatch = text.match(/INSERT INTO\s+\w+\s*\((.*?)\)/i);
+        // Извлечь VALUES (...) часть
+        const valuesMatch = text.match(/VALUES\s*\((.*?)\)/is);
+        
+        if (columnsMatch && valuesMatch) {
           const columns = columnsMatch[1].split(',').map(c => c.trim());
+          const values = valuesMatch[1].split(',').map(v => v.trim());
+          
+          // Сопоставить каждую колонку с её значением
           columns.forEach((col, idx) => {
-            newRow[col] = params[idx];
+            const value = values[idx];
+            
+            // Пропустить если значение отсутствует
+            if (!value) {
+              return;
+            }
+            
+            // Обработать значение: $1, 'string', NOW(), число
+            if (value.startsWith('$')) {
+              // Параметр $1, $2 и т.д.
+              const paramIndex = parseInt(value.substring(1)) - 1;
+              newRow[col] = params[paramIndex];
+            } else if (value.startsWith("'") && value.endsWith("'")) {
+              // Строковый литерал
+              newRow[col] = value.substring(1, value.length - 1);
+            } else if (value.toUpperCase() === 'NOW()') {
+              // Функция NOW()
+              newRow[col] = new Date();
+            } else if (!isNaN(value)) {
+              // Число
+              newRow[col] = parseFloat(value);
+            } else {
+              // Другое (NULL, TRUE, FALSE и т.д.)
+              newRow[col] = value;
+            }
           });
+        }
+        
+        // Добавить автоинкремент ID для processing_progress
+        if (tableName === 'processing_progress' && !newRow.progress_id) {
+          newRow.progress_id = this.data[tableName] ? this.data[tableName].length + 1 : 1;
+        }
+        
+        // Добавить created_at/updated_at если нет
+        if (!newRow.created_at) {
+          newRow.created_at = new Date();
+        }
+        if (!newRow.updated_at) {
+          newRow.updated_at = new Date();
         }
         
         if (!this.data[tableName]) {
@@ -86,6 +141,8 @@ class MockDatabase {
         }
         
         this.data[tableName].push(newRow);
+        
+        // Поддержка RETURNING
         return { rows: [newRow] };
       }
     }
@@ -95,13 +152,59 @@ class MockDatabase {
       const tableMatch = text.match(/UPDATE\s+(\w+)/i);
       if (tableMatch) {
         const tableName = tableMatch[1];
-        // Упрощенная логика - обновляем первую найденную строку
-        if (this.data[tableName] && this.data[tableName].length > 0) {
-          // Обновляем все строки (для простоты)
-          this.data[tableName].forEach(row => {
-            row.updated_at = new Date();
-          });
+        
+        if (!this.data[tableName]) {
+          return { rows: [] };
         }
+        
+        // Извлечь SET параметры
+        const setMatch = text.match(/SET\s+(.*?)\s+WHERE/is);
+        const setFields = {};
+        if (setMatch) {
+          const setPart = setMatch[1];
+          // Простой парсинг SET field = $1, field2 = $2
+          const fieldMatches = setPart.matchAll(/(\w+)\s*=\s*\$(\d+)/g);
+          for (const match of fieldMatches) {
+            const fieldName = match[1];
+            const paramIndex = parseInt(match[2]) - 1;
+            setFields[fieldName] = params[paramIndex];
+          }
+        }
+        
+        // Найти строки для обновления по WHERE
+        if (text.includes('WHERE') && params.length > 0) {
+          let updated = 0;
+          
+          if (text.includes('progress_id')) {
+            const progressId = params[params.length - 1];
+            this.data[tableName].forEach(row => {
+              if (row.progress_id === progressId) {
+                Object.assign(row, setFields);
+                row.updated_at = new Date();
+                updated++;
+              }
+            });
+          } else if (text.includes('session_id')) {
+            const sessionId = params[params.length - 1];
+            this.data[tableName].forEach(row => {
+              if (row.session_id === sessionId) {
+                Object.assign(row, setFields);
+                row.updated_at = new Date();
+                updated++;
+              }
+            });
+          } else {
+            // Обновляем все строки (fallback)
+            this.data[tableName].forEach(row => {
+              Object.assign(row, setFields);
+              row.updated_at = new Date();
+              updated++;
+            });
+          }
+          
+          return { rowCount: updated, rows: [] };
+        }
+        
         return { rows: [] };
       }
     }
