@@ -209,8 +209,10 @@ try {
   app.use('/api/topics', require('./api/topics'));
   app.use('/api/credits', require('./api/credits'));
   app.use('/api/progress', require('./api/progress'));
+  app.use('/api/debug', require('./api/debug')); // НОВЫЙ: Показывает ВСЕ данные
   
   console.log('✅ API routes loaded successfully');
+  
 } catch (error) {
   console.error('⚠️  Failed to load API routes:', error.message);
   console.log('Running in basic mode only');
