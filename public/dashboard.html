@@ -119,6 +119,14 @@
             background: #4caf50;
         }
 
+        .button.danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+        }
+
+        .button.danger:hover {
+            background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+        }
+
         .button:disabled {
             background: #ccc;
             cursor: not-allowed;
@@ -209,6 +217,11 @@
         <div class="header">
             <h1>📊 Единая панель управления</h1>
             <p>Все этапы работы в одном месте</p>
+            <div style="margin-top: 20px;">
+                <button class="button danger" id="clearDatabaseBtn" style="font-size: 14px; padding: 8px 16px;">
+                    🗑️ Очистить базу данных
+                </button>
+            </div>
         </div>
 
         <!-- Step 1: Generate Queries -->
@@ -218,8 +231,11 @@
             <p class="step-description">Введите основную тему на китайском языке, и система создаст 10-50 похожих под-запросов для эффективного поиска.</p>
             
             <div class="input-group">
-                <label>Основная тема (на китайском):</label>
-                <input type="text" id="mainTopic" placeholder="不锈钢数控车铣加工" value="不锈钢数控车铣加工">
+                <label>Описание задачи (своими словами):</label>
+                <input type="text" id="mainTopic" placeholder="Например: Ищу производителей CNC обработки титановых деталей для медицинского оборудования" value="">
+                <p style="font-size: 12px; color: #666; margin-top: 5px;">
+                    💡 Опишите своими словами что вам нужно. AI создаст конкретные поисковые запросы на китайском.
+                </p>
             </div>
             
             <div class="input-group">
@@ -300,6 +316,63 @@
         let allQueries = [];
         let selectedQueriesIds = [];
 
+        // Clear Database Button
+        document.getElementById('clearDatabaseBtn').addEventListener('click', async () => {
+            const confirmed = confirm(
+                '⚠️ ВНИМАНИЕ!\n\n' +
+                'Это действие удалит ВСЕ данные:\n' +
+                '• Все сессии\n' +
+                '• Все запросы\n' +
+                '• Все найденные компании\n' +
+                '• Весь прогресс обработки\n' +
+                '• Весь кеш API\n\n' +
+                'Это действие НЕОБРАТИМО!\n\n' +
+                'Вы уверены?'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            // Второе подтверждение для критичного действия
+            const doubleConfirmed = confirm(
+                '🔴 ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!\n\n' +
+                'Все данные будут безвозвратно удалены.\n\n' +
+                'Продолжить?'
+            );
+
+            if (!doubleConfirmed) {
+                return;
+            }
+
+            const btn = document.getElementById('clearDatabaseBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Очистка...';
+
+            try {
+                const response = await fetch('/api/sessions/clear-all', {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ База данных успешно очищена!\n\nСтраница будет перезагружена.');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    alert('❌ Ошибка при очистке: ' + data.error);
+                    btn.disabled = false;
+                    btn.textContent = '🗑️ Очистить базу данных';
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '🗑️ Очистить базу данных';
+            }
+        });
+
         // Step 1: Generate Queries
         document.getElementById('generateQueriesBtn').addEventListener('click', async () => {
             const mainTopic = document.getElementById('mainTopic').value.trim();
@@ -362,14 +435,16 @@
 
             queries.forEach((query, index) => {
                 const item = document.createElement('div');
-                item.style.cssText = 'padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 8px; cursor: pointer; border-left: 3px solid transparent;';
+                item.style.cssText = 'padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 8px; cursor: pointer; border-left: 3px solid transparent; display: flex; align-items: center; justify-content: space-between;';
+                
+                const leftSection = document.createElement('div');
+                leftSection.style.cssText = 'display: flex; align-items: center; flex: 1;';
                 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.id = `query-${index}`;
                 checkbox.dataset.queryId = query.query_id;
-                checkbox.checked = query.is_selected || query.is_main;
-                checkbox.disabled = query.is_main;
+                checkbox.checked = query.is_selected;
 
                 checkbox.addEventListener('change', () => {
                     item.style.borderLeftColor = checkbox.checked ? '#4caf50' : 'transparent';
@@ -378,11 +453,32 @@
 
                 const label = document.createElement('label');
                 label.htmlFor = `query-${index}`;
-                label.style.cssText = 'margin-left: 10px; cursor: pointer;';
+                label.style.cssText = 'margin-left: 10px; cursor: pointer; flex: 1;';
                 label.innerHTML = `<strong>${query.query_cn}</strong><br><span style="color: #666; font-size: 13px;">${query.query_ru}</span>`;
 
-                item.appendChild(checkbox);
-                item.appendChild(label);
+                // Релевантность
+                const relevance = query.relevance || 50;
+                const relevanceBadge = document.createElement('span');
+                relevanceBadge.style.cssText = 'padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; margin-left: 10px;';
+                
+                if (relevance >= 80) {
+                    relevanceBadge.style.background = '#10b981';
+                    relevanceBadge.style.color = 'white';
+                    relevanceBadge.textContent = `🔥 ${relevance}%`;
+                } else if (relevance >= 60) {
+                    relevanceBadge.style.background = '#f59e0b';
+                    relevanceBadge.style.color = 'white';
+                    relevanceBadge.textContent = `⭐ ${relevance}%`;
+                } else {
+                    relevanceBadge.style.background = '#6b7280';
+                    relevanceBadge.style.color = 'white';
+                    relevanceBadge.textContent = `💡 ${relevance}%`;
+                }
+
+                leftSection.appendChild(checkbox);
+                leftSection.appendChild(label);
+                item.appendChild(leftSection);
+                item.appendChild(relevanceBadge);
                 list.appendChild(item);
 
                 if (checkbox.checked) {

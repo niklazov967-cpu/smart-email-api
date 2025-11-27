@@ -29,14 +29,25 @@ router.post('/', async (req, res) => {
       target_count 
     });
 
-    // Создать новую сессию
+    // Создать новую сессию с автоматическим именем
     const { v4: uuidv4 } = require('uuid');
     const sessionId = uuidv4();
     
+    // Форматировать время
+    const now = new Date();
+    const timeStr = now.toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).replace(',', '');
+    
+    const topic_description = `${main_topic} [${timeStr}]`;
+    
     await req.db.query(
-      `INSERT INTO search_sessions (session_id, search_query, target_count, status, created_at)
-       VALUES ($1, $2, $3, 'pending', NOW())`,
-      [sessionId, main_topic, target_count]
+      `INSERT INTO search_sessions (session_id, search_query, topic_description, target_count, status, created_at)
+       VALUES ($1, $2, $3, $4, 'pending', NOW())`,
+      [sessionId, main_topic, topic_description, target_count]
     );
 
     // Генерировать под-запросы
@@ -46,7 +57,8 @@ router.post('/', async (req, res) => {
     await req.queryExpander.saveQueries(sessionId, main_topic, result.queries);
 
     req.logger.info('Topics API: Session created and queries saved', { 
-      sessionId, 
+      sessionId,
+      topic_description,
       count: result.queries.length 
     });
 

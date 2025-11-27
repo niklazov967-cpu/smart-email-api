@@ -212,6 +212,23 @@
     .result-badge.medium { background: #f59e0b; color: white; }
     .result-badge.low { background: #6b7280; color: white; }
 
+    .badge-new {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin-left: 8px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
     .loading {
       display: flex;
       align-items: center;
@@ -378,6 +395,11 @@
         Пошаговая обработка
       </h1>
       <p>Контроль каждого этапа. Вы подтверждаете переход к следующему шагу после просмотра результатов.</p>
+      <div style="margin-top: 10px; margin-bottom: 10px;">
+        <button onclick="clearDatabase()" style="background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+          🗑️ Очистить базу данных
+        </button>
+      </div>
       <div class="progress-bar">
         <div class="progress-fill" id="overallProgress"></div>
       </div>
@@ -596,6 +618,50 @@
     let currentSessionId = null;
     let currentStage = 0;
 
+    // Clear Database
+    async function clearDatabase() {
+      const confirmed = confirm(
+        '⚠️ ВНИМАНИЕ!\n\n' +
+        'Это действие удалит ВСЕ данные:\n' +
+        '• Все сессии\n' +
+        '• Все запросы\n' +
+        '• Все найденные компании\n' +
+        '• Весь прогресс обработки\n' +
+        '• Весь кеш API\n\n' +
+        'Это действие НЕОБРАТИМО!\n\n' +
+        'Вы уверены?'
+      );
+
+      if (!confirmed) return;
+
+      const doubleConfirmed = confirm(
+        '🔴 ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!\n\n' +
+        'Все данные будут безвозвратно удалены.\n\n' +
+        'Продолжить?'
+      );
+
+      if (!doubleConfirmed) return;
+
+      try {
+        const response = await fetch('/api/sessions/clear-all', {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('✅ База данных успешно очищена!\n\nСтраница будет перезагружена.');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          alert('❌ Ошибка при очистке: ' + data.error);
+        }
+      } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+      }
+    }
+
     // Загрузить сессии
     async function loadSessions() {
       try {
@@ -800,8 +866,12 @@
                 <span>${company.name || company.company_name}</span>
                 ${company.relevance ? `<span class="result-badge ${getRelevanceClass(company.relevance)}">${company.relevance}%</span>` : ''}
               </div>
-              ${company.query_text ? `<div class="result-detail">📝 Запрос: ${company.query_text}</div>` : ''}
-              ${company.domain_extension ? `<div class="result-detail">🌐 Домен: ${company.domain_extension}</div>` : ''}
+              ${company.website ? `<div class="result-detail">🌐 <a href="${company.website}" target="_blank">${company.website}</a> <span class="badge-new">✨ Найден сразу!</span></div>` : ''}
+              ${company.email ? `<div class="result-detail">✉️ Email: ${company.email} <span class="badge-new">✨ Найден сразу!</span></div>` : ''}
+              ${company.phone ? `<div class="result-detail">📱 Телефон: ${company.phone} <span class="badge-new">✨ Найден сразу!</span></div>` : ''}
+              ${company.description ? `<div class="result-detail">📝 ${company.description}</div>` : ''}
+              ${company.query_text ? `<div class="result-detail" style="opacity:0.7">🔍 Запрос: ${company.query_text}</div>` : ''}
+              ${company.domain_extension ? `<div class="result-detail" style="opacity:0.7">🌐 Домен: ${company.domain_extension}</div>` : ''}
             </div>
           `).join('');
         }

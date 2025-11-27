@@ -77,8 +77,8 @@ app.get('/health', (req, res) => {
 // Подключение API роутов (с обработкой ошибок)
 (async () => {
 try {
-  // Инициализация Hybrid Database (MockDatabase + Supabase sync)
-  const HybridDatabase = require('./database/HybridDatabase');
+  // Инициализация Supabase Database (только Supabase, без MockDatabase)
+  const SupabaseClient = require('./database/SupabaseClient');
   const SettingsManager = require('./services/SettingsManager');
   const winston = require('winston');
   
@@ -88,8 +88,8 @@ try {
     transports: [new winston.transports.Console()]
   });
   
-  const pool = new HybridDatabase();
-  await pool.initialize(); // Загрузить из Supabase если доступен
+  const pool = new SupabaseClient();
+  await pool.initialize(); // Подключиться к Supabase
   
   const settingsManager = new SettingsManager(pool, logger);
   
@@ -226,7 +226,7 @@ try {
 app.listen(PORT, () => {
   console.log(`🚀 Smart Email API running on http://localhost:${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💾 Database: MockDatabase (compatible with Node v24)`);
+  console.log(`💾 Database: Supabase (PostgreSQL)`);
   console.log(`✨ Server ready!`);
 });
 

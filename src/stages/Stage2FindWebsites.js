@@ -81,29 +81,55 @@ class Stage2FindWebsites {
   }
 
   async _getCompanies(sessionId) {
+    // Получить только компании БЕЗ сайта
+    // (Stage 1 уже мог найти сайты для некоторых)
     const result = await this.db.query(
       `SELECT pending_id, company_name 
        FROM pending_companies 
-       WHERE session_id = $1 AND stage = 'names_found'`,
+       WHERE session_id = $1 
+         AND stage = 'names_found'
+         AND (website IS NULL OR website = '')`,
       [sessionId]
     );
+    
+    this.logger.info('Stage 2: Companies without website', {
+      count: result.rows.length,
+      sessionId
+    });
+    
     return result.rows;
   }
 
   async _findWebsite(company, sessionId) {
     try {
-      const prompt = `Найди официальный веб-сайт компании из Китая.
+      const prompt = `Найди официальный веб-сайт и email компании из Китая через поиск в интернете.
 
 КОМПАНИЯ: ${company.company_name}
 
-ТРЕБОВАНИЯ:
-1. Только официальные сайты (заканчиваются на .cn, .com.cn, .net.cn или .com)
-2. НЕ маркетплейсы (Alibaba, 1688, Made-in-China)
-3. Основной домен компании, не подразделений
+ЧТО ИСКАТЬ:
+1. **Официальный веб-сайт**:
+   - Только корпоративные сайты (.cn, .com.cn, .net.cn, .com)
+   - НЕ маркетплейсы (Alibaba, 1688, Made-in-China)
+   - Основной домен компании, не подразделений
 
-РЕЗУЛЬТАТ: Только URL в формате https://www.example.cn
+2. **Email для связи**:
+   - Поищи email в профилях на B2B площадках (Alibaba, Made-in-China, 1688)
+   - Проверь каталоги и справочники компаний
+   - Любые упоминания компании с контактами в интернете
 
-Если не найдено: выведи "NOT_FOUND"`;
+РЕЗУЛЬТАТ: JSON формат:
+{
+  "website": "https://www.example.cn",
+  "email": "info@example.com",
+  "source": "откуда взят email (Alibaba/каталог/сайт)"
+}
+
+Если сайт не найден: {"website": null, "email": "...если найден", "source": "..."}
+Если ничего не найдено: {"website": null, "email": null, "source": null}
+
+ВАЖНО: Email можно взять с Alibaba/Made-in-China даже если сайт не найден!
+
+ВЕРНИ ТОЛЬКО JSON, без дополнительного текста.`;
 
       const response = await this.sonar.query(prompt, {
         stage: 'stage2_find_websites',
@@ -111,23 +137,35 @@ class Stage2FindWebsites {
         useCache: true
       });
 
-      const website = this._parseWebsite(response);
+      const result = this._parseResponse(response);
 
-      if (website) {
-        // Сохранить URL
+      if (result.website || result.email) {
+        // Определяем новый stage
+        let newStage = 'names_found';
+        if (result.website && result.email) {
+          newStage = 'contacts_found';
+        } else if (result.website) {
+          newStage = 'website_found';
+        } else if (result.email) {
+          newStage = 'email_found'; // новый stage для случая когда есть email но нет сайта
+        }
+
+        // Сохранить найденные данные
         await this.db.query(
           `UPDATE pending_companies 
-           SET website = $1, stage = 'website_found', updated_at = NOW()
-           WHERE pending_id = $2`,
-          [website, company.pending_id]
+           SET website = $1, email = $2, stage = $3, updated_at = NOW()
+           WHERE pending_id = $4`,
+          [result.website, result.email, newStage, company.pending_id]
         );
 
-        this.logger.debug('Stage 2: Website found', {
+        this.logger.info('Stage 2: Data found', {
           company: company.company_name,
-          website
+          website: result.website || 'not found',
+          email: result.email || 'not found',
+          source: result.source
         });
 
-        return { success: true, website };
+        return { success: true, website: result.website, email: result.email };
       } else {
         // Отметить как не найдено
         await this.db.query(
@@ -137,7 +175,7 @@ class Stage2FindWebsites {
           [company.pending_id]
         );
 
-        this.logger.debug('Stage 2: Website not found', {
+        this.logger.warn('Stage 2: Nothing found', {
           company: company.company_name
         });
 
@@ -150,6 +188,37 @@ class Stage2FindWebsites {
         error: error.message
       });
       return { success: false, error: error.message };
+    }
+  }
+
+  _parseResponse(response) {
+    try {
+      // Попытка распарсить JSON
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        // Fallback: попытка найти URL напрямую в тексте
+        const urlMatch = response.match(/(https?:\/\/[^\s]+)/);
+        return {
+          website: urlMatch ? urlMatch[1] : null,
+          email: null,
+          source: null
+        };
+      }
+
+      const data = JSON.parse(jsonMatch[0]);
+      
+      return {
+        website: data.website || null,
+        email: data.email || null,
+        source: data.source || null
+      };
+
+    } catch (error) {
+      this.logger.error('Failed to parse Stage 2 response', {
+        error: error.message,
+        response: response.substring(0, 200)
+      });
+      return { website: null, email: null, source: null };
     }
   }
 

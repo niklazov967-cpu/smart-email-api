@@ -209,6 +209,135 @@ class MockDatabase {
       }
     }
     
+    // SELECT
+    if (text.trim().toUpperCase().startsWith('SELECT')) {
+      const tableMatch = text.match(/FROM\s+(\w+)/i);
+      if (tableMatch) {
+        const tableName = tableMatch[1];
+        
+        if (!this.data[tableName]) {
+          return { rows: [] };
+        }
+        
+        let results = [...this.data[tableName]];
+        
+        // WHERE обработка
+        if (text.includes('WHERE') && params.length > 0) {
+          // Извлечь условия WHERE
+          const whereMatch = text.match(/WHERE\s+(.*?)(?:\s+ORDER|\s+LIMIT|\s+OFFSET|$)/is);
+          
+          if (whereMatch) {
+            const whereClause = whereMatch[1].trim();
+            
+            // DEBUG
+            const isProgressQuery = tableName === 'processing_progress';
+            if (isProgressQuery) {
+              console.log('🔍 MockDatabase WHERE debug:', {
+                table: tableName,
+                whereClause,
+                params,
+                totalRows: results.length
+              });
+            }
+            
+            results = results.filter(row => {
+              // Парсинг простых условий: field = $1 AND field2 = $2
+              const conditions = whereClause.split(/\s+AND\s+/i);
+              
+              const matches = conditions.every(condition => {
+                const match = condition.match(/(\w+)\s*=\s*\$(\d+)/);
+                if (match) {
+                  const fieldName = match[1];
+                  const paramIndex = parseInt(match[2]) - 1;
+                  const expectedValue = params[paramIndex];
+                  
+                  const result = row[fieldName] === expectedValue;
+                  
+                  if (isProgressQuery) {
+                    console.log(`  Checking ${fieldName}: ${row[fieldName]} === ${expectedValue} => ${result}`);
+                  }
+                  
+                  return result;
+                }
+                
+                // Проверка на status = 'completed' (строковый литерал)
+                const literalMatch = condition.match(/(\w+)\s*=\s*'([^']+)'/);
+                if (literalMatch) {
+                  const fieldName = literalMatch[1];
+                  const expectedValue = literalMatch[2];
+                  const result = row[fieldName] === expectedValue;
+                  
+                  if (isProgressQuery) {
+                    console.log(`  Checking ${fieldName}: ${row[fieldName]} === '${expectedValue}' => ${result}`);
+                  }
+                  
+                  return result;
+                }
+                
+                return true;
+              });
+              
+              if (isProgressQuery && matches) {
+                console.log(`  ✅ Row matched:`, { stage_name: row.stage_name, status: row.status });
+              }
+              
+              return matches;
+            });
+            
+            if (isProgressQuery) {
+              console.log(`🔍 Filter result: ${results.length} rows`);
+            }
+          }
+        }
+        
+        // ORDER BY
+        if (text.includes('ORDER BY')) {
+          const orderMatch = text.match(/ORDER BY\s+(\w+)\s+(ASC|DESC)?/i);
+          if (orderMatch) {
+            const orderField = orderMatch[1];
+            const orderDir = orderMatch[2]?.toUpperCase() || 'ASC';
+            
+            results.sort((a, b) => {
+              const aVal = a[orderField];
+              const bVal = b[orderField];
+              
+              if (aVal === bVal) return 0;
+              if (aVal === null || aVal === undefined) return 1;
+              if (bVal === null || bVal === undefined) return -1;
+              
+              const comparison = aVal > bVal ? 1 : -1;
+              return orderDir === 'DESC' ? -comparison : comparison;
+            });
+          }
+        }
+        
+        // LIMIT
+        if (text.includes('LIMIT')) {
+          const limitMatch = text.match(/LIMIT\s+(\d+)/i);
+          if (limitMatch) {
+            const limit = parseInt(limitMatch[1]);
+            results = results.slice(0, limit);
+          }
+        }
+        
+        // OFFSET
+        if (text.includes('OFFSET')) {
+          const offsetMatch = text.match(/OFFSET\s+(\d+)/i);
+          if (offsetMatch) {
+            const offset = parseInt(offsetMatch[1]);
+            results = results.slice(offset);
+          }
+        }
+        
+        // COUNT(*)
+        if (text.includes('COUNT(*)')) {
+          return { rows: [{ count: results.length }] };
+        }
+        
+        return { rows: results };
+      }
+    }
+    
     // BEGIN, COMMIT, ROLLBACK
     if (text.match(/BEGIN|COMMIT|ROLLBACK/i)) {
       return { rows: [] };

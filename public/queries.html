@@ -647,27 +647,22 @@
             queries.forEach((query, index) => {
                 const item = document.createElement('div');
                 item.className = 'query-item';
-                if (query.is_selected || query.is_main) {
+                if (query.is_selected) {
                     item.classList.add('selected');
                 }
-                if (query.is_main) {
-                    item.classList.add('main-topic');
-                }
 
-                const relevanceBadge = getRelevanceBadge(query.relevance || query.relevance_score || 75);
+                const relevanceBadge = getRelevanceBadge(query.relevance || query.relevance_score || 50);
 
                 item.innerHTML = `
                     <input type="checkbox" 
                            class="query-checkbox" 
                            id="query-${index}"
-                           ${query.is_selected || query.is_main ? 'checked' : ''}
-                           ${query.is_main ? 'disabled' : ''}
+                           ${query.is_selected ? 'checked' : ''}
                            onchange="updateSelection()">
                     <div class="query-content">
                         <div class="query-cn">${query.query_cn}</div>
                         <div class="query-ru">${query.query_ru}</div>
                     </div>
-                    ${query.is_main ? '<span class="query-badge badge-main">Основная тема</span>' : ''}
                     <span class="query-badge ${relevanceBadge.class}">${relevanceBadge.text}</span>
                 `;
 
@@ -679,24 +674,23 @@
         }
 
         function getRelevanceBadge(relevance) {
-            // Если relevance не задана, используем 75% по умолчанию
-            const rel = relevance || 75;
+            // Если relevance не задана, используем 50% по умолчанию
+            const rel = relevance || 50;
             
             if (rel >= 80) {
-                return { class: 'badge-high', text: `🔥 ${rel}% релевантность` };
-            } else if (rel >= 50) {
-                return { class: 'badge-medium', text: `⭐ ${rel}% релевантность` };
+                return { class: 'badge-high', text: `🔥 ${rel}%` };
+            } else if (rel >= 60) {
+                return { class: 'badge-medium', text: `⭐ ${rel}%` };
             } else {
-                return { class: 'badge-low', text: `💡 ${rel}% релевантность` };
+                return { class: 'badge-low', text: `💡 ${rel}%` };
             }
         }
 
         function updateSelection() {
-            const checkboxes = document.querySelectorAll('.query-checkbox:not(:disabled)');
+            const checkboxes = document.querySelectorAll('.query-checkbox');
             const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
             
-            // +1 for main topic (always selected)
-            document.getElementById('selectedCount').textContent = checkedCount + 1;
+            document.getElementById('selectedCount').textContent = checkedCount;
 
             // Update visual state
             checkboxes.forEach(checkbox => {

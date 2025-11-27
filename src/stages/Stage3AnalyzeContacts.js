@@ -77,8 +77,10 @@ class Stage3AnalyzeContacts {
     const result = await this.db.query(
       `SELECT pending_id, company_name, website 
        FROM pending_companies 
-       WHERE session_id = $1 AND stage = 'website_found'
-       AND website IS NOT NULL`,
+       WHERE session_id = $1 
+       AND stage = 'website_found'
+       AND website IS NOT NULL
+       AND (email IS NULL OR email = '')`,
       [sessionId]
     );
     return result.rows;
@@ -86,23 +88,36 @@ class Stage3AnalyzeContacts {
 
   async _analyzeContacts(company, sessionId) {
     try {
-      const prompt = `Проанализируй сайт компании и найди email-адреса для связи.
+      const prompt = `Найди email-адрес для этой компании через поиск в интернете:
 
+КОМПАНИЯ: ${company.company_name}
 САЙТ: ${company.website}
 
 ЗАДАЧА:
-1. Найди страницу контактов (Contact, About Us, Contact Us, 联系我们)
-2. Извлеки ВСЕ email адреса (включая info@, admin@, sales@, export@ и т.д.)
-3. Приоритет email: sales@, export@, international@, но включи все найденные
+Используй поиск в интернете (НЕ пытайся открыть сайт напрямую):
+1. Поищи упоминания компании "${company.company_name}" в интернете
+2. Поищи информацию по домену "${company.website}"
+3. Проверь каталоги, справочники, B2B площадки (Alibaba, Made-in-China, 1688)
+4. Найди ЛЮБЫЕ email-адреса связанные с этой компанией
 
-РЕЗУЛЬТАТ: JSON массив email адресов:
+ВАЖНО:
+- Email может быть на Alibaba, 1688, Made-in-China, других B2B площадках
+- Email может быть в отзывах, новостях, справочниках компаний
+- Ищи любые упоминания контактов этой компании
+- **НЕ пытайся открыть сайт напрямую** - используй ПОИСК В ИНТЕРНЕТЕ
+- Даже если сайт недоступен - email можно найти в других источниках!
+
+РЕЗУЛЬТАТ: JSON формат:
 {
-  "emails": ["email1@example.com", "email2@example.com"],
-  "contact_page": "URL страницы контактов",
-  "note": "примечания"
+  "emails": ["email@example.com"],
+  "source": "где нашел (Alibaba/Made-in-China/каталог/новости/сайт)",
+  "found_in": "internet search",
+  "note": "источник информации"
 }
 
-Если не найдено: {"emails": [], "note": "причина"}`;
+Если не найдено: {"emails": [], "note": "детальное объяснение где искал и что нашел"}
+
+ВЕРНИ ТОЛЬКО JSON, без дополнительного текста.`;
 
       const response = await this.sonar.query(prompt, {
         stage: 'stage3_analyze_contacts',
@@ -113,17 +128,21 @@ class Stage3AnalyzeContacts {
       const result = this._parseResponse(response);
 
       if (result.emails.length > 0) {
-        // Сохранить email адреса
+        // Сохранить первый найденный email в колонку email
+        const primaryEmail = result.emails[0];
+        
         await this.db.query(
           `UPDATE pending_companies 
-           SET contacts_json = $1, stage = 'site_analyzed', updated_at = NOW()
-           WHERE pending_id = $2`,
-          [JSON.stringify(result), company.pending_id]
+           SET email = $1, contacts_json = $2, stage = 'contacts_found', updated_at = NOW()
+           WHERE pending_id = $3`,
+          [primaryEmail, JSON.stringify(result), company.pending_id]
         );
 
-        this.logger.debug('Stage 3: Contacts found', {
+        this.logger.info('Stage 3: Email found', {
           company: company.company_name,
-          emailCount: result.emails.length
+          email: primaryEmail,
+          emailCount: result.emails.length,
+          source: result.source
         });
 
         return { success: true, emails: result.emails };
@@ -133,11 +152,13 @@ class Stage3AnalyzeContacts {
           `UPDATE pending_companies 
            SET contacts_json = $1, stage = 'site_analyzed', updated_at = NOW()
            WHERE pending_id = $2`,
-          [JSON.stringify({ emails: [], note: 'No contacts found' }), company.pending_id]
+          [JSON.stringify({ emails: [], note: result.note || 'No contacts found' }), company.pending_id]
         );
 
-        this.logger.debug('Stage 3: No contacts found', {
-          company: company.company_name
+        this.logger.warn('Stage 3: No email found', {
+          company: company.company_name,
+          website: company.website,
+          reason: result.note
         });
 
         return { success: true, emails: [] };
@@ -149,6 +170,78 @@ class Stage3AnalyzeContacts {
         error: error.message
       });
       return { success: false, emails: [], error: error.message };
+    }
+  }
+
+  async _fallbackEmailSearch(company, sessionId) {
+    try {
+      const prompt = `Найди email-адрес для этой компании через поиск в интернете:
+
+КОМПАНИЯ: ${company.company_name}
+САЙТ: ${company.website}
+
+ЗАДАЧА:
+Поскольку сайт недоступен напрямую, используй поиск в интернете:
+1. Поищи упоминания компании "${company.company_name}" в интернете
+2. Поищи по домену "${company.website}"
+3. Проверь каталоги, справочники, B2B площадки (Alibaba, Made-in-China, и др.)
+4. Найди ЛЮБЫЕ email-адреса связанные с этой компанией
+
+ВАЖНО:
+- Email может быть на Alibaba, 1688, Made-in-China, других B2B площадках
+- Email может быть в отзывах, новостях, справочниках компаний
+- Ищи любые упоминания контактов этой компании
+
+РЕЗУЛЬТАТ: JSON формат:
+{
+  "emails": ["email@example.com"],
+  "source": "где нашел (Alibaba/Made-in-China/каталог/новости)",
+  "found_in": "fallback search",
+  "note": "источник информации"
+}
+
+Если не найдено: {"emails": [], "note": "причина"}
+
+ВЕРНИ ТОЛЬКО JSON, без дополнительного текста.`;
+
+      const response = await this.sonar.query(prompt, {
+        stage: 'stage3_fallback_search',
+        sessionId,
+        useCache: true
+      });
+
+      const result = this._parseResponse(response);
+
+      if (result.emails.length > 0) {
+        const primaryEmail = result.emails[0];
+        
+        await this.db.query(
+          `UPDATE pending_companies 
+           SET email = $1, contacts_json = $2, stage = 'contacts_found', updated_at = NOW()
+           WHERE pending_id = $3`,
+          [primaryEmail, JSON.stringify({ ...result, fallback: true }), company.pending_id]
+        );
+
+        this.logger.info('Stage 3: Email found via fallback search', {
+          company: company.company_name,
+          email: primaryEmail,
+          source: result.source || 'internet search'
+        });
+
+        return { success: true, emails: result.emails };
+      } else {
+        this.logger.warn('Stage 3: Fallback search also failed', {
+          company: company.company_name
+        });
+        return { success: true, emails: [] };
+      }
+
+    } catch (error) {
+      this.logger.error('Stage 3: Fallback search error', {
+        company: company.company_name,
+        error: error.message
+      });
+      return { success: true, emails: [] };
     }
   }
 
@@ -164,6 +257,8 @@ class Stage3AnalyzeContacts {
       return {
         emails: Array.isArray(data.emails) ? data.emails : [],
         contact_page: data.contact_page || null,
+        found_in: data.found_in || null,
+        source: data.source || null,
         note: data.note || ''
       };
 

@@ -125,6 +125,60 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * DELETE /api/sessions/clear-all
+ * Очистить всю базу данных (удалить все сессии и связанные данные)
+ * ВАЖНО: Должен быть ПЕРЕД /:id чтобы не воспринимался как UUID
+ */
+router.delete('/clear-all', async (req, res) => {
+  try {
+    req.logger.info('Clearing all database data');
+
+    // Удаляем все записи из таблиц (CASCADE удалит связанные записи)
+    // Supabase требует WHERE clause
+    await req.db.query('DELETE FROM search_sessions WHERE true');
+    
+    // Для уверенности очищаем и другие таблицы
+    await req.db.query('DELETE FROM session_queries WHERE true');
+    await req.db.query('DELETE FROM pending_companies WHERE true');
+    await req.db.query('DELETE FROM found_companies WHERE true');
+    await req.db.query('DELETE FROM processing_progress WHERE true');
+    
+    // Опционально: очистить кеш (если таблица существует)
+    try {
+      await req.db.query('DELETE FROM perplexity_cache WHERE true');
+      await req.db.query('DELETE FROM api_calls WHERE true');
+    } catch (error) {
+      req.logger.warn('Could not clear cache tables', { error: error.message });
+    }
+
+    req.logger.info('Database cleared successfully');
+
+    res.json({
+      success: true,
+      message: 'База данных очищена',
+      cleared_tables: [
+        'search_sessions',
+        'session_queries',
+        'pending_companies',
+        'found_companies',
+        'processing_progress',
+        'perplexity_cache',
+        'api_calls'
+      ]
+    });
+
+  } catch (error) {
+    req.logger.error('Failed to clear database', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/sessions/:id
  * Получить детали сессии
  */

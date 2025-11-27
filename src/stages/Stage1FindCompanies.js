@@ -16,8 +16,8 @@ class Stage1FindCompanies {
     try {
       // Получить настройки для Stage 1
       const settings = await this.settings.getCategory('processing_stages');
-      const minCompanies = settings.stage1_min_companies || 8;
-      const maxCompanies = settings.stage1_max_companies || 12;
+      const minCompanies = settings.stage1_min_companies || 10;
+      const maxCompanies = settings.stage1_max_companies || 15;
 
       // Создать промпт для Sonar
       const prompt = this._createPrompt(searchQuery, minCompanies, maxCompanies);
@@ -54,8 +54,11 @@ class Stage1FindCompanies {
       // Удалить дубликаты
       const uniqueCompanies = this._removeDuplicates(companies);
 
+      // Фильтровать маркетплейсы
+      const filteredCompanies = this._filterMarketplaces(uniqueCompanies);
+
       // Ограничить до максимума
-      const finalCompanies = uniqueCompanies.slice(0, maxCompanies);
+      const finalCompanies = filteredCompanies.slice(0, maxCompanies);
 
       // Сохранить в БД
       await this._saveCompanies(finalCompanies, sessionId);
@@ -91,7 +94,7 @@ class Stage1FindCompanies {
   _createPrompt(searchQuery, minCompanies, maxCompanies) {
     return `Используй поиск в интернете для поиска реальных производителей.
 
-ЗАДАЧА: Найти лучших производителей в Китае по этому критерию:
+ЗАДАЧА: Найти минимум ${minCompanies} производителей в Китае по этому критерию:
 ${searchQuery}
 
 ТРЕБОВАНИЯ:
@@ -100,11 +103,24 @@ ${searchQuery}
 3. Компании с официальными веб-сайтами
 4. Действующие компании (не закрытые)
 
-РЕЗУЛЬТАТ: JSON формат, от ${minCompanies} до ${maxCompanies} компаний:
+ЧТО ИСКАТЬ ДЛЯ КАЖДОЙ КОМПАНИИ:
+1. **Название компании** (полное китайское название)
+2. **Официальный сайт** (корпоративный, НЕ маркетплейс)
+3. **Email для связи** - ВАЖНО! Поищи email в:
+   - Профилях на B2B площадках (Alibaba, Made-in-China, 1688)
+   - Каталогах и справочниках компаний
+   - Любых упоминаниях компании в интернете
+   - Контактной информации в поисковой выдаче
+4. **Краткое описание** услуг/продукции
+
+РЕЗУЛЬТАТ: JSON формат, минимум ${minCompanies} компаний:
 {
   "companies": [
     {
       "name": "完整的公司名",
+      "website": "https://example.com",
+      "email": "info@example.com",
+      "brief_description": "краткое описание услуг компании",
       "likely_domain_extension": ".cn"
     }
   ],
@@ -112,7 +128,21 @@ ${searchQuery}
   "note": "краткие замечания откуда взяты компании"
 }
 
-ВНИМАНИЕ: Выведи ТОЛЬКО JSON, без дополнительного текста.`;
+ВАЖНО: 
+- Найди МИНИМУМ ${minCompanies} компаний
+- **ОБЯЗАТЕЛЬНО постарайся найти email** для каждой компании через поиск в интернете
+- Если website найден - обязательно укажи полный URL
+- **НЕ УКАЗЫВАЙ маркетплейсы как website** (Alibaba, 1688, Made-in-China) - **ТОЛЬКО официальные корпоративные сайты**
+- Если у компании нет своего сайта - оставь website = null
+- **Email можно взять с Alibaba/Made-in-China/каталогов** - это нормально!
+- Если email не найден после поиска - укажи null
+- brief_description - 1-2 предложения о том, что производит компания
+- Выведи ТОЛЬКО JSON, без дополнительного текста
+
+ПРИОРИТЕТ: 
+1. Найти название и официальный сайт компании
+2. **Найти email через поиск в интернете** (Alibaba, Made-in-China, каталоги, справочники)
+3. Описание услуг`;
   }
 
   _createRetryPrompt(searchQuery) {
@@ -138,6 +168,9 @@ ${searchQuery}
 
       return data.companies.map(c => ({
         name: c.name,
+        website: c.website || null,
+        email: c.email || null,
+        description: c.brief_description || null,
         domain_extension: c.likely_domain_extension || '.cn'
       }));
 
@@ -162,15 +195,93 @@ ${searchQuery}
     });
   }
 
+  /**
+   * Проверяет является ли URL маркетплейсом
+   * Маркетплейсы: Alibaba, 1688, Made-in-China, Global Sources, Tmart, DHgate
+   */
+  _isMarketplace(url) {
+    if (!url) return false;
+    
+    const marketplaces = [
+      'alibaba.com',
+      '1688.com',
+      'made-in-china.com',
+      'globalsources.com',
+      'tmart.com',
+      'dhgate.com',
+      'aliexpress.com',
+      'taobao.com',
+      'tmall.com',
+      'jd.com',
+      'amazon.cn'
+    ];
+    
+    const urlLower = url.toLowerCase();
+    return marketplaces.some(marketplace => urlLower.includes(marketplace));
+  }
+
+  /**
+   * Фильтрует маркетплейсы из найденных компаний
+   * Если website - это маркетплейс, очищаем его и меняем stage на 'names_found'
+   */
+  _filterMarketplaces(companies) {
+    let marketplacesFound = 0;
+    
+    const filtered = companies.map(company => {
+      if (this._isMarketplace(company.website)) {
+        marketplacesFound++;
+        this.logger.debug('Stage 1: Marketplace URL filtered', {
+          company: company.name,
+          marketplace: company.website
+        });
+        
+        return {
+          ...company,
+          website: null,  // Убираем маркетплейс URL
+          // Сохраняем email/phone если есть
+        };
+      }
+      return company;
+    });
+    
+    if (marketplacesFound > 0) {
+      this.logger.info('Stage 1: Marketplaces filtered', {
+        count: marketplacesFound
+      });
+    }
+    
+    return filtered;
+  }
+
   async _saveCompanies(companies, sessionId) {
     for (const company of companies) {
+      // Определяем stage в зависимости от наличия данных
+      let stage = 'names_found';
+      if (company.website) {
+        stage = company.email ? 'contacts_found' : 'website_found';
+      }
+      
       await this.db.query(
         `INSERT INTO pending_companies 
-         (session_id, company_name, stage, created_at)
-         VALUES ($1, $2, $3, NOW())`,
-        [sessionId, company.name, 'names_found']
+         (session_id, company_name, website, email, description, stage, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+        [
+          sessionId, 
+          company.name, 
+          company.website,
+          company.email,
+          company.description,
+          stage
+        ]
       );
     }
+    
+    this.logger.info('Stage 1: Companies saved', {
+      total: companies.length,
+      withWebsite: companies.filter(c => c.website).length,
+      withEmail: companies.filter(c => c.email).length,
+      withDescription: companies.filter(c => c.description).length
+    });
   }
 }
 

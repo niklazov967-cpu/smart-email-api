@@ -68,10 +68,30 @@ class HybridDatabase {
   }
 
   /**
-   * Основной query метод - работает с MockDatabase
+   * Основной query метод - работает с MockDatabase + fallback на Supabase
    */
   async query(text, params = []) {
-    // Выполнить запрос в MockDatabase (быстро)
+    const operation = text.trim().toUpperCase();
+    
+    // Для SELECT - проверяем MockDatabase, если пусто - читаем из Supabase
+    if (operation.startsWith('SELECT')) {
+      const mockResult = await this.mock.query(text, params);
+      
+      // Если MockDatabase пуст и Supabase доступен - читаем из Supabase
+      if ((!mockResult.rows || mockResult.rows.length === 0) && this.syncEnabled) {
+        try {
+          const supabaseResult = await this.supabase.query(text, params);
+          return supabaseResult;
+        } catch (error) {
+          console.warn('⚠️  Supabase SELECT failed, using MockDatabase:', error.message);
+          return mockResult;
+        }
+      }
+      
+      return mockResult;
+    }
+    
+    // Для INSERT/UPDATE/DELETE - выполняем в MockDatabase
     const result = await this.mock.query(text, params);
     
     // Синхронизировать с Supabase в фоне (не ждем)
@@ -223,6 +243,44 @@ class HybridDatabase {
   // Прямой доступ к данным MockDatabase
   get data() {
     return this.mock.data;
+  }
+
+  // Для совместимости с SupabaseClient
+  async directSelect(table, filters = {}) {
+    // Пробуем прочитать из MockDatabase
+    let rows = this.mock.data[table] || [];
+    
+    // Применяем фильтры
+    if (Object.keys(filters).length > 0) {
+      rows = rows.filter(row => {
+        return Object.entries(filters).every(([key, value]) => row[key] === value);
+      });
+    }
+    
+    // Если данных нет в MockDatabase и Supabase доступен - читаем из Supabase
+    if (rows.length === 0 && this.syncEnabled) {
+      try {
+        return await this.supabase.directSelect(table, filters);
+      } catch (error) {
+        console.warn(`⚠️  Supabase directSelect failed for ${table}:`, error.message);
+      }
+    }
+    
+    return rows;
+  }
+
+  async directInsert(table, data) {
+    if (this.syncEnabled) {
+      return await this.supabase.directInsert(table, data);
+    }
+    throw new Error('Supabase not available for directInsert');
+  }
+
+  async directUpdate(table, filters, data) {
+    if (this.syncEnabled) {
+      return await this.supabase.directUpdate(table, filters, data);
+    }
+    throw new Error('Supabase not available for directUpdate');
   }
 }
 
