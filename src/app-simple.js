@@ -75,9 +75,10 @@ app.get('/health', (req, res) => {
 });
 
 // Подключение API роутов (с обработкой ошибок)
+(async () => {
 try {
-  // Инициализация Mock DB и сервисов
-  const MockDatabase = require('./database/MockDatabase');
+  // Инициализация Supabase
+  const SupabaseClient = require('./database/SupabaseClient');
   const SettingsManager = require('./services/SettingsManager');
   const winston = require('winston');
   
@@ -87,7 +88,9 @@ try {
     transports: [new winston.transports.Console()]
   });
   
-  const pool = new MockDatabase();
+  const pool = new SupabaseClient();
+  await pool.initialize(); // Загрузить Supabase клиент
+  
   const settingsManager = new SettingsManager(pool, logger);
   
   // Инициализация API клиентов
@@ -212,18 +215,21 @@ try {
   app.use('/api/debug', require('./api/debug')); // НОВЫЙ: Показывает ВСЕ данные
   
   console.log('✅ API routes loaded successfully');
+
+  // Start server
+  app.listen(PORT, () => {
+    console.log(`🚀 Smart Email API running on http://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`💾 Database: Supabase`);
+    console.log(`✨ Server ready!`);
+  });
   
 } catch (error) {
   console.error('⚠️  Failed to load API routes:', error.message);
-  console.log('Running in basic mode only');
+  console.error(error.stack);
+  process.exit(1);
 }
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Smart Email API running on http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`✨ Server ready!`);
-});
+})();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
