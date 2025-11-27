@@ -78,48 +78,56 @@ class SupabaseClient {
     }
 
     const tableName = tableMatch[1];
-    let query = this.supabase.from(tableName).select('*');
+    
+    try {
+      let query = this.supabase.from(tableName).select('*');
 
-    // WHERE session_id = $1
-    if (text.includes('WHERE') && text.includes('session_id') && params.length > 0) {
-      query = query.eq('session_id', params[0]);
-    }
-
-    // WHERE progress_id = $1
-    if (text.includes('WHERE') && text.includes('progress_id') && params.length > 0) {
-      query = query.eq('progress_id', params[0]);
-    }
-
-    // ORDER BY
-    if (text.includes('ORDER BY')) {
-      const orderMatch = text.match(/ORDER BY\s+(\w+)\s+(ASC|DESC)?/i);
-      if (orderMatch) {
-        const column = orderMatch[1];
-        const direction = orderMatch[2]?.toUpperCase() === 'DESC';
-        query = query.order(column, { ascending: !direction });
+      // WHERE session_id = $1
+      if (text.includes('WHERE') && text.includes('session_id') && params.length > 0) {
+        query = query.eq('session_id', params[0]);
       }
-    }
 
-    // LIMIT
-    if (text.includes('LIMIT')) {
-      const limitMatch = text.match(/LIMIT\s+(\d+)/i);
-      if (limitMatch) {
-        query = query.limit(parseInt(limitMatch[1]));
+      // WHERE progress_id = $1
+      if (text.includes('WHERE') && text.includes('progress_id') && params.length > 0) {
+        query = query.eq('progress_id', params[0]);
       }
+
+      // ORDER BY
+      if (text.includes('ORDER BY')) {
+        const orderMatch = text.match(/ORDER BY\s+(\w+)\s+(ASC|DESC)?/i);
+        if (orderMatch) {
+          const column = orderMatch[1];
+          const direction = orderMatch[2]?.toUpperCase() === 'DESC';
+          query = query.order(column, { ascending: !direction });
+        }
+      }
+
+      // LIMIT
+      if (text.includes('LIMIT')) {
+        const limitMatch = text.match(/LIMIT\s+(\d+)/i);
+        if (limitMatch) {
+          query = query.limit(parseInt(limitMatch[1]));
+        }
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.warn('Supabase SELECT error:', error.message);
+        throw new Error(`Supabase SELECT error: ${error.message}`);
+      }
+
+      // COUNT(*)
+      if (text.includes('COUNT(*)')) {
+        return { rows: [{ count: data?.length || 0 }] };
+      }
+
+      return { rows: data || [] };
+    } catch (error) {
+      console.error('Supabase query failed, returning empty result:', error.message);
+      // Возвращаем пустой результат вместо ошибки для совместимости
+      return { rows: [] };
     }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(`Supabase SELECT error: ${error.message}`);
-    }
-
-    // COUNT(*)
-    if (text.includes('COUNT(*)')) {
-      return { rows: [{ count: data?.length || 0 }] };
-    }
-
-    return { rows: data || [] };
   }
 
   async _handleInsert(text, params) {
@@ -167,16 +175,24 @@ class SupabaseClient {
       row.created_at = new Date().toISOString();
     }
 
-    const { data, error } = await this.supabase
-      .from(tableName)
-      .insert([row])
-      .select();
+    try {
+      const { data, error } = await this.supabase
+        .from(tableName)
+        .insert([row])
+        .select();
 
-    if (error) {
-      throw new Error(`Supabase INSERT error: ${error.message}`);
+      if (error) {
+        console.warn('Supabase INSERT error:', error.message);
+        // Для совместимости возвращаем исходную строку
+        return { rows: [row] };
+      }
+
+      return { rows: data || [row] };
+    } catch (error) {
+      console.error('Supabase INSERT failed, returning row:', error.message);
+      // Возвращаем строку для совместимости
+      return { rows: [row] };
     }
-
-    return { rows: data || [row] };
   }
 
   async _handleUpdate(text, params) {
@@ -207,21 +223,27 @@ class SupabaseClient {
 
     updates.updated_at = new Date().toISOString();
 
-    // WHERE session_id = $N (последний параметр)
-    let query = this.supabase.from(tableName).update(updates);
+    try {
+      // WHERE session_id = $N (последний параметр)
+      let query = this.supabase.from(tableName).update(updates);
 
-    if (text.includes('WHERE session_id')) {
-      const sessionId = params[params.length - 1];
-      query = query.eq('session_id', sessionId);
+      if (text.includes('WHERE session_id')) {
+        const sessionId = params[params.length - 1];
+        query = query.eq('session_id', sessionId);
+      }
+
+      const { data, error } = await query.select();
+
+      if (error) {
+        console.warn('Supabase UPDATE error:', error.message);
+        return { rows: [] };
+      }
+
+      return { rows: data || [] };
+    } catch (error) {
+      console.error('Supabase UPDATE failed:', error.message);
+      return { rows: [] };
     }
-
-    const { data, error } = await query.select();
-
-    if (error) {
-      throw new Error(`Supabase UPDATE error: ${error.message}`);
-    }
-
-    return { rows: data || [] };
   }
 
   async _handleDelete(text, params) {

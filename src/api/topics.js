@@ -82,7 +82,7 @@ router.post('/:sessionId/generate', async (req, res) => {
 
     // Получить тему из сессии
     const sessionResult = await req.db.query(
-      'SELECT search_query FROM search_sessions WHERE session_id = $1',
+      'SELECT search_query, topic_description FROM search_sessions WHERE session_id = $1',
       [sessionId]
     );
 
@@ -94,6 +94,7 @@ router.post('/:sessionId/generate', async (req, res) => {
     }
 
     const mainTopic = sessionResult.rows[0].search_query;
+    const oldDescription = sessionResult.rows[0].topic_description;
 
     // Генерировать запросы
     const result = await req.queryExpander.expandTopic(mainTopic, target_count);
@@ -101,9 +102,36 @@ router.post('/:sessionId/generate', async (req, res) => {
     // Сохранить в БД
     await req.queryExpander.saveQueries(sessionId, mainTopic, result.queries);
 
+    // Обновить topic_description с количеством запросов
+    const queriesCount = result.queries.length;
+    let newDescription = oldDescription;
+    
+    // Извлечь время из старого описания если есть
+    const timeMatch = oldDescription ? oldDescription.match(/\[([^\]]+)\]/) : null;
+    if (timeMatch) {
+      const timeStr = timeMatch[1];
+      newDescription = `${mainTopic} [${timeStr}, ${queriesCount} запросов]`;
+    } else {
+      const now = new Date();
+      const timeStr = now.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).replace(',', '');
+      newDescription = `${mainTopic} [${timeStr}, ${queriesCount} запросов]`;
+    }
+    
+    // Обновить topic_description в БД
+    await req.db.query(
+      'UPDATE search_sessions SET topic_description = $1 WHERE session_id = $2',
+      [newDescription, sessionId]
+    );
+
     req.logger.info('Topics API: Queries generated and saved', { 
       sessionId, 
-      count: result.queries.length 
+      count: queriesCount,
+      description: newDescription
     });
 
     res.json({

@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Пошаговая обработка - Smart Email API</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      color: #333;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 20px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .stage-card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      opacity: 0.5;
+      transition: all 0.3s ease;
+    }
+
+    .stage-card.active {
+      opacity: 1;
+      border: 2px solid #667eea;
+    }
+
+    .stage-card.completed {
+      opacity: 1;
+      background: #f0f7ff;
+    }
+
+    .stage-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .stage-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .stage-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      background: #e0e0e0;
+    }
+
+    .stage-card.active .stage-icon {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      animation: pulse 2s infinite;
+    }
+
+    .stage-card.completed .stage-icon {
+      background: #10b981;
+      color: white;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+
+    .stage-status {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-pending {
+      background: #e0e0e0;
+      color: #666;
+    }
+
+    .status-active {
+      background: #667eea;
+      color: white;
+      animation: blink 2s infinite;
+    }
+
+    .status-completed {
+      background: #10b981;
+      color: white;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .stage-content {
+      display: none;
+    }
+
+    .stage-card.active .stage-content,
+    .stage-card.completed .stage-content {
+      display: block;
+    }
+
+    .results-list {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .result-item {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-left: 4px solid #667eea;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .result-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .result-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-detail {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .result-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #e0e0e0;
+      color: #666;
+    }
+
+    .result-badge.high { background: #10b981; color: white; }
+    .result-badge.medium { background: #f59e0b; color: white; }
+    .result-badge.low { background: #6b7280; color: white; }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px;
+      background: #f0f7ff;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      color: #667eea;
+      font-weight: 500;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #f0f7ff;
+    }
+
+    .btn-success {
+      background: #10b981;
+      color: white;
+    }
+
+    .btn-success:hover:not(:disabled) {
+      background: #059669;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+
+    .session-selector {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      margin: 10px 0;
+      cursor: pointer;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .info-box {
+      background: #f0f7ff;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+
+    .info-box p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Заголовок -->
+    <div class="header">
+      <h1>
+        <span>👣</span>
+        Пошаговая обработка
+      </h1>
+      <p>Контроль каждого этапа. Вы подтверждаете переход к следующему шагу после просмотра результатов.</p>
+      <div class="progress-bar">
+        <div class="progress-fill" id="overallProgress"></div>
+      </div>
+    </div>
+
+    <!-- Выбор сессии -->
+    <div class="session-selector" id="sessionSelector">
+      <h2 style="margin-bottom: 15px;">📋 Выберите сессию</h2>
+      <select id="sessionSelect">
+        <option value="">Загрузка сессий...</option>
+      </select>
+      <div class="info-box">
+        <p><strong>💡 Совет:</strong> Сначала создайте сессию и сгенерируйте запросы на главной странице, затем вернитесь сюда для пошаговой обработки.</p>
+      </div>
+      <div class="action-buttons">
+        <button class="btn btn-primary" id="startBtn" disabled>
+          <span>▶️</span>
+          Начать пошаговую обработку
+        </button>
+        <button class="btn btn-secondary" onclick="window.location.href='/'">
+          <span>🏠</span>
+          На главную
+        </button>
+      </div>
+    </div>
+
+    <!-- Этапы обработки -->
+    <div id="stagesContainer" style="display: none;">
+      <!-- Stage 1: Поиск компаний -->
+      <div class="stage-card" id="stage1" data-stage="1">
+        <div class="stage-header">
+          <div class="stage-title">
+            <div class="stage-icon">🏢</div>
+            <span>Этап 1: Поиск компаний</span>
+          </div>
+          <div class="stage-status status-pending" id="status1">Ожидание</div>
+        </div>
+        <div class="stage-content">
+          <div id="loading1" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <div class="loading-text">Ищу компании по запросам...</div>
+          </div>
+          <div id="results1" style="display: none;">
+            <div class="stats">
+              <div class="stat-card">
+                <div class="stat-value" id="stat1-queries">0</div>
+                <div class="stat-label">Запросов обработано</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat1-companies">0</div>
+                <div class="stat-label">Компаний найдено</div>
+              </div>
+            </div>
+            <div class="results-list" id="resultsList1"></div>
+            <div class="action-buttons">
+              <button class="btn btn-success" id="continue1">
+                <span>✅</span>
+                Продолжить к следующему этапу
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 2: Поиск сайтов -->
+      <div class="stage-card" id="stage2" data-stage="2">
+        <div class="stage-header">
+          <div class="stage-title">
+            <div class="stage-icon">🌐</div>
+            <span>Этап 2: Поиск сайтов</span>
+          </div>
+          <div class="stage-status status-pending" id="status2">Ожидание</div>
+        </div>
+        <div class="stage-content">
+          <div id="loading2" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <div class="loading-text">Ищу веб-сайты компаний...</div>
+          </div>
+          <div id="results2" style="display: none;">
+            <div class="stats">
+              <div class="stat-card">
+                <div class="stat-value" id="stat2-companies">0</div>
+                <div class="stat-label">Компаний обработано</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat2-websites">0</div>
+                <div class="stat-label">Сайтов найдено</div>
+              </div>
+            </div>
+            <div class="results-list" id="resultsList2"></div>
+            <div class="action-buttons">
+              <button class="btn btn-success" id="continue2">
+                <span>✅</span>
+                Продолжить к следующему этапу
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 3: Поиск контактов -->
+      <div class="stage-card" id="stage3" data-stage="3">
+        <div class="stage-header">
+          <div class="stage-title">
+            <div class="stage-icon">📧</div>
+            <span>Этап 3: Поиск контактов</span>
+          </div>
+          <div class="stage-status status-pending" id="status3">Ожидание</div>
+        </div>
+        <div class="stage-content">
+          <div id="loading3" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <div class="loading-text">Анализирую веб-сайты и ищу контакты...</div>
+          </div>
+          <div id="results3" style="display: none;">
+            <div class="stats">
+              <div class="stat-card">
+                <div class="stat-value" id="stat3-websites">0</div>
+                <div class="stat-label">Сайтов обработано</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat3-contacts">0</div>
+                <div class="stat-label">Контактов найдено</div>
+              </div>
+            </div>
+            <div class="results-list" id="resultsList3"></div>
+            <div class="action-buttons">
+              <button class="btn btn-success" id="continue3">
+                <span>✅</span>
+                Продолжить к следующему этапу
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 4: Анализ сервисов -->
+      <div class="stage-card" id="stage4" data-stage="4">
+        <div class="stage-header">
+          <div class="stage-title">
+            <div class="stage-icon">🔍</div>
+            <span>Этап 4: Анализ сервисов</span>
+          </div>
+          <div class="stage-status status-pending" id="status4">Ожидание</div>
+        </div>
+        <div class="stage-content">
+          <div id="loading4" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <div class="loading-text">Анализирую предоставляемые сервисы...</div>
+          </div>
+          <div id="results4" style="display: none;">
+            <div class="stats">
+              <div class="stat-card">
+                <div class="stat-value" id="stat4-companies">0</div>
+                <div class="stat-label">Компаний проанализировано</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat4-services">0</div>
+                <div class="stat-label">Сервисов определено</div>
+              </div>
+            </div>
+            <div class="results-list" id="resultsList4"></div>
+            <div class="action-buttons">
+              <button class="btn btn-success" id="continue4">
+                <span>✅</span>
+                Продолжить к следующему этапу
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 5: Генерация тегов -->
+      <div class="stage-card" id="stage5" data-stage="5">
+        <div class="stage-header">
+          <div class="stage-title">
+            <div class="stage-icon">🏷️</div>
+            <span>Этап 5: Генерация тегов</span>
+          </div>
+          <div class="stage-status status-pending" id="status5">Ожидание</div>
+        </div>
+        <div class="stage-content">
+          <div id="loading5" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <div class="loading-text">Генерирую теги и категории...</div>
+          </div>
+          <div id="results5" style="display: none;">
+            <div class="stats">
+              <div class="stat-card">
+                <div class="stat-value" id="stat5-companies">0</div>
+                <div class="stat-label">Компаний обработано</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="stat5-tags">0</div>
+                <div class="stat-label">Тегов создано</div>
+              </div>
+            </div>
+            <div class="results-list" id="resultsList5"></div>
+            <div class="action-buttons">
+              <button class="btn btn-primary" onclick="window.location.href='/companies.html'">
+                <span>📊</span>
+                Посмотреть все компании
+              </button>
+              <button class="btn btn-secondary" onclick="window.location.href='/'">
+                <span>🏠</span>
+                На главную
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentSessionId = null;
+    let currentStage = 0;
+
+    // Загрузить сессии
+    async function loadSessions() {
+      try {
+        const response = await fetch('/api/sessions');
+        const data = await response.json();
+        
+        const select = document.getElementById('sessionSelect');
+        
+        if (data.data && data.data.length > 0) {
+          select.innerHTML = '<option value="">Выберите сессию...</option>';
+          data.data.forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.session_id;
+            option.textContent = `${session.topic_description} (${new Date(session.created_at).toLocaleDateString()})`;
+            select.appendChild(option);
+          });
+        } else {
+          select.innerHTML = '<option value="">Нет доступных сессий</option>';
+        }
+      } catch (error) {
+        console.error('Error loading sessions:', error);
+        document.getElementById('sessionSelect').innerHTML = '<option value="">Ошибка загрузки</option>';
+      }
+    }
+
+    // Обработчик выбора сессии
+    document.getElementById('sessionSelect').addEventListener('change', (e) => {
+      currentSessionId = e.target.value;
+      document.getElementById('startBtn').disabled = !currentSessionId;
+    });
+
+    // Начать обработку
+    document.getElementById('startBtn').addEventListener('click', async () => {
+      if (!currentSessionId) return;
+      
+      document.getElementById('sessionSelector').style.display = 'none';
+      document.getElementById('stagesContainer').style.display = 'block';
+      
+      // Проверить прогресс сессии
+      try {
+        const progressResponse = await fetch(`/api/sessions/${currentSessionId}/stage-progress`);
+        const progressData = await progressResponse.json();
+        
+        if (progressData.success) {
+          const lastCompleted = progressData.lastCompletedStage;
+          const nextStage = progressData.nextStage;
+          
+          if (lastCompleted > 0) {
+            // Есть завершенные этапы - показать их как completed
+            for (let i = 1; i <= lastCompleted; i++) {
+              const stageCard = document.getElementById(`stage${i}`);
+              const statusEl = document.getElementById(`status${i}`);
+              stageCard.classList.add('completed');
+              statusEl.textContent = 'Завершено';
+              statusEl.className = 'stage-status status-completed';
+              
+              // Загрузить сохраненные результаты
+              await loadCachedStageResults(i, currentSessionId);
+            }
+            
+            // Показать сообщение о продолжении
+            if (nextStage) {
+              if (confirm(`Этапы 1-${lastCompleted} уже выполнены.\n\nПродолжить с этапа ${nextStage}?`)) {
+                runStage(nextStage);
+              } else {
+                runStage(1);
+              }
+            } else {
+              alert('Все этапы уже выполнены! ✅');
+            }
+          } else {
+            // Начать с первого этапа
+            runStage(1);
+          }
+        } else {
+          // Если не удалось получить прогресс, начать с первого
+          runStage(1);
+        }
+      } catch (error) {
+        console.error('Error checking progress:', error);
+        runStage(1);
+      }
+    });
+    
+    // Загрузить сохраненные результаты этапа
+    async function loadCachedStageResults(stageNum, sessionId) {
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}/process-stage/${stageNum}`, {
+          method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.cached) {
+          await displayStageResults(stageNum, data.data);
+          
+          const resultsEl = document.getElementById(`results${stageNum}`);
+          resultsEl.style.display = 'block';
+          
+          // Добавить бейдж "Кэшировано"
+          const cachedBadge = document.createElement('div');
+          cachedBadge.className = 'info-box';
+          cachedBadge.style.marginTop = '10px';
+          cachedBadge.innerHTML = `
+            <p>✅ Результаты загружены из кэша (выполнено ${new Date(data.completedAt).toLocaleString('ru-RU')})</p>
+          `;
+          resultsEl.insertBefore(cachedBadge, resultsEl.firstChild);
+        }
+      } catch (error) {
+        console.error(`Error loading cached results for stage ${stageNum}:`, error);
+      }
+    }
+
+    // Запуск этапа
+    async function runStage(stageNum) {
+      currentStage = stageNum;
+      updateProgress();
+      
+      const stageCard = document.getElementById(`stage${stageNum}`);
+      const statusEl = document.getElementById(`status${stageNum}`);
+      const loadingEl = document.getElementById(`loading${stageNum}`);
+      const resultsEl = document.getElementById(`results${stageNum}`);
+      
+      // Активировать карточку
+      stageCard.classList.add('active');
+      statusEl.textContent = 'Выполняется...';
+      statusEl.className = 'stage-status status-active';
+      loadingEl.style.display = 'flex';
+      resultsEl.style.display = 'none';
+      
+      try {
+        // Запустить обработку этапа
+        const response = await fetch(`/api/sessions/${currentSessionId}/process-stage/${stageNum}`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) throw new Error('Stage processing failed');
+        
+        const data = await response.json();
+        
+        // Показать результаты
+        await displayStageResults(stageNum, data.data);
+        
+        // Обновить статус
+        loadingEl.style.display = 'none';
+        resultsEl.style.display = 'block';
+        
+        // Показать информацию о кэше если этап был выполнен ранее
+        if (data.cached) {
+          const cachedInfo = document.createElement('div');
+          cachedInfo.className = 'info-box';
+          cachedInfo.style.marginBottom = '15px';
+          cachedInfo.innerHTML = `
+            <p><strong>⚡ Результаты загружены из кэша</strong></p>
+            <p style="font-size: 12px; margin-top: 5px;">
+              Этап был выполнен ранее: ${new Date(data.completedAt).toLocaleString('ru-RU')}<br>
+              Время выполнения: ${data.duration?.toFixed(2) || 'N/A'} сек
+            </p>
+          `;
+          resultsEl.insertBefore(cachedInfo, resultsEl.firstChild);
+        }
+        
+        statusEl.textContent = data.cached ? 'Загружено из кэша' : 'Завершено';
+        statusEl.className = 'stage-status status-completed';
+        stageCard.classList.remove('active');
+        stageCard.classList.add('completed');
+        
+        // Настроить кнопку продолжения
+        const continueBtn = document.getElementById(`continue${stageNum}`);
+        if (continueBtn && stageNum < 5) {
+          continueBtn.onclick = () => runStage(stageNum + 1);
+        }
+        
+      } catch (error) {
+        console.error(`Error in stage ${stageNum}:`, error);
+        loadingEl.style.display = 'none';
+        resultsEl.innerHTML = `<div class="empty-state">
+          <div class="empty-state-icon">❌</div>
+          <p>Ошибка обработки этапа</p>
+        </div>`;
+        resultsEl.style.display = 'block';
+      }
+    }
+
+    // Отобразить результаты этапа
+    async function displayStageResults(stageNum, data) {
+      const listEl = document.getElementById(`resultsList${stageNum}`);
+      
+      if (stageNum === 1) {
+        // Stage 1: Найденные компании
+        const companies = data.companies || [];
+        document.getElementById('stat1-queries').textContent = data.queriesProcessed || 0;
+        document.getElementById('stat1-companies').textContent = companies.length;
+        
+        if (companies.length === 0) {
+          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Компании не найдены</p></div>';
+        } else {
+          listEl.innerHTML = companies.map(company => `
+            <div class="result-item">
+              <div class="result-title">
+                <span>🏢</span>
+                <span>${company.name || company.company_name}</span>
+                ${company.relevance ? `<span class="result-badge ${getRelevanceClass(company.relevance)}">${company.relevance}%</span>` : ''}
+              </div>
+              ${company.query_text ? `<div class="result-detail">📝 Запрос: ${company.query_text}</div>` : ''}
+              ${company.domain_extension ? `<div class="result-detail">🌐 Домен: ${company.domain_extension}</div>` : ''}
+            </div>
+          `).join('');
+        }
+        
+      } else if (stageNum === 2) {
+        // Stage 2: Найденные сайты
+        const websites = data.websites || [];
+        document.getElementById('stat2-companies').textContent = data.companiesProcessed || 0;
+        document.getElementById('stat2-websites').textContent = websites.length;
+        
+        if (websites.length === 0) {
+          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Сайты не найдены</p></div>';
+        } else {
+          listEl.innerHTML = websites.map(site => `
+            <div class="result-item">
+              <div class="result-title">
+                <span>🌐</span>
+                <span>${site.company_name}</span>
+              </div>
+              <div class="result-detail">🔗 <a href="${site.website}" target="_blank">${site.website}</a></div>
+              ${site.confidence ? `<div class="result-detail">✅ Уверенность: ${site.confidence}%</div>` : ''}
+            </div>
+          `).join('');
+        }
+        
+      } else if (stageNum === 3) {
+        // Stage 3: Найденные контакты
+        const contacts = data.contacts || [];
+        document.getElementById('stat3-websites').textContent = data.websitesProcessed || 0;
+        document.getElementById('stat3-contacts').textContent = contacts.length;
+        
+        if (contacts.length === 0) {
+          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Контакты не найдены</p></div>';
+        } else {
+          listEl.innerHTML = contacts.map(contact => `
+            <div class="result-item">
+              <div class="result-title">
+                <span>📧</span>
+                <span>${contact.company_name}</span>
+              </div>
+              ${contact.email ? `<div class="result-detail">✉️ Email: ${contact.email}</div>` : ''}
+              ${contact.phone ? `<div class="result-detail">📱 Телефон: ${contact.phone}</div>` : ''}
+              ${contact.contact_page ? `<div class="result-detail">📄 Страница: <a href="${contact.contact_page}" target="_blank">${contact.contact_page}</a></div>` : ''}
+            </div>
+          `).join('');
+        }
+        
+      } else if (stageNum === 4) {
+        // Stage 4: Сервисы
+        const services = data.services || [];
+        document.getElementById('stat4-companies').textContent = data.companiesProcessed || 0;
+        document.getElementById('stat4-services').textContent = services.reduce((sum, s) => sum + (s.services?.length || 0), 0);
+        
+        if (services.length === 0) {
+          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Сервисы не определены</p></div>';
+        } else {
+          listEl.innerHTML = services.map(item => `
+            <div class="result-item">
+              <div class="result-title">
+                <span>🔍</span>
+                <span>${item.company_name}</span>
+              </div>
+              ${item.services && item.services.length > 0 ? 
+                `<div class="result-detail">🛠️ Сервисы: ${item.services.join(', ')}</div>` : 
+                '<div class="result-detail">⚠️ Сервисы не определены</div>'
+              }
+            </div>
+          `).join('');
+        }
+        
+      } else if (stageNum === 5) {
+        // Stage 5: Теги
+        const tags = data.tags || [];
+        document.getElementById('stat5-companies').textContent = data.companiesProcessed || 0;
+        document.getElementById('stat5-tags').textContent = tags.reduce((sum, t) => sum + (t.tags?.length || 0), 0);
+        
+        if (tags.length === 0) {
+          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Теги не созданы</p></div>';
+        } else {
+          listEl.innerHTML = tags.map(item => `
+            <div class="result-item">
+              <div class="result-title">
+                <span>🏷️</span>
+                <span>${item.company_name}</span>
+              </div>
+              ${item.tags && item.tags.length > 0 ? 
+                `<div class="result-detail">🏷️ ${item.tags.map(tag => `<span class="result-badge">${tag}</span>`).join(' ')}</div>` : 
+                '<div class="result-detail">⚠️ Теги не созданы</div>'
+              }
+            </div>
+          `).join('');
+        }
+      }
+    }
+
+    function getRelevanceClass(relevance) {
+      if (relevance >= 80) return 'high';
+      if (relevance >= 50) return 'medium';
+      return 'low';
+    }
+
+    // Обновить общий прогресс
+    function updateProgress() {
+      const progress = (currentStage / 5) * 100;
+      document.getElementById('overallProgress').style.width = `${progress}%`;
+    }
+
+    // Загрузить сессии при загрузке страницы
+    loadSessions();
+  </script>
+</body>
+</html>
+

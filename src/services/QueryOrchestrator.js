@@ -306,6 +306,164 @@ class QueryOrchestrator {
       [sessionId]
     );
   }
+
+  /**
+   * Пошаговые методы для ручного контроля обработки
+   */
+  
+  async runStage1Only(sessionId) {
+    this.logger.info('Running Stage 1 only', { sessionId });
+    
+    // Получить запросы сессии (используем is_selected вместо selected)
+    const queriesResult = await this.db.query(
+      'SELECT * FROM session_queries WHERE session_id = $1 AND (is_selected = true OR selected = true)',
+      [sessionId]
+    );
+    
+    const queries = queriesResult.rows;
+    const companies = [];
+    
+    this.logger.info('Stage 1: Processing queries', { 
+      sessionId, 
+      queryCount: queries.length 
+    });
+    
+    for (const query of queries) {
+      try {
+        // Используем query_cn или query_text
+        const queryText = query.query_text || query.query_cn || query.query_ru;
+        
+        if (!queryText) {
+          this.logger.warn('Stage 1: Query without text', { query });
+          continue;
+        }
+        
+        this.logger.info('Stage 1: Processing query', { 
+          queryText: queryText.substring(0, 50) 
+        });
+        
+        const result = await this.stage1.execute(queryText, sessionId);
+        
+        if (result.success && result.companies) {
+          companies.push(...result.companies.map(c => ({
+            ...c,
+            query_text: queryText
+          })));
+          
+          this.logger.info('Stage 1: Query completed', { 
+            queryText: queryText.substring(0, 50),
+            companiesFound: result.companies.length
+          });
+        }
+      } catch (error) {
+        this.logger.error('Stage 1 query failed', { 
+          queryId: query.query_id, 
+          error: error.message 
+        });
+      }
+    }
+    
+    this.logger.info('Stage 1: All queries processed', {
+      sessionId,
+      totalCompanies: companies.length
+    });
+    
+    return {
+      queriesProcessed: queries.length,
+      companies
+    };
+  }
+
+  async runStage2Only(sessionId) {
+    this.logger.info('Running Stage 2 only', { sessionId });
+    
+    const result = await this.stage2.execute(sessionId);
+    
+    // Получить компании с сайтами
+    const companiesResult = await this.db.query(
+      `SELECT company_name, website, confidence_score 
+       FROM pending_companies 
+       WHERE session_id = $1 AND website IS NOT NULL`,
+      [sessionId]
+    );
+    
+    return {
+      companiesProcessed: result.total || 0,
+      websites: companiesResult.rows.map(row => ({
+        company_name: row.company_name,
+        website: row.website,
+        confidence: row.confidence_score
+      }))
+    };
+  }
+
+  async runStage3Only(sessionId) {
+    this.logger.info('Running Stage 3 only', { sessionId });
+    
+    const result = await this.stage3.execute(sessionId);
+    
+    // Получить компании с контактами
+    const companiesResult = await this.db.query(
+      `SELECT company_name, email, phone, contact_page 
+       FROM pending_companies 
+       WHERE session_id = $1 AND (email IS NOT NULL OR phone IS NOT NULL)`,
+      [sessionId]
+    );
+    
+    return {
+      websitesProcessed: result.processed || 0,
+      contacts: companiesResult.rows.map(row => ({
+        company_name: row.company_name,
+        email: row.email,
+        phone: row.phone,
+        contact_page: row.contact_page
+      }))
+    };
+  }
+
+  async runStage4Only(sessionId) {
+    this.logger.info('Running Stage 4 only', { sessionId });
+    
+    const result = await this.stage4.execute(sessionId);
+    
+    // Получить компании с сервисами
+    const companiesResult = await this.db.query(
+      `SELECT company_name, services 
+       FROM pending_companies 
+       WHERE session_id = $1 AND services IS NOT NULL`,
+      [sessionId]
+    );
+    
+    return {
+      companiesProcessed: result.processed || 0,
+      services: companiesResult.rows.map(row => ({
+        company_name: row.company_name,
+        services: row.services ? JSON.parse(row.services) : []
+      }))
+    };
+  }
+
+  async runStage5Only(sessionId) {
+    this.logger.info('Running Stage 5 only', { sessionId });
+    
+    const result = await this.stage5.execute(sessionId);
+    
+    // Получить компании с тегами
+    const companiesResult = await this.db.query(
+      `SELECT company_name, tags 
+       FROM pending_companies 
+       WHERE session_id = $1 AND tags IS NOT NULL`,
+      [sessionId]
+    );
+    
+    return {
+      companiesProcessed: result.processed || 0,
+      tags: companiesResult.rows.map(row => ({
+        company_name: row.company_name,
+        tags: row.tags ? JSON.parse(row.tags) : []
+      }))
+    };
+  }
 }
 
 module.exports = QueryOrchestrator;

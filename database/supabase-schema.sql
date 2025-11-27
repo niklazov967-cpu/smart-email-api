@@ -5,35 +5,51 @@
 CREATE TABLE IF NOT EXISTS search_sessions (
   session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   search_query TEXT NOT NULL,
+  topic_description TEXT,
+  target_count INTEGER DEFAULT 50,
+  priority VARCHAR(20) DEFAULT 'balanced',
   status VARCHAR(20) DEFAULT 'pending',
   companies_found INTEGER DEFAULT 0,
+  companies_analyzed INTEGER DEFAULT 0,
+  companies_added INTEGER DEFAULT 0,
+  duplicates_skipped INTEGER DEFAULT 0,
+  errors_count INTEGER DEFAULT 0,
+  perplexity_api_calls INTEGER DEFAULT 0,
+  perplexity_tokens_used INTEGER DEFAULT 0,
+  cache_hits INTEGER DEFAULT 0,
   total_cost_usd NUMERIC(10, 6) DEFAULT 0,
+  start_time TIMESTAMPTZ,
+  end_time TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 2. Таблица запросов для каждой сессии
 CREATE TABLE IF NOT EXISTS session_queries (
-  query_id SERIAL PRIMARY KEY,
+  query_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID REFERENCES search_sessions(session_id) ON DELETE CASCADE,
-  query_cn TEXT NOT NULL,
+  query_text TEXT NOT NULL,
+  query_cn TEXT,
   query_ru TEXT,
   relevance INTEGER,
-  is_selected BOOLEAN DEFAULT false,
+  selected BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 3. Таблица найденных компаний (pending)
 CREATE TABLE IF NOT EXISTS pending_companies (
-  company_id SERIAL PRIMARY KEY,
+  company_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID REFERENCES search_sessions(session_id) ON DELETE CASCADE,
   company_name TEXT NOT NULL,
   website TEXT,
-  emails TEXT[],
-  phones TEXT[],
+  email TEXT,
+  phone TEXT,
+  contact_page TEXT,
   stage VARCHAR(50) DEFAULT 'names_found',
+  services JSONB,
+  tags JSONB,
   main_activity TEXT,
-  tags TEXT[],
+  confidence_score INTEGER,
   validation_score INTEGER,
   is_relevant BOOLEAN,
   search_query_text TEXT,
