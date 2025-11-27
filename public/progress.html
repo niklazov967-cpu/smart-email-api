@@ -603,7 +603,7 @@
             
             logUpdateInterval = setInterval(async () => {
                 try {
-                    const response = await fetch(`/api/sessions/${sessionId}/progress`);
+                    const response = await fetch(`/api/progress/${sessionId}`);
                     const data = await response.json();
                     
                     if (data.success) {
