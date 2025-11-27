@@ -7,6 +7,11 @@ const router = express.Router();
  */
 router.post('/', async (req, res) => {
   try {
+    // Ждать инициализации API клиентов
+    if (req.waitForInit) {
+      await req.waitForInit();
+    }
+    
     const {
       main_topic,           // Основная тема на китайском
       target_count = 10     // Количество под-запросов

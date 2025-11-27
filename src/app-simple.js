@@ -111,15 +111,53 @@ try {
   // Sonar Pro клиент (для сложного анализа - Stage 1, 4)
   const sonarProClient = new SonarApiClient(pool, settingsManager, logger, 'sonar-pro');
   
+  // Флаги инициализации
+  let sonarBasicReady = false;
+  let sonarProReady = false;
+  
+  // Инициализировать API клиенты асинхронно
+  (async () => {
+    try {
+      await sonarBasicClient.initialize();
+      sonarBasicReady = true;
+      logger.info('Sonar Basic client initialized');
+      await sonarProClient.initialize();
+      sonarProReady = true;
+      logger.info('Sonar Pro client initialized');
+    } catch (error) {
+      logger.error('Failed to initialize API clients:', error);
+    }
+  })();
+  
+  // Helper функция для ожидания инициализации
+  const waitForInit = async () => {
+    let attempts = 0;
+    while ((!sonarBasicReady || !sonarProReady) && attempts < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+    if (!sonarBasicReady || !sonarProReady) {
+      throw new Error('API clients initialization timeout');
+    }
+  };
+  
   // Сервисы с правильными клиентами
-  const queryExpander = new QueryExpander(deepseekClient, settingsManager, pool, logger);
+  // ВРЕМЕННО: QueryExpander использует Perplexity т.к. DeepSeek недоступен
+  const queryExpander = new QueryExpander(sonarProClient, settingsManager, pool, logger);
   const creditsTracker = new CreditsTracker(pool, logger);
-  const companyValidator = new CompanyValidator(deepseekClient, settingsManager, pool, logger);
+  // CompanyValidator тоже временно на Perplexity
+  const companyValidator = new CompanyValidator(sonarProClient, settingsManager, pool, logger);
   const progressTracker = new ProgressTracker(pool, logger);
   
   // Подключить creditsTracker к обоим Sonar клиентам для автоматического логирования
   sonarBasicClient.setCreditsTracker(creditsTracker);
   sonarProClient.setCreditsTracker(creditsTracker);
+  
+  // Добавить waitForInit к req для использования в роутах
+  app.use((req, res, next) => {
+    req.waitForInit = waitForInit;
+    next();
+  });
   
   const orchestrator = new QueryOrchestrator({
     database: pool,

@@ -4,8 +4,8 @@
  * Использует DeepSeek API для экономии кредитов (не требует доступ к интернету)
  */
 class CompanyValidator {
-  constructor(deepseekClient, settingsManager, database, logger) {
-    this.deepseek = deepseekClient;
+  constructor(apiClient, settingsManager, database, logger) {
+    this.apiClient = apiClient;
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
@@ -35,7 +35,7 @@ class CompanyValidator {
       );
 
       // Запросить анализ у DeepSeek
-      const response = await this.deepseek.query(prompt, {
+      const response = await this.apiClient.query(prompt, {
         stage: 'company_validation',
         maxTokens: 1500
       });

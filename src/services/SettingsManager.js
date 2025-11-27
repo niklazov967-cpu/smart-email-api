@@ -69,6 +69,12 @@ class SettingsManager {
         return this._getDefaultSettings(category);
       }
       
+      // Проверить критичные поля для API категории
+      if (category === 'api' && !settings[category].api_key) {
+        this.logger.warn(`API key missing in DB settings for category: ${category}, using defaults`);
+        return this._getDefaultSettings(category);
+      }
+      
       return settings[category];
     } catch (error) {
       this.logger.error(`Failed to get category settings: ${category}`, error);

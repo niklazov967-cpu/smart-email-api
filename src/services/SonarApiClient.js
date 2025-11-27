@@ -51,7 +51,8 @@ class SonarApiClient {
       maxTokens: this.maxTokens,
       rateLimit: this.rateLimit,
       hasApiKey: !!this.apiKey,
-      apiKeyLength: this.apiKey ? this.apiKey.length : 0
+      apiKeyLength: this.apiKey ? this.apiKey.length : 0,
+      baseUrl: this.baseUrl
     });
   }
 

@@ -1,11 +1,11 @@
 /**
  * QueryExpander - Генератор под-запросов из темы
  * Создает множество релевантных запросов на основе одной темы
- * Использует DeepSeek API для экономии кредитов (не требует доступ к интернету)
+ * Может использовать DeepSeek или Perplexity API
  */
 class QueryExpander {
-  constructor(deepseekClient, settingsManager, database, logger) {
-    this.deepseek = deepseekClient;
+  constructor(apiClient, settingsManager, database, logger) {
+    this.apiClient = apiClient;
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
@@ -27,8 +27,8 @@ class QueryExpander {
       // Создать промпт для генерации под-запросов
       const prompt = this._createExpansionPrompt(mainTopic, targetCount);
 
-      // Запросить у DeepSeek генерацию вариаций
-      const response = await this.deepseek.query(prompt, {
+      // Запросить у API генерацию вариаций
+      const response = await this.apiClient.query(prompt, {
         stage: 'query_expansion',
         maxTokens: 2000
       });
@@ -42,7 +42,7 @@ class QueryExpander {
         
         // Вторая попытка с другим промптом
         const retryPrompt = this._createRetryPrompt(mainTopic, targetCount);
-        const retryResponse = await this.deepseek.query(retryPrompt, {
+        const retryResponse = await this.apiClient.query(retryPrompt, {
           stage: 'query_expansion_retry',
           maxTokens: 2000
         });
@@ -169,7 +169,7 @@ class QueryExpander {
   async _translate(chineseText) {
     try {
       const prompt = `Переведи на русский язык кратко (2-4 слова): ${chineseText}`;
-      const response = await this.deepseek.query(prompt, {
+      const response = await this.apiClient.query(prompt, {
         stage: 'translation',
         maxTokens: 100
       });
