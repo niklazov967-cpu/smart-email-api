@@ -227,6 +227,40 @@ router.post('/test-fallback', async (req, res) => {
 });
 
 /**
+ * GET /api/debug/companies
+ * Получить список компаний с фильтрацией
+ */
+router.get('/companies', async (req, res) => {
+  try {
+    const { session_id, limit = 100 } = req.query;
+
+    // Используем directSelect для получения компаний
+    let companies;
+    if (session_id) {
+      companies = await req.db.directSelect('pending_companies', { session_id });
+    } else {
+      companies = await req.db.directSelect('pending_companies');
+    }
+
+    // Применяем limit
+    const limitedCompanies = companies.slice(0, parseInt(limit));
+
+    res.json({
+      success: true,
+      count: limitedCompanies.length,
+      total: companies.length,
+      companies: limitedCompanies
+    });
+  } catch (error) {
+    req.logger.error('Error fetching companies:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * DELETE /api/debug/companies/:id
  * Удалить компанию по ID
  */
@@ -236,12 +270,21 @@ router.delete('/companies/:id', async (req, res) => {
     
     req.logger.info('Deleting company:', { company_id: id });
     
-    const { error } = await req.db.supabase
-      .from('pending_companies')
-      .delete()
-      .eq('company_id', id);
-    
-    if (error) throw error;
+    // Используем directDelete если есть, иначе через Supabase
+    if (req.db.supabase) {
+      const { error } = await req.db.supabase
+        .from('pending_companies')
+        .delete()
+        .eq('company_id', id);
+      
+      if (error) throw error;
+    } else {
+      // Fallback через SQL query если supabase недоступен
+      await req.db.query(
+        'DELETE FROM pending_companies WHERE company_id = $1',
+        [id]
+      );
+    }
     
     res.json({ 
       success: true, 
@@ -258,4 +301,5 @@ router.delete('/companies/:id', async (req, res) => {
 });
 
 module.exports = router;
+
 
