@@ -101,6 +101,7 @@ try {
   const CreditsTracker = require('./services/CreditsTracker');
   const CompanyValidator = require('./services/CompanyValidator');
   const ProgressTracker = require('./services/ProgressTracker');
+  const TranslationService = require('./services/TranslationService');
   
   // DeepSeek клиент (для генерации без интернета)
   const deepseekClient = new DeepSeekClient(
@@ -152,6 +153,18 @@ try {
   const companyValidator = new CompanyValidator(sonarProClient, settingsManager, pool, logger);
   const progressTracker = new ProgressTracker(pool, logger);
   
+  // Инициализация TranslationService
+  let translationService = null;
+  (async () => {
+    try {
+      const settings = await settingsManager.getAllSettings();
+      translationService = new TranslationService(pool, logger, settings);
+      logger.info('Translation Service initialized');
+    } catch (error) {
+      logger.error('Failed to initialize Translation Service:', error);
+    }
+  })();
+  
   // Подключить creditsTracker к обоим Sonar клиентам для автоматического логирования
   sonarBasicClient.setCreditsTracker(creditsTracker);
   sonarProClient.setCreditsTracker(creditsTracker);
@@ -201,6 +214,7 @@ try {
     req.creditsTracker = creditsTracker;
     req.companyValidator = companyValidator;
     req.progressTracker = progressTracker;
+    req.translationService = translationService; // Добавляем TranslationService
     req.logger = logger;
     next();
   });

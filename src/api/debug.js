@@ -7,23 +7,35 @@ const router = express.Router();
  */
 router.get('/data', async (req, res) => {
   try {
-    const [sessions, queries, companies, progress] = await Promise.all([
-      req.db.directSelect('search_sessions'),
-      req.db.directSelect('session_queries'),
-      req.db.directSelect('pending_companies'),
-      req.db.directSelect('processing_progress')
-    ]);
+    // Более надежный способ - запрашивать таблицы по одной и обрабатывать ошибки
+    const results = {};
+    const tables = [
+      'search_sessions',
+      'session_queries', 
+      'pending_companies',
+      'processing_progress'
+    ];
+    
+    for (const table of tables) {
+      try {
+        const data = await req.db.directSelect(table);
+        results[table] = { count: data.length, items: data };
+      } catch (error) {
+        req.logger.error(`Failed to fetch ${table}:`, error.message);
+        results[table] = { 
+          count: 0, 
+          items: [], 
+          error: error.message 
+        };
+      }
+    }
 
     res.json({
       success: true,
-      data: {
-        search_sessions: { count: sessions.length, items: sessions },
-        session_queries: { count: queries.length, items: queries },
-        pending_companies: { count: companies.length, items: companies },
-        processing_progress: { count: progress.length, items: progress }
-      }
+      data: results
     });
   } catch (error) {
+    req.logger.error('Error in /api/debug/data:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -228,13 +240,54 @@ router.post('/test-fallback', async (req, res) => {
 
 /**
  * GET /api/debug/companies
- * Получить список компаний с фильтрацией
+ * Получить список компаний с фильтрацией (и переводами если доступны)
  */
 router.get('/companies', async (req, res) => {
   try {
-    const { session_id, limit = 100 } = req.query;
+    const { session_id, limit = 100, include_translations = 'true' } = req.query;
 
-    // Используем directSelect для получения компаний
+    // Если запрошены переводы, используем Supabase с JOIN
+    if (include_translations === 'true') {
+      let query = req.db.supabase
+        .from('pending_companies')
+        .select(`
+          *,
+          search_sessions!inner (
+            topic_description
+          ),
+          pending_companies_ru (
+            company_name_ru,
+            description_ru,
+            ai_generated_description_ru,
+            services_ru,
+            validation_reason_ru,
+            tag1_ru, tag2_ru, tag3_ru, tag4_ru, tag5_ru,
+            tag6_ru, tag7_ru, tag8_ru, tag9_ru, tag10_ru,
+            tag11_ru, tag12_ru, tag13_ru, tag14_ru, tag15_ru,
+            tag16_ru, tag17_ru, tag18_ru, tag19_ru, tag20_ru,
+            translation_status,
+            translated_at
+          )
+        `)
+        .limit(parseInt(limit));
+
+      if (session_id) {
+        query = query.eq('session_id', session_id);
+      }
+
+      const { data: companies, error } = await query;
+
+      if (error) throw error;
+
+      return res.json({
+        success: true,
+        count: companies?.length || 0,
+        total: companies?.length || 0,
+        companies: companies || []
+      });
+    }
+
+    // Без переводов - используем directSelect
     let companies;
     if (session_id) {
       companies = await req.db.directSelect('pending_companies', { session_id });
@@ -293,6 +346,155 @@ router.delete('/companies/:id', async (req, res) => {
     });
   } catch (error) {
     req.logger.error('Error deleting company:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/translations/stats
+ * Получить статистику переводов
+ */
+router.get('/translations/stats', async (req, res) => {
+  try {
+    // Проверяем наличие TranslationService
+    if (!req.translationService) {
+      return res.status(500).json({
+        success: false,
+        error: 'Translation service not initialized'
+      });
+    }
+
+    const stats = await req.translationService.getTranslationStats();
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    req.logger.error('Error getting translation stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/translations/:companyId
+ * Получить переводы компании из pending_companies_ru
+ */
+router.get('/translations/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    // Получить запись из pending_companies_ru
+    const { data: translation, error } = await req.db.supabase
+      .from('pending_companies_ru')
+      .select('*')
+      .eq('company_id', companyId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+      throw error;
+    }
+
+    if (!translation) {
+      return res.json({
+        success: true,
+        companyId,
+        translation: null,
+        message: 'No translation found for this company'
+      });
+    }
+
+    res.json({
+      success: true,
+      companyId,
+      translation
+    });
+  } catch (error) {
+    req.logger.error('Error getting company translation:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/translations/trigger
+ * Запустить перевод для конкретной компании
+ */
+router.post('/translations/trigger', async (req, res) => {
+  try {
+    const { companyId } = req.body;
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        error: 'companyId is required'
+      });
+    }
+
+    if (!req.translationService) {
+      return res.status(500).json({
+        success: false,
+        error: 'Translation service not initialized'
+      });
+    }
+
+    req.logger.info('Manual translation triggered', { companyId });
+
+    // Запускаем перевод в фоне
+    req.translationService.translateCompany(companyId)
+      .then(result => {
+        req.logger.info('Manual translation completed', { companyId, result });
+      })
+      .catch(error => {
+        req.logger.error('Manual translation failed', { companyId, error: error.message });
+      });
+
+    res.json({
+      success: true,
+      message: 'Translation started',
+      companyId
+    });
+  } catch (error) {
+    req.logger.error('Error triggering translation:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/translations/:companyId
+ * Удалить все переводы компании
+ */
+router.delete('/translations/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    if (!req.translationService) {
+      return res.status(500).json({
+        success: false,
+        error: 'Translation service not initialized'
+      });
+    }
+
+    await req.translationService.deleteCompanyTranslations(companyId);
+
+    res.json({
+      success: true,
+      message: 'Translations deleted',
+      companyId
+    });
+  } catch (error) {
+    req.logger.error('Error deleting translations:', error);
     res.status(500).json({
       success: false,
       error: error.message

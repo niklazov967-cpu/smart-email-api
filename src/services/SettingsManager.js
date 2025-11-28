@@ -33,7 +33,7 @@ class SettingsManager {
     this.logger.debug('Loading settings from database');
     
     const result = await this.db.query(
-      'SELECT category, setting_key, setting_value, setting_type FROM system_settings ORDER BY category, setting_key'
+      'SELECT category, key, value FROM system_settings ORDER BY category, key'
     );
 
     this.cachedSettings = this._parseSettings(result.rows);
@@ -330,7 +330,8 @@ class SettingsManager {
       if (!result[row.category]) {
         result[row.category] = {};
       }
-      result[row.category][row.setting_key] = this._parseValue(row.setting_value, row.setting_type);
+      // Используем новые названия колонок: key и value (без префикса setting_)
+      result[row.category][row.key] = row.value;
     });
     
     return result;

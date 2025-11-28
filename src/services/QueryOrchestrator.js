@@ -320,11 +320,13 @@ class QueryOrchestrator {
     
     this.logger.info('Stage 1: All queries processed', {
       sessionId,
+      queriesProcessed: queries.length,
       totalCompanies: companies.length
     });
     
     return {
       queriesProcessed: queries.length,
+      companiesFound: companies.length,
       companies
     };
   }
@@ -409,6 +411,7 @@ class QueryOrchestrator {
     
     return {
       websitesProcessed: result.processed || 0,
+      contactsFound: companiesResult.rows.length,
       contacts: companiesResult.rows.map(row => ({
         company_name: row.company_name,
         email: row.email,

@@ -63,6 +63,68 @@
             font-size: 14px;
         }
 
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s ease;
+        }
+
+        .translation-stats {
+            position: relative;
+        }
+
+        .translation-stats.active::after {
+            content: '🔄';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 20px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .translation-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .translation-panel h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .cost-warning {
+            background: #fff5f5;
+            border-left: 4px solid #f56565;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+
+        .cost-info {
+            background: #f0fff4;
+            border-left: 4px solid #48bb78;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+
         .filters {
             background: white;
             padding: 20px;
@@ -134,6 +196,11 @@
 
         .btn-secondary:hover {
             background: #4a5568;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
         }
 
         .results-container {
@@ -476,6 +543,70 @@
                 <div class="number" id="avgScore">0</div>
                 <div class="label">Средний score</div>
             </div>
+            <div class="stat-card translation-stats" id="translationStatsCard">
+                <div class="number" id="translationProgress">0%</div>
+                <div class="label">Переведено</div>
+                <div class="progress-bar">
+                    <div id="translationProgressBar" class="progress-fill" style="width: 0%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Translation Panel -->
+        <div class="translation-panel" id="translationPanel">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>🌐 Прогресс перевода</h3>
+                <button onclick="toggleTranslationPanel()" class="btn btn-small">Скрыть</button>
+            </div>
+            
+            <div style="margin-top: 15px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px;">
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #667eea;" id="statsTotal">0</div>
+                    <div style="font-size: 12px; color: #666;">Всего компаний</div>
+                </div>
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #48bb78;" id="statsTranslated">0</div>
+                    <div style="font-size: 12px; color: #666;">Переведено</div>
+                </div>
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #667eea;" id="statsCompleted">0</div>
+                    <div style="font-size: 12px; color: #666;">Полей готово</div>
+                </div>
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #ed8936;" id="statsPending">0</div>
+                    <div style="font-size: 12px; color: #666;">В процессе</div>
+                </div>
+                <div>
+                    <div style="font-size: 24px; font-weight: bold; color: #f56565;" id="statsFailed">0</div>
+                    <div style="font-size: 12px; color: #666;">Ошибки</div>
+                </div>
+            </div>
+            
+            <!-- Cost Monitoring -->
+            <div id="costInfo" class="cost-info" style="margin-top: 15px;">
+                <strong>💰 Расходы:</strong>
+                <div style="margin-top: 5px;">
+                    <span id="apiCallsCount">0</span> запросов к DeepSeek 
+                    • Примерная стоимость: <strong id="estimatedCost">$0.00</strong>
+                </div>
+                <div style="font-size: 11px; color: #666; margin-top: 5px;">
+                    ~$0.14 за 1M входных токенов, ~$0.28 за 1M выходных токенов
+                </div>
+            </div>
+
+            <!-- Warning if too many pending -->
+            <div id="costWarning" class="cost-warning" style="display: none;">
+                <strong>⚠️ Внимание!</strong> Много переводов в очереди. 
+                Worker может израсходовать много токенов. 
+                <button onclick="pauseTranslations()" class="btn btn-small btn-danger" style="margin-left: 10px;">
+                    ⏸️ Остановить worker
+                </button>
+            </div>
+            
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button onclick="refreshTranslations()" class="btn btn-primary">🔄 Обновить</button>
+                <button onclick="toggleTranslationPanel()" class="btn btn-secondary">Скрыть панель</button>
+            </div>
         </div>
 
         <div class="filters">
@@ -492,8 +623,10 @@
                     <option value="">Все</option>
                     <option value="with-email">С email</option>
                     <option value="no-email">Без email</option>
-                    <option value="validated">Проверено AI</option>
-                    <option value="rejected">Отклонено</option>
+                    <option value="validated">Проверено AI (любой score)</option>
+                    <option value="valid-companies">✅ Валидные (score ≥ 70)</option>
+                    <option value="rejected">❌ Отклоненные (rejected)</option>
+                    <option value="needs-review">⚠️ Требуют проверки</option>
                 </select>
             </div>
 
@@ -509,6 +642,21 @@
 
             <div style="margin-left: auto;">
                 <button class="btn btn-secondary" onclick="exportToCSV()">📥 Экспорт CSV</button>
+            </div>
+        </div>
+
+        <!-- Быстрая статистика по фильтрам -->
+        <div style="margin-top: 15px; padding: 15px; background: #f7fafc; border-radius: 8px; font-size: 13px;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                <div>
+                    <strong id="quickStatsValid" style="color: #16a34a;">0</strong> валидных (≥70)
+                </div>
+                <div>
+                    <strong id="quickStatsRejected" style="color: #dc2626;">0</strong> отклоненных
+                </div>
+                <div>
+                    <strong id="quickStatsReview" style="color: #ea580c;">0</strong> требуют проверки
+                </div>
             </div>
         </div>
 
@@ -587,6 +735,10 @@
         let sortColumn = 'validation_score';
         let sortDirection = 'desc';
         let selectedIds = new Set();
+        let translationStatusMap = new Map(); // Хранит статус переводов
+
+        // Загрузка статуса переводов
+        // Функция loadTranslationStatus больше не нужна - переводы загружаются через JOIN
 
         // Загрузка сессий
         async function loadSessions() {
@@ -625,15 +777,16 @@
                 document.getElementById('emptyState').style.display = 'none';
                 document.getElementById('resultsTable').style.display = 'none';
 
-                let url = '/api/debug/companies';
+                let url = '/api/debug/companies?include_translations=true';
                 if (sessionId) {
-                    url += `?session_id=${sessionId}`;
+                    url += `&session_id=${sessionId}`;
                 }
 
                 const response = await fetch(url);
                 const data = await response.json();
                 
                 allCompanies = data.companies || [];
+                
                 updateStats();
                 applyFilters();
 
@@ -643,6 +796,22 @@
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('emptyState').style.display = 'block';
             }
+        }
+
+        // Helper: Получить отображаемый текст (русский если есть, иначе оригинал)
+        function getDisplayText(company, field) {
+            const ruData = company.pending_companies_ru;
+            if (ruData && ruData[`${field}_ru`]) {
+                return ruData[`${field}_ru`];
+            }
+            return company[field] || '';
+        }
+
+        // Helper: Получить статус перевода
+        function getTranslationStatus(company) {
+            const ruData = company.pending_companies_ru;
+            if (!ruData) return null;
+            return ruData.translation_status;
         }
 
         // Обновление статистики
@@ -657,6 +826,15 @@
             document.getElementById('withEmails').textContent = withEmails;
             document.getElementById('validated').textContent = validated;
             document.getElementById('avgScore').textContent = avgScore;
+            
+            // Новая быстрая статистика по фильтрам
+            const validCompanies = allCompanies.filter(c => c.validation_score >= 70).length;
+            const rejected = allCompanies.filter(c => c.stage === 'rejected').length;
+            const needsReview = allCompanies.filter(c => c.stage === 'needs_review').length;
+            
+            document.getElementById('quickStatsValid').textContent = validCompanies;
+            document.getElementById('quickStatsRejected').textContent = rejected;
+            document.getElementById('quickStatsReview').textContent = needsReview;
         }
 
         // Применение фильтров
@@ -669,7 +847,11 @@
                 if (status === 'with-email' && (!company.email || company.email === '')) return false;
                 if (status === 'no-email' && company.email && company.email !== '') return false;
                 if (status === 'validated' && !company.validation_score) return false;
+                
+                // Новые фильтры для валидных компаний
+                if (status === 'valid-companies' && (!company.validation_score || company.validation_score < 70)) return false;
                 if (status === 'rejected' && company.stage !== 'rejected') return false;
+                if (status === 'needs-review' && company.stage !== 'needs_review') return false;
 
                 // Поиск
                 if (search) {
@@ -758,7 +940,18 @@
                                ${selectedIds.has(company.company_id) ? 'checked' : ''}
                                onchange="toggleSelect('${company.company_id}')">
                     </td>
-                    <td class="company-name">${escapeHtml(company.company_name)}</td>
+                    <td class="company-name">
+                        ${escapeHtml(getDisplayText(company, 'company_name'))}
+                        ${getTranslationStatus(company) === 'completed' 
+                            ? '<span class="badge badge-success" title="Переведено">✓ RU</span>' 
+                            : ''}
+                        ${getTranslationStatus(company) === 'failed' 
+                            ? '<span class="badge badge-danger" title="Ошибка перевода - будет повторная попытка">⚠️</span>' 
+                            : ''}
+                        ${getTranslationStatus(company) === 'pending' || getTranslationStatus(company) === 'partial'
+                            ? '<span class="badge badge-warning" title="Перевод в процессе">⏳</span>' 
+                            : ''}
+                    </td>
                     <td>
                         ${company.email ? `
                             <div class="email-cell">
@@ -848,8 +1041,14 @@
 
         function getTags(company) {
             const tags = [];
+            const ruData = company.pending_companies_ru;
+            
             for (let i = 1; i <= 20; i++) {
-                const tag = company[`tag${i}`];
+                // Приоритет: русский перевод, иначе оригинал
+                const ruTag = ruData ? ruData[`tag${i}_ru`] : null;
+                const originalTag = company[`tag${i}`];
+                const tag = ruTag || originalTag;
+                
                 if (tag) tags.push(tag);
             }
             return tags.slice(0, 5); // Показываем только первые 5
@@ -894,12 +1093,47 @@
         }
 
         // Модальное окно
-        function showDetails(companyId) {
+        async function showDetails(companyId) {
             const company = allCompanies.find(c => c.company_id === companyId);
             if (!company) return;
 
-            document.getElementById('modalTitle').textContent = company.company_name;
+            // Переводы уже загружены через JOIN в pending_companies_ru
+            const ruData = company.pending_companies_ru;
+            const hasTranslations = ruData && ruData.translation_status === 'completed';
+
+            document.getElementById('modalTitle').innerHTML = `
+                ${escapeHtml(getDisplayText(company, 'company_name'))}
+                ${hasTranslations ? '<span class="badge badge-success" title="Есть переводы">✓ RU</span>' : ''}
+                ${!hasTranslations ? `<button class="btn btn-small" onclick="triggerTranslation('${companyId}')" style="margin-left: 10px;">🌐 Перевести</button>` : ''}
+            `;
+            
             document.getElementById('modalBody').innerHTML = `
+                <div class="detail-row">
+                    <label>Название компании</label>
+                    <div class="value">
+                        ${ruData && ruData.company_name_ru 
+                            ? `<div><strong>🇷🇺</strong> ${escapeHtml(ruData.company_name_ru)}</div>
+                               <div style="margin-top: 5px; color: #888;"><strong>🇨🇳</strong> ${escapeHtml(company.company_name)}</div>`
+                            : `<div>${escapeHtml(company.company_name)}</div>`
+                        }
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <label>🔍 Основная тема</label>
+                    <div class="value">
+                        <div style="color: #4a5568; font-style: italic;">
+                            ${escapeHtml(company.search_sessions?.topic_description || company.topic_description || '—')}
+                        </div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <label>🎯 Поисковый запрос</label>
+                    <div class="value">
+                        <div style="color: #2d3748;">
+                            ${escapeHtml(company.search_query_text || company.stage1_raw_data?.query || '—')}
+                        </div>
+                    </div>
+                </div>
                 <div class="detail-row">
                     <label>Email</label>
                     <div class="value">${company.email || '—'}</div>
@@ -912,7 +1146,13 @@
                 </div>
                 <div class="detail-row">
                     <label>Описание</label>
-                    <div class="value">${company.description || company.ai_generated_description || '—'}</div>
+                    <div class="value">
+                        ${ruData && (ruData.description_ru || ruData.ai_generated_description_ru)
+                            ? `<div><strong>🇷🇺</strong> ${escapeHtml(ruData.description_ru || ruData.ai_generated_description_ru)}</div>
+                               <div style="margin-top: 5px; color: #888;"><strong>🇨🇳</strong> ${escapeHtml(company.description || company.ai_generated_description || '—')}</div>`
+                            : `<div>${escapeHtml(company.description || company.ai_generated_description || '—')}</div>`
+                        }
+                    </div>
                 </div>
                 <div class="detail-row">
                     <label>Validation Score</label>
@@ -920,17 +1160,41 @@
                 </div>
                 <div class="detail-row">
                     <label>Причина валидации</label>
-                    <div class="value">${company.validation_reason || '—'}</div>
+                    <div class="value">
+                        ${ruData && ruData.validation_reason_ru
+                            ? `<div><strong>🇷🇺</strong> ${escapeHtml(ruData.validation_reason_ru)}</div>
+                               <div style="margin-top: 5px; color: #888;"><strong>🇨🇳</strong> ${escapeHtml(company.validation_reason || '—')}</div>`
+                            : `<div>${escapeHtml(company.validation_reason || '—')}</div>`
+                        }
+                    </div>
                 </div>
                 <div class="detail-row">
                     <label>Сервисы</label>
-                    <div class="value">${company.services || '—'}</div>
+                    <div class="value">
+                        ${ruData && ruData.services_ru
+                            ? `<div><strong>🇷🇺</strong> ${escapeHtml(ruData.services_ru)}</div>
+                               <div style="margin-top: 5px; color: #888;"><strong>🇨🇳</strong> ${escapeHtml(company.services || '—')}</div>`
+                            : `<div>${escapeHtml(company.services || '—')}</div>`
+                        }
+                    </div>
                 </div>
                 <div class="detail-row">
                     <label>Все теги</label>
                     <div class="value">
                         <div class="tags-container">
-                            ${getTags(company).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                            ${Array.from({length: 20}, (_, i) => {
+                                const tagNum = i + 1;
+                                const originalTag = company[`tag${tagNum}`];
+                                const translatedTag = ruData ? ruData[`tag${tagNum}_ru`] : null;
+                                const displayTag = translatedTag || originalTag;
+                                
+                                if (!displayTag) return '';
+                                
+                                const tooltip = translatedTag && originalTag !== translatedTag 
+                                    ? `🇨🇳 ${escapeHtml(originalTag)}` 
+                                    : '';
+                                return `<span class="tag" title="${tooltip}">${escapeHtml(displayTag)}</span>`;
+                            }).filter(t => t).join('')}
                         </div>
                     </div>
                 </div>
@@ -941,6 +1205,27 @@
             `;
 
             document.getElementById('detailsModal').classList.add('active');
+        }
+
+        async function triggerTranslation(companyId) {
+            try {
+                const response = await fetch('/api/debug/translations/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ companyId })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ Перевод запущен! Обновите страницу через некоторое время.');
+                    closeModal();
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Ошибка запуска перевода');
+            }
         }
 
         function closeModal() {
@@ -1016,9 +1301,133 @@
         }
 
         // Инициализация
+        let translationStatsInterval = null;
+
+        // Translation Panel Functions
+        function toggleTranslationPanel() {
+            const panel = document.getElementById('translationPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function refreshTranslations() {
+            await loadTranslationStats();
+            await loadCompanies(document.getElementById('sessionFilter').value);
+        }
+
+        // Загрузить статистику переводов
+        async function loadTranslationStats() {
+            try {
+                const response = await fetch('/api/debug/translations/stats');
+                const data = await response.json();
+                
+                if (data.success && data.stats) {
+                    const stats = data.stats;
+                    const percent = stats.totalCompanies > 0 
+                        ? Math.round((stats.translatedCompanies / stats.totalCompanies) * 100)
+                        : 0;
+                    
+                    // Обновить основную статистику
+                    document.getElementById('translationProgress').textContent = `${percent}%`;
+                    document.getElementById('translationProgressBar').style.width = `${percent}%`;
+                    
+                    // Обновить детальную панель
+                    document.getElementById('statsTotal').textContent = stats.totalCompanies;
+                    document.getElementById('statsTranslated').textContent = stats.translatedCompanies;
+                    document.getElementById('statsCompleted').textContent = stats.completed;
+                    document.getElementById('statsPending').textContent = stats.pending;
+                    document.getElementById('statsFailed').textContent = stats.failed;
+                    
+                    // Расчет примерной стоимости
+                    // ~8 полей на компанию, ~100 токенов вход + 50 токенов выход на поле
+                    const estimatedInputTokens = stats.completed * 100;
+                    const estimatedOutputTokens = stats.completed * 50;
+                    const cost = (estimatedInputTokens / 1000000 * 0.14) + (estimatedOutputTokens / 1000000 * 0.28);
+                    
+                    document.getElementById('apiCallsCount').textContent = stats.completed;
+                    document.getElementById('estimatedCost').textContent = `$${cost.toFixed(4)}`;
+                    
+                    // Показать активность worker'а
+                    const isWorking = stats.pending > 0;
+                    const statsCard = document.querySelector('.translation-stats');
+                    if (statsCard) {
+                        if (isWorking) {
+                            statsCard.classList.add('active');
+                        } else {
+                            statsCard.classList.remove('active');
+                        }
+                    }
+                    
+                    // Предупреждение если много в очереди
+                    const costWarning = document.getElementById('costWarning');
+                    if (stats.pending > 50) {
+                        costWarning.style.display = 'block';
+                    } else {
+                        costWarning.style.display = 'none';
+                    }
+                    
+                    console.log('Translation stats updated:', {
+                        progress: `${percent}%`,
+                        translated: stats.translatedCompanies,
+                        total: stats.totalCompanies,
+                        completed: stats.completed,
+                        pending: stats.pending,
+                        estimatedCost: `$${cost.toFixed(4)}`
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading translation stats:', error);
+            }
+        }
+
+        // Запустить автообновление статистики переводов
+        function startTranslationMonitoring() {
+            // Загрузить сразу
+            loadTranslationStats();
+            
+            // Обновлять каждые 10 секунд
+            translationStatsInterval = setInterval(loadTranslationStats, 10000);
+            
+            console.log('Translation monitoring started (updates every 10s)');
+        }
+
+        // Остановить автообновление
+        function stopTranslationMonitoring() {
+            if (translationStatsInterval) {
+                clearInterval(translationStatsInterval);
+                translationStatsInterval = null;
+                console.log('Translation monitoring stopped');
+            }
+        }
+
+        // Остановить worker (через settings API)
+        async function pauseTranslations() {
+            if (!confirm('Остановить фоновый перевод? Worker перестанет обрабатывать компании.')) return;
+            
+            try {
+                const response = await fetch('/api/settings/translation/translation_enabled', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: 'false' })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Фоновый перевод остановлен. Worker остановится через 30 секунд.');
+                    document.getElementById('costWarning').style.display = 'none';
+                } else {
+                    alert('❌ Ошибка остановки worker');
+                }
+            } catch (error) {
+                console.error('Error pausing translations:', error);
+                alert('❌ Ошибка остановки worker');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             loadSessions();
             loadCompanies();
+            
+            // Запустить мониторинг переводов
+            startTranslationMonitoring();
 
             // Автоприменение фильтра при изменении сессии
             document.getElementById('sessionFilter').addEventListener('change', (e) => {
@@ -1030,6 +1439,11 @@
                 if (e.target.id === 'detailsModal') {
                     closeModal();
                 }
+            });
+            
+            // Остановить мониторинг при закрытии страницы
+            window.addEventListener('beforeunload', () => {
+                stopTranslationMonitoring();
             });
         });
     </script>

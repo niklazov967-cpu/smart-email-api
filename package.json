@@ -13,7 +13,9 @@
     "dev": "nodemon src/app.js",
     "migrate": "node database/migrate.js",
     "seed": "node database/seed.js",
-    "test": "jest"
+    "test": "jest",
+    "translate:start": "node src/workers/translationWorker.js",
+    "translate:stop": "pkill -f translationWorker.js"
   },
   "keywords": [
     "perplexity",

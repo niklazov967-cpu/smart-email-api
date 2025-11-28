@@ -130,9 +130,20 @@ REQUIREMENTS:
 
 FOR EACH COMPANY FIND:
 1. **Company name** (full Chinese name)
-2. **Official website** (corporate site, NOT marketplace like Alibaba/1688)
+2. **Official website (MAIN PAGE ONLY)**:
+   - Corporate site MAIN PAGE (https://company.com)
+   - NOT marketplace URLs (Alibaba, 1688, Made-in-China)
+   - NOT blog/article pages (NO /blog/, /article/, /news/, /products/)
+   - If you find only a blog post - extract the main domain
 3. **Email** (from company website, directories, or search results)
 4. **Brief description** (1-2 sentences about services)
+
+IMPORTANT about website:
+- Provide MAIN PAGE of the website (e.g., https://company.com)
+- DO NOT provide links to blogs (https://company.com/blog/article)
+- DO NOT provide links to product pages
+- If you find only an article - extract the domain and provide main page
+- If no corporate website exists, set website = null
 
 IMPORTANT:
 - Find at least ${minCompanies} companies
@@ -232,13 +243,27 @@ STRICT JSON OUTPUT ONLY.`;
         this.logger.warn('Empty companies array in response');
       }
 
-      return data.companies.map(c => ({
-        name: c.name,
-        website: c.website || null,
-        email: c.email || null,
-        description: c.brief_description || c.description || null,
-        domain_extension: c.likely_domain_extension || '.cn'
-      }));
+      return data.companies.map(c => {
+        let website = c.website || null;
+        
+        // Если website это блог/статья - извлечь главный домен
+        if (website && this._isBlogOrArticle(website)) {
+          const mainDomain = this._extractMainDomain(website);
+          this.logger.debug('Stage 1: Website is blog/article, extracting main domain', {
+            original: website,
+            mainDomain: mainDomain
+          });
+          website = mainDomain;
+        }
+        
+        return {
+          name: c.name,
+          website: website,
+          email: (c.email && this._isValidEmail(c.email)) ? c.email : null,  // Валидация email
+          description: c.brief_description || c.description || null,
+          domain_extension: c.likely_domain_extension || '.cn'
+        };
+      });
 
     } catch (error) {
       this.logger.error('Failed to parse Stage 1 response', {
@@ -373,6 +398,12 @@ STRICT JSON OUTPUT ONLY.`;
     for (const email of emails) {
       if (!email || typeof email !== 'string') continue;
       
+      // Валидация email
+      if (!this._isValidEmail(email)) {
+        this.logger.debug('Stage 1: Invalid email skipped in filtering', { value: email });
+        continue;
+      }
+      
       const domain = this._extractDomain(email);
       if (!domain) continue;
       
@@ -430,6 +461,114 @@ STRICT JSON OUTPUT ONLY.`;
     return websites[0];
   }
 
+  _isValidEmail(email) {
+    if (!email || typeof email !== 'string') {
+      return false;
+    }
+    
+    email = email.trim();
+    
+    // Проверка на телефон
+    const phonePatterns = [
+      /^\+?\d{10,15}$/,
+      /^\+?\d[\d\s\-().]{8,}$/,
+      /^\d{3,4}[-\s]?\d{4}[-\s]?\d{4}$/,
+      /^\+?86[-\s]?\d{3,4}[-\s]?\d{4}[-\s]?\d{4}$/
+    ];
+    
+    for (const pattern of phonePatterns) {
+      if (pattern.test(email)) {
+        this.logger.debug('Stage 1: Filtered out phone number', { value: email });
+        return false;
+      }
+    }
+    
+    // Убрать mailto: если есть
+    if (email.toLowerCase().startsWith('mailto:')) {
+      email = email.substring(7);
+    }
+    
+    // Валидация email
+    const emailRegex = /^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    
+    if (!emailRegex.test(email)) {
+      return false;
+    }
+    
+    const parts = email.split('@');
+    if (parts.length !== 2) {
+      return false;
+    }
+    
+    const localPart = parts[0].toLowerCase();
+    const domain = parts[1];
+    
+    // Фильтр generic emails
+    const genericPrefixes = [
+      'noreply', 'no-reply', 'donotreply',
+      'securities', 'ir', 'investor', 'relations',
+      'pr', 'press', 'media', 'news',
+      'hr', 'recruitment', 'jobs', 'career',
+      'legal', 'compliance', 'admin', 'webmaster',
+      'postmaster', 'hostmaster', 'abuse',
+      'marketing', 'advertising', 'promo'
+    ];
+    
+    for (const prefix of genericPrefixes) {
+      if (localPart === prefix || localPart.startsWith(prefix + '.') || localPart.startsWith(prefix + '_')) {
+        this.logger.debug('Stage 1: Filtered out generic email', { value: email, reason: prefix });
+        return false;
+      }
+    }
+    
+    if (!domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) {
+      return false;
+    }
+    
+    if (localPart.length < 2 || domain.length < 4) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  _isBlogOrArticle(url) {
+    if (!url) return false;
+    
+    const blogPatterns = [
+      '/blog/',
+      '/article/',
+      '/news/',
+      '/post/',
+      '/press/',
+      '/story/',
+      '/media/',
+      'blog.',
+      'news.',
+      'article.'
+    ];
+    
+    const lowerUrl = url.toLowerCase();
+    return blogPatterns.some(pattern => lowerUrl.includes(pattern));
+  }
+
+  _extractMainDomain(url) {
+    try {
+      if (!url) return null;
+      
+      // Убрать протокол и параметры
+      let domain = url.replace(/^https?:\/\//, '').split('/')[0].split('?')[0];
+      
+      // Оставляем www. если есть (для корректности)
+      // domain = domain.replace(/^www\./, '');
+      
+      return `https://${domain}`;
+    } catch (error) {
+      this.logger.error('Stage 1: Failed to extract domain', { url, error: error.message });
+      return url;
+    }
+  }
+
   async _saveCompanies(companies, sessionId) {
     for (const company of companies) {
       // Определяем stage в зависимости от наличия данных
@@ -459,6 +598,7 @@ STRICT JSON OUTPUT ONLY.`;
         email: company.email,
         description: company.description,
         services: services,
+        search_query_text: company.rawQuery || null, // НОВОЕ: сохраняем поисковый запрос
         stage1_raw_data: rawData, // НОВОЕ: сохраняем сырые данные
         tag1: tagData.tag1,
         tag2: tagData.tag2,

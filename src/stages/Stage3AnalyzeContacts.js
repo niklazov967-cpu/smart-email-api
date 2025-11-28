@@ -96,31 +96,37 @@ class Stage3AnalyzeContacts {
 
   async _analyzeContacts(company, sessionId) {
     try {
+      // Извлекаем главный домен из URL
+      const mainDomain = this._extractMainDomain(company.website);
+      
       const prompt = `Найди EMAIL-АДРЕС (НЕ ТЕЛЕФОН!) для этой компании через поиск в интернете:
 
 КОМПАНИЯ: ${company.company_name}
-САЙТ: ${company.website}
+ГЛАВНАЯ СТРАНИЦА САЙТА: ${mainDomain}
+ИСХОДНЫЙ URL: ${company.website}
 
 ЗАДАЧА:
-Используй поиск в интернете для поиска EMAIL:
-1. Поищи упоминания компании "${company.company_name}" в интернете
-2. Поищи информацию по домену "${company.website}"
-3. Проверь ОФИЦИАЛЬНЫЙ САЙТ компании (если известен)
-4. Проверь отраслевые каталоги, справочники, рейтинги компаний
-5. Проверь новости, статьи, пресс-релизы о компании
-6. Проверь профили компании в соцсетях (LinkedIn, Facebook)
+Найди EMAIL на ГЛАВНОЙ СТРАНИЦЕ сайта (НЕ на конкретных статьях/блогах):
+1. Открой ГЛАВНУЮ страницу: ${mainDomain}
+2. Найди раздел "Contact Us" / "联系我们" / "关于我们" 
+3. Проверь footer (подвал страницы) на главной странице
+4. Если на главной странице нет - поищи через Google/Baidu: "site:${mainDomain} email" или "site:${mainDomain} 联系方式"
+5. Дополнительно проверь отраслевые каталоги с названием компании "${company.company_name}"
+6. Проверь профили в LinkedIn, Facebook по названию компании
 7. Найди ТОЛЬКО EMAIL-АДРЕСА (формат: xxx@yyy.zzz)
 
 КРИТИЧЕСКИ ВАЖНО - ГДЕ ИСКАТЬ:
-✅ Официальный сайт компании (НЕ маркетплейс!)
+✅ ГЛАВНАЯ страница сайта ${mainDomain} (НЕ статьи, НЕ блоги!)
+✅ Страница "Contact Us" / "联系我们" на официальном сайте
+✅ Footer (подвал) главной страницы
 ✅ Отраслевые каталоги и справочники (например: 中国机械企业名录)
-✅ Новости и статьи о компании
 ✅ Профили в соцсетях (LinkedIn, Facebook)
 ✅ Контактная информация в поисковой выдаче Google/Baidu
 
-❌ НЕ ИСКАТЬ на маркетплейсах:
-   - Alibaba, 1688, Made-in-China, Taobao - там НЕТ email!
-   - На маркетплейсах только формы обратной связи, БЕЗ email!
+❌ НЕ ИСКАТЬ:
+   - На маркетплейсах (Alibaba, 1688, Made-in-China) - там НЕТ email!
+   - На страницах блогов/статей - там только общая информация
+   - На страницах товаров - там нет контактов
 
 ФОРМАТ EMAIL:
 - Нужен ТОЛЬКО EMAIL в формате: something@domain.com
@@ -129,14 +135,14 @@ class Stage3AnalyzeContacts {
 РЕЗУЛЬТАТ: JSON формат:
 {
   "emails": ["email@example.com", "sales@company.cn"],
-  "source": "где нашел (официальный сайт/каталог/новости/LinkedIn)",
+  "source": "где нашел (главная страница/contact us/footer/каталог/LinkedIn)",
   "found_in": "internet search",
   "note": "источник информации (укажи конкретный URL если найден)"
 }
 
 ВНИМАНИЕ: 
 - В массиве "emails" должны быть ТОЛЬКО email-адреса с символом @, БЕЗ телефонов!
-- НЕ возвращай email с маркетплейсов - там их нет!
+- Ищи на ГЛАВНОЙ странице ${mainDomain}, а не на ${company.website}!
 
 Если не найдено: {"emails": [], "note": "детальное объяснение где искал и почему не нашел"}
 
@@ -417,21 +423,97 @@ class Stage3AnalyzeContacts {
       return false;
     }
     
-    // Проверка на телефон (начинается с + или цифр)
-    if (/^\+?\d/.test(email)) {
-      this.logger.debug('Stage 3: Filtered out phone number', { value: email });
+    // Trim whitespace
+    email = email.trim();
+    
+    // Проверка на телефон (различные форматы)
+    // +86 139 1234 5678, 86-139-1234-5678, 13912345678, +8613912345678
+    const phonePatterns = [
+      /^\+?\d{10,15}$/,              // Только цифры (с + или без)
+      /^\+?\d[\d\s\-().]{8,}$/,      // Цифры с разделителями
+      /^\d{3,4}[-\s]?\d{4}[-\s]?\d{4}$/,  // Китайские мобильные
+      /^\+?86[-\s]?\d{3,4}[-\s]?\d{4}[-\s]?\d{4}$/  // +86 формат
+    ];
+    
+    for (const pattern of phonePatterns) {
+      if (pattern.test(email)) {
+        this.logger.debug('Stage 3: Filtered out phone number', { value: email });
+        return false;
+      }
+    }
+    
+    // Проверка на "mailto:" префикс
+    if (email.toLowerCase().startsWith('mailto:')) {
+      email = email.substring(7);
+    }
+    
+    // Базовая проверка формата email
+    const emailRegex = /^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    
+    if (!emailRegex.test(email)) {
+      this.logger.debug('Stage 3: Invalid email format', { value: email });
       return false;
     }
     
-    // Проверка формата email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const isValid = emailRegex.test(email);
-    
-    if (!isValid) {
-      this.logger.debug('Stage 3: Invalid email format', { value: email });
+    // Дополнительные проверки
+    // Проверка что после @ есть точка с доменом
+    const parts = email.split('@');
+    if (parts.length !== 2) {
+      return false;
     }
     
-    return isValid;
+    const localPart = parts[0].toLowerCase();
+    const domain = parts[1];
+    
+    // Фильтр generic/non-useful emails (securities@, pr@, service@, noreply@, etc.)
+    const genericPrefixes = [
+      'noreply', 'no-reply', 'donotreply', 
+      'securities', 'ir', 'investor', 'relations',
+      'pr', 'press', 'media', 'news',
+      'hr', 'recruitment', 'jobs', 'career',
+      'legal', 'compliance', 'admin', 'webmaster',
+      'postmaster', 'hostmaster', 'abuse',
+      'marketing', 'advertising', 'promo',
+      'support-cn', 'support-zh'  // Общий саппорт
+    ];
+    
+    for (const prefix of genericPrefixes) {
+      if (localPart === prefix || localPart.startsWith(prefix + '.') || localPart.startsWith(prefix + '_')) {
+        this.logger.debug('Stage 3: Filtered out generic email', { value: email, reason: `generic prefix: ${prefix}` });
+        return false;
+      }
+    }
+    
+    // Домен должен содержать точку и быть валидным
+    if (!domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) {
+      this.logger.debug('Stage 3: Invalid domain', { value: email, domain });
+      return false;
+    }
+    
+    // Проверка что это не слишком короткий email (возможно, ошибка)
+    if (localPart.length < 2 || domain.length < 4) {
+      this.logger.debug('Stage 3: Email too short', { value: email });
+      return false;
+    }
+    
+    return true;
+  }
+
+  _extractMainDomain(url) {
+    try {
+      if (!url) return null;
+      
+      // Убрать протокол и параметры
+      let domain = url.replace(/^https?:\/\//, '').split('/')[0].split('?')[0];
+      
+      // Оставляем www. если есть (для корректности)
+      // domain = domain.replace(/^www\./, '');
+      
+      return `https://${domain}`;
+    } catch (error) {
+      this.logger.error('Stage 3: Failed to extract domain', { url, error: error.message });
+      return url;
+    }
   }
 
   _sleep(ms) {

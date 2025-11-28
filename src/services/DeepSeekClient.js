@@ -163,6 +163,53 @@ class DeepSeekClient {
   }
 
   /**
+   * Перевести текст с китайского на русский
+   * @param {string} text - Текст для перевода
+   * @param {string} fieldName - Название поля (для контекста)
+   * @returns {string} Переведенный текст
+   */
+  async translate(text, fieldName = '') {
+    if (!text || text.trim().length === 0) {
+      return '';
+    }
+
+    // Определяем контекст на основе типа поля
+    let context = '';
+    if (fieldName.includes('tag')) {
+      context = 'Это технический тег. ';
+    } else if (fieldName === 'services') {
+      context = 'Это список услуг компании. ';
+    } else if (fieldName === 'company_name') {
+      context = 'Это название компании. ';
+    }
+
+    const prompt = `${context}Переведи на русский язык следующий текст с китайского.
+Сохрани все технические термины, аббревиатуры (CNC, CAD, CAM и т.д.) без изменений.
+Если текст уже на русском или английском, верни его без изменений.
+Верни ТОЛЬКО перевод без объяснений, комментариев или дополнительного текста.
+
+Текст: ${text}`;
+
+    try {
+      const translation = await this.query(prompt, {
+        maxTokens: 500,
+        temperature: 0.3, // Низкая температура для более точного перевода
+        systemPrompt: 'You are a professional translator specializing in technical Chinese to Russian translation.',
+        stage: 'translation'
+      });
+
+      return translation.trim();
+    } catch (error) {
+      this.logger.error('DeepSeekClient: Translation failed', {
+        fieldName,
+        textLength: text.length,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Проверка доступности API
    */
   async healthCheck() {

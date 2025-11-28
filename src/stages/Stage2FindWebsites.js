@@ -110,13 +110,17 @@ class Stage2FindWebsites {
 КОМПАНИЯ: ${company.company_name}
 
 ЧТО ИСКАТЬ:
-1. **Официальный веб-сайт**:
+1. **Официальный веб-сайт (ГЛАВНАЯ СТРАНИЦА)**:
    - Только корпоративные сайты (.cn, .com.cn, .net.cn, .com)
    - НЕ маркетплейсы (Alibaba, 1688, Made-in-China)
    - Основной домен компании, не подразделений
+   - ГЛАВНАЯ страница (https://company.com), НЕ страницы блогов или статей
+   - НЕ указывай URL вида: /blog/, /article/, /news/, /products/item-123
 
 2. **Email для связи**:
-   - Поищи email на официальном сайте компании (если найден)
+   - Поищи email на ГЛАВНОЙ СТРАНИЦЕ официального сайта компании (если найден)
+   - Проверь раздел "Contact Us" / "联系我们" на главной странице
+   - Проверь footer (подвал) главной страницы
    - Проверь отраслевые каталоги и справочники компаний
    - Проверь новости и статьи о компании
    - Любые упоминания компании с контактами в интернете
@@ -132,13 +136,15 @@ class Stage2FindWebsites {
   "website": "https://www.example.cn",
   "email": "info@example.com",
   "description": "краткое описание услуг компании",
-  "source": "откуда взят email (Alibaba/каталог/сайт)"
+  "source": "откуда взят email (сайт/каталог)"
 }
 
 Если сайт не найден: {"website": null, "email": "...если найден", "description": "...", "source": "..."}
 Если ничего не найдено: {"website": null, "email": null, "description": null, "source": null}
 
-ВАЖНО: Email и описание можно взять с Alibaba/Made-in-China даже если сайт не найден!
+ВАЖНО: 
+- Указывай ГЛАВНУЮ страницу сайта, а не страницы блогов/статей!
+- Email и описание можно взять с Alibaba/Made-in-China даже если сайт не найден!
 
 ВЕРНИ ТОЛЬКО JSON, без дополнительного текста.`;
 
@@ -274,9 +280,18 @@ class Stage2FindWebsites {
 
       const data = JSON.parse(jsonMatch[0]);
       
+      // Валидация email
+      let validEmail = null;
+      if (data.email) {
+        validEmail = this._isValidEmail(data.email) ? data.email : null;
+        if (!validEmail) {
+          this.logger.debug('Stage 2: Invalid email filtered', { value: data.email });
+        }
+      }
+      
       return {
         website: data.website || null,
-        email: data.email || null,
+        email: validEmail,
         description: data.description || null,
         source: data.source || null
       };
@@ -325,6 +340,12 @@ class Stage2FindWebsites {
     for (const email of emails) {
       if (!email || typeof email !== 'string') continue;
       
+      // Валидация email
+      if (!this._isValidEmail(email)) {
+        this.logger.debug('Stage 2: Invalid email skipped in filtering', { value: email });
+        continue;
+      }
+      
       const domain = this._extractDomain(email);
       if (!domain) continue;
       
@@ -360,6 +381,92 @@ class Stage2FindWebsites {
     }
 
     return emails[0];
+  }
+
+  _isValidEmail(email) {
+    if (!email || typeof email !== 'string') {
+      return false;
+    }
+    
+    email = email.trim();
+    
+    // Проверка на телефон
+    const phonePatterns = [
+      /^\+?\d{10,15}$/,
+      /^\+?\d[\d\s\-().]{8,}$/,
+      /^\d{3,4}[-\s]?\d{4}[-\s]?\d{4}$/,
+      /^\+?86[-\s]?\d{3,4}[-\s]?\d{4}[-\s]?\d{4}$/
+    ];
+    
+    for (const pattern of phonePatterns) {
+      if (pattern.test(email)) {
+        this.logger.debug('Stage 2: Filtered out phone number', { value: email });
+        return false;
+      }
+    }
+    
+    if (email.toLowerCase().startsWith('mailto:')) {
+      email = email.substring(7);
+    }
+    
+    const emailRegex = /^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    
+    if (!emailRegex.test(email)) {
+      return false;
+    }
+    
+    const parts = email.split('@');
+    if (parts.length !== 2) {
+      return false;
+    }
+    
+    const localPart = parts[0].toLowerCase();
+    const domain = parts[1];
+    
+    // Фильтр generic emails
+    const genericPrefixes = [
+      'noreply', 'no-reply', 'donotreply',
+      'securities', 'ir', 'investor', 'relations',
+      'pr', 'press', 'media', 'news',
+      'hr', 'recruitment', 'jobs', 'career',
+      'legal', 'compliance', 'admin', 'webmaster',
+      'postmaster', 'hostmaster', 'abuse',
+      'marketing', 'advertising', 'promo'
+    ];
+    
+    for (const prefix of genericPrefixes) {
+      if (localPart === prefix || localPart.startsWith(prefix + '.') || localPart.startsWith(prefix + '_')) {
+        this.logger.debug('Stage 2: Filtered out generic email', { value: email, reason: prefix });
+        return false;
+      }
+    }
+    
+    if (!domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) {
+      return false;
+    }
+    
+    if (localPart.length < 2 || domain.length < 4) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  _extractMainDomain(url) {
+    try {
+      if (!url) return null;
+      
+      // Убрать протокол и параметры
+      let domain = url.replace(/^https?:\/\//, '').split('/')[0].split('?')[0];
+      
+      // Оставляем www. если есть (для корректности)
+      // domain = domain.replace(/^www\./, '');
+      
+      return `https://${domain}`;
+    } catch (error) {
+      this.logger.error('Stage 2: Failed to extract domain', { url, error: error.message });
+      return url;
+    }
   }
 
   _sleep(ms) {

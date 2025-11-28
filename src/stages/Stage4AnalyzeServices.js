@@ -288,14 +288,34 @@ Analyze ALL available information and provide:
 1. Relevance score (0-100) to search topic
 2. Improved description (merge all info)
 3. Improved services list
-4. Improved tags (up to 20)
+4. Improved tags (up to 20) - ОБЯЗАТЕЛЬНО включи:
+   - Виды обработки (токарная, фрезерная, 5-осевая и т.д.)
+   - Материалы с которыми работают (нержавейка, алюминий, пластики, титан и т.д.)
+   - Поверхностная обработка (анодирование, гальваника, порошковая покраска)
+   - Отрасли применения (автомобильная, аэрокосм, медицинская)
+   - Типы производства (мелкосерийное, прототипирование)
 5. Confidence in data quality (0-100)
 6. Validation reason
 
 RULES:
-- Equipment manufacturer = score <30
-- Trading company = score <40  
-- Service provider matching topic = score >70
+⚠️ КРИТИЧЕСКИ ВАЖНО - РАЗЛИЧИЕ ПРОИЗВОДИТЕЛЬ vs СЕРВИС ОБРАБОТКИ:
+
+❌ ОТКЛОНИТЬ (score < 30) если компания:
+   - Производит/продает станки и оборудование (CNC machines, lathes, mills, equipment)
+   - Ключевые слова: "制造商" (manufacturer), "生产" (produce/manufacturing), "设备" (equipment), "机床" (machine tool)
+   - Примеры: "数控机床制造商", "CNC设备生产商", "станкостроительный завод"
+   - Если в описании есть "equipment manufacturer", "machine manufacturer", "tool manufacturer" - это ПРОИЗВОДИТЕЛЬ!
+
+✅ ПРИНЯТЬ (score > 70) если компания:
+   - Предоставляет услуги обработки деталей (machining/processing services)
+   - Ключевые слова: "加工服务" (machining service), "零件加工" (parts processing), "定制加工" (custom machining)
+   - Примеры: "CNC加工厂", "精密零件加工", "металлообработка на заказ"
+   - Услуги: токарная, фрезерная обработка, изготовление деталей
+
+⚠️ ПРОВЕРКА: Если видишь слова "制造商", "生产设备", "机床", "equipment", "tool manufacturer" - 
+   это ПРОИЗВОДИТЕЛЬ СТАНКОВ (score < 30), а НЕ компания по обработке деталей!
+
+- Trading company (торговая компания оборудованием) = score <40  
 - Use ALL data from stages to create comprehensive description
 - Extract maximum value from raw AI responses
 
