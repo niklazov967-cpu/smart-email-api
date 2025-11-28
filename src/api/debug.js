@@ -226,5 +226,36 @@ router.post('/test-fallback', async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/debug/companies/:id
+ * Удалить компанию по ID
+ */
+router.delete('/companies/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    req.logger.info('Deleting company:', { company_id: id });
+    
+    const { error } = await req.db.supabase
+      .from('pending_companies')
+      .delete()
+      .eq('company_id', id);
+    
+    if (error) throw error;
+    
+    res.json({ 
+      success: true, 
+      message: 'Company deleted successfully',
+      company_id: id
+    });
+  } catch (error) {
+    req.logger.error('Error deleting company:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
 
