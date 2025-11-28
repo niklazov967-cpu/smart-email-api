@@ -86,21 +86,27 @@ class Stage2FindWebsites {
   async _getCompanies(sessionId) {
     // Получить только компании БЕЗ сайта
     // (Stage 1 уже мог найти сайты для некоторых)
-    const result = await this.db.query(
-      `SELECT company_id, company_name 
-       FROM pending_companies 
-       WHERE session_id = $1 
-         AND stage = 'names_found'
-         AND (website IS NULL OR website = '')`,
-      [sessionId]
-    );
+    const { data, error } = await this.db.supabase
+      .from('pending_companies')
+      .select('company_id, company_name')
+      .eq('session_id', sessionId)
+      .eq('stage', 'names_found')
+      .or('website.is.null,website.eq.');
+    
+    if (error) {
+      this.logger.error('Stage 2: Failed to fetch companies without website', { 
+        error: error.message,
+        sessionId 
+      });
+      throw new Error(`Failed to fetch companies: ${error.message}`);
+    }
     
     this.logger.info('Stage 2: Companies without website', {
-      count: result.rows.length,
+      count: data?.length || 0,
       sessionId
     });
     
-    return result.rows;
+    return data || [];
   }
 
   async _findWebsite(company, sessionId) {
@@ -206,27 +212,33 @@ class Stage2FindWebsites {
         };
 
         // Сохранить найденные данные (включая описание, теги и сервисы)
-        await this.db.query(
-            `UPDATE pending_companies 
-             SET website = $1, email = $2, description = COALESCE($3, description), 
-                 services = COALESCE($4, services), stage = $5,
-                 tag1 = COALESCE($6, tag1), tag2 = COALESCE($7, tag2), tag3 = COALESCE($8, tag3), 
-                 tag4 = COALESCE($9, tag4), tag5 = COALESCE($10, tag5), tag6 = COALESCE($11, tag6),
-                 tag7 = COALESCE($12, tag7), tag8 = COALESCE($13, tag8), tag9 = COALESCE($14, tag9),
-                 tag10 = COALESCE($15, tag10), tag11 = COALESCE($16, tag11), tag12 = COALESCE($17, tag12),
-                 tag13 = COALESCE($18, tag13), tag14 = COALESCE($19, tag14), tag15 = COALESCE($20, tag15),
-                 tag16 = COALESCE($21, tag16), tag17 = COALESCE($22, tag17), tag18 = COALESCE($23, tag18),
-                 tag19 = COALESCE($24, tag19), tag20 = COALESCE($25, tag20),
-                 stage2_raw_data = $27,
-                 updated_at = NOW()
-             WHERE company_id = $26`,
-            [result.website, result.email, result.description, services, newStage,
-             tagData.tag1, tagData.tag2, tagData.tag3, tagData.tag4, tagData.tag5,
-             tagData.tag6, tagData.tag7, tagData.tag8, tagData.tag9, tagData.tag10,
-             tagData.tag11, tagData.tag12, tagData.tag13, tagData.tag14, tagData.tag15,
-             tagData.tag16, tagData.tag17, tagData.tag18, tagData.tag19, tagData.tag20,
-             company.company_id, JSON.stringify(rawData)]
-        );
+        const updateData = {
+          website: result.website,
+          email: result.email,
+          description: result.description || undefined,
+          services: services || undefined,
+          stage: newStage,
+          stage2_raw_data: rawData,
+          updated_at: new Date().toISOString(),
+          ...tagData // tag1, tag2, ... tag20
+        };
+        
+        // Удалить undefined значения (чтобы не перезаписывать существующие)
+        Object.keys(updateData).forEach(key => {
+          if (updateData[key] === undefined) delete updateData[key];
+        });
+        
+        const { error: updateError } = await this.db.supabase
+          .from('pending_companies')
+          .update(updateData)
+          .eq('company_id', company.company_id);
+        
+        if (updateError) {
+          this.logger.error('Stage 2: Failed to update company', {
+            company: company.company_name,
+            error: updateError.message
+          });
+        }
 
         this.logger.info('Stage 2: Data found', {
           company: company.company_name,
@@ -240,12 +252,20 @@ class Stage2FindWebsites {
         return { success: true, website: result.website, email: result.email };
       } else {
         // Отметить как не найдено
-        await this.db.query(
-          `UPDATE pending_companies 
-           SET website_status = 'not_found', updated_at = NOW()
-           WHERE company_id = $1`,
-          [company.company_id]
-        );
+        const { error: updateError } = await this.db.supabase
+          .from('pending_companies')
+          .update({
+            website_status: 'not_found',
+            updated_at: new Date().toISOString()
+          })
+          .eq('company_id', company.company_id);
+        
+        if (updateError) {
+          this.logger.error('Stage 2: Failed to mark as not found', {
+            company: company.company_name,
+            error: updateError.message
+          });
+        }
 
         this.logger.warn('Stage 2: Nothing found', {
           company: company.company_name
