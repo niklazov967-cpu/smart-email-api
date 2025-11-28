@@ -86,11 +86,11 @@ class Stage2FindWebsites {
   async _getCompanies(sessionId) {
     // Получить только компании БЕЗ сайта
     // (Stage 1 уже мог найти сайты для некоторых)
+    // Не фильтруем по stage, т.к. Stage4 может изменить stage
     const { data, error } = await this.db.supabase
       .from('pending_companies')
       .select('company_id, company_name')
       .eq('session_id', sessionId)
-      .eq('stage', 'names_found')
       .or('website.is.null,website.eq.');
     
     if (error) {
@@ -251,11 +251,21 @@ class Stage2FindWebsites {
 
         return { success: true, website: result.website, email: result.email };
       } else {
-        // Отметить как не найдено
+        // Подготовить raw data для случая "не найдено"
+        const rawDataNotFound = {
+          company: company.company_name,
+          full_response: response ? response.substring(0, 10000) : null,
+          timestamp: new Date().toISOString(),
+          source: 'perplexity_sonar_pro',
+          result: 'not_found'
+        };
+        
+        // Отметить как не найдено И сохранить raw_data
         const { error: updateError } = await this.db.supabase
           .from('pending_companies')
           .update({
             website_status: 'not_found',
+            stage2_raw_data: rawDataNotFound,
             updated_at: new Date().toISOString()
           })
           .eq('company_id', company.company_id);
