@@ -335,32 +335,40 @@ class QueryOrchestrator {
     this.logger.info('Running Stage 2 only', { sessionId });
     
     // Проверить сколько компаний ВСЕГО
-    const totalCompaniesResult = await this.db.query(
-      `SELECT COUNT(*) as count FROM pending_companies 
-       WHERE session_id = $1`,
-      [sessionId]
-    );
+    const { count: totalCompanies, error: totalError } = await this.db.supabase
+      .from('pending_companies')
+      .select('*', { count: 'exact', head: true })
+      .eq('session_id', sessionId);
     
-    const totalCompanies = parseInt(totalCompaniesResult.rows[0]?.count || 0);
+    if (totalError) {
+      this.logger.error('Stage 2: Failed to count total companies', { error: totalError.message });
+      throw new Error(`Failed to count companies: ${totalError.message}`);
+    }
     
     // Проверить сколько уже имеют website
-    const alreadyHaveWebsiteResult = await this.db.query(
-      `SELECT COUNT(*) as count FROM pending_companies 
-       WHERE session_id = $1 AND website IS NOT NULL`,
-      [sessionId]
-    );
+    const { count: alreadyHaveWebsite, error: websiteError } = await this.db.supabase
+      .from('pending_companies')
+      .select('*', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+      .not('website', 'is', null);
     
-    const alreadyHaveWebsite = parseInt(alreadyHaveWebsiteResult.rows[0]?.count || 0);
+    if (websiteError) {
+      this.logger.error('Stage 2: Failed to count companies with website', { error: websiteError.message });
+      throw new Error(`Failed to count websites: ${websiteError.message}`);
+    }
     
     // Если ВСЕ компании уже имеют website - пропустить Stage 2
     if (totalCompanies > 0 && alreadyHaveWebsite === totalCompanies) {
       // Получить компании которые уже имеют website
-      const companiesResult = await this.db.query(
-        `SELECT company_name, website, email, stage, confidence_score 
-         FROM pending_companies 
-         WHERE session_id = $1 AND website IS NOT NULL`,
-        [sessionId]
-      );
+      const { data: companiesWithWebsite, error: fetchError } = await this.db.supabase
+        .from('pending_companies')
+        .select('company_name, website, email, stage, confidence_score')
+        .eq('session_id', sessionId)
+        .not('website', 'is', null);
+      
+      if (fetchError) {
+        this.logger.error('Stage 2: Failed to fetch companies', { error: fetchError.message });
+      }
       
       this.logger.info('Stage 2: All websites already found in Stage 1', {
         sessionId,
@@ -377,7 +385,7 @@ class QueryOrchestrator {
         notFound: 0,                        // Не было чего искать
         companiesProcessed: alreadyHaveWebsite,  // Общее количество
         websitesFound: alreadyHaveWebsite,       // Все найдены в Stage 1
-        websites: companiesResult.rows.map(row => ({
+        websites: (companiesWithWebsite || []).map(row => ({
           company_name: row.company_name,
           website: row.website,
           email: row.email,
@@ -392,12 +400,14 @@ class QueryOrchestrator {
     const result = await this.stage2.execute(sessionId);
     
     // Получить компании с сайтами и email
-    const companiesResult = await this.db.query(
-      `SELECT company_name, website, email, stage, confidence_score 
-       FROM pending_companies 
-       WHERE session_id = $1`,
-      [sessionId]
-    );
+    const { data: allCompanies, error: allError } = await this.db.supabase
+      .from('pending_companies')
+      .select('company_name, website, email, stage, confidence_score')
+      .eq('session_id', sessionId);
+    
+    if (allError) {
+      this.logger.error('Stage 2: Failed to fetch all companies', { error: allError.message });
+    }
     
     return {
       success: true,
@@ -406,7 +416,7 @@ class QueryOrchestrator {
       notFound: result.notFound || 0,     // Не найдено
       companiesProcessed: result.total || 0,  // Для обратной совместимости
       websitesFound: result.found || 0,       // Для обратной совместимости
-      websites: companiesResult.rows.map(row => ({
+      websites: (allCompanies || []).map(row => ({
         company_name: row.company_name,
         website: row.website,
         email: row.email,
@@ -422,17 +432,22 @@ class QueryOrchestrator {
     const result = await this.stage3.execute(sessionId);
     
     // Получить компании с контактами
-    const companiesResult = await this.db.query(
-      `SELECT company_name, email, phone, contact_page 
-       FROM pending_companies 
-       WHERE session_id = $1 AND (email IS NOT NULL OR phone IS NOT NULL)`,
-      [sessionId]
-    );
+    const { data: companiesWithContacts, error } = await this.db.supabase
+      .from('pending_companies')
+      .select('company_name, email, phone, contact_page')
+      .eq('session_id', sessionId)
+      .or('email.not.is.null,phone.not.is.null');
+    
+    if (error) {
+      this.logger.error('Stage 3: Failed to fetch companies with contacts', { error: error.message });
+    }
     
     return {
+      success: true,
+      processed: result.processed || 0,
+      contactsFound: (companiesWithContacts || []).length,
       websitesProcessed: result.processed || 0,
-      contactsFound: companiesResult.rows.length,
-      contacts: companiesResult.rows.map(row => ({
+      contacts: (companiesWithContacts || []).map(row => ({
         company_name: row.company_name,
         email: row.email,
         phone: row.phone,
@@ -447,13 +462,15 @@ class QueryOrchestrator {
     const result = await this.stage4.execute(sessionId);
     
     // Получить валидированные компании с причинами
-    const companiesResult = await this.db.query(
-      `SELECT company_name, stage, validation_score, validation_reason 
-       FROM pending_companies 
-       WHERE session_id = $1
-       ORDER BY validation_score DESC`,
-      [sessionId]
-    );
+    const { data: validatedCompanies, error } = await this.db.supabase
+      .from('pending_companies')
+      .select('company_name, stage, validation_score, validation_reason')
+      .eq('session_id', sessionId)
+      .order('validation_score', { ascending: false });
+    
+    if (error) {
+      this.logger.error('Stage 4: Failed to fetch validated companies', { error: error.message });
+    }
     
     return {
       success: true,
@@ -461,7 +478,7 @@ class QueryOrchestrator {
       validated: result.validated || 0,
       rejected: result.rejected || 0,
       needsReview: result.needsReview || 0,
-      companies: companiesResult.rows.map(row => ({
+      companies: (validatedCompanies || []).map(row => ({
         company_name: row.company_name,
         stage: row.stage,
         validation_score: row.validation_score || 0,
