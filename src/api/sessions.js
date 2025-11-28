@@ -513,21 +513,24 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
       const duration = (endTime - startTime) / 1000; // секунды
       
       // Сохранить прогресс этапа
-      await req.db.query(
-        `INSERT INTO processing_progress 
-         (session_id, stage, stage_name, status, started_at, completed_at, result_data, duration_seconds)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          id, 
-          `stage${stage}`,  // stage (обязательное поле)
-          `stage${stage}`,  // stage_name (для совместимости)
-          'completed', 
-          startTime, 
-          endTime, 
-          JSON.stringify(result),
-          duration
-        ]
-      );
+      const { error: progressError } = await req.db.supabase
+        .from('processing_progress')
+        .insert({
+          session_id: id,
+          stage: `stage${stage}`,
+          stage_name: `stage${stage}`,
+          status: 'completed',
+          started_at: startTime.toISOString(),
+          completed_at: endTime.toISOString(),
+          result_data: result,
+          duration_seconds: duration
+        });
+      
+      if (progressError) {
+        req.logger.error(`Failed to save stage ${stage} progress`, {
+          error: progressError.message
+        });
+      }
       
       req.logger.info(`Stage ${stage} completed and saved`, { 
         sessionId: id, 
@@ -545,12 +548,22 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
       
     } catch (stageError) {
       // Сохранить ошибку
-      await req.db.query(
-        `INSERT INTO processing_progress 
-         (session_id, stage, stage_name, status, started_at, error_message)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [id, `stage${stage}`, `stage${stage}`, 'failed', startTime, stageError.message]
-      );
+      const { error: errorSaveError } = await req.db.supabase
+        .from('processing_progress')
+        .insert({
+          session_id: id,
+          stage: `stage${stage}`,
+          stage_name: `stage${stage}`,
+          status: 'failed',
+          started_at: startTime.toISOString(),
+          error_message: stageError.message
+        });
+      
+      if (errorSaveError) {
+        req.logger.error('Failed to save stage error', {
+          error: errorSaveError.message
+        });
+      }
       
       req.logger.error(`Stage ${stage} failed`, { 
         sessionId: id, 
@@ -582,13 +595,15 @@ router.get('/:id/stage-progress', async (req, res) => {
     const { id } = req.params;
     
     // Получить все выполненные этапы
-    const progressResult = await req.db.query(
-      `SELECT stage_name, status, started_at, completed_at, duration_seconds, error_message
-       FROM processing_progress 
-       WHERE session_id = $1
-       ORDER BY started_at DESC`,
-      [id]
-    );
+    const { data: progressData, error } = await req.db.supabase
+      .from('processing_progress')
+      .select('stage_name, status, started_at, completed_at, duration_seconds, error_message')
+      .eq('session_id', id)
+      .order('started_at', { ascending: false });
+    
+    if (error) {
+      throw new Error(`Failed to fetch progress: ${error.message}`);
+    }
     
     // Сгруппировать по этапам (последняя попытка каждого)
     const stageStatus = {};
@@ -596,7 +611,7 @@ router.get('/:id/stage-progress', async (req, res) => {
     
     stages.forEach((stageName, index) => {
       const stageNum = index + 1;
-      const stageProgress = progressResult.rows.find(row => row.stage_name === stageName);
+      const stageProgress = progressData?.find(row => row.stage_name === stageName);
       
       if (stageProgress) {
         stageStatus[`stage${stageNum}`] = {
@@ -661,22 +676,21 @@ router.post('/:id/process', async (req, res) => {
     }
     
     // Проверить существование сессии
-    const sessionResult = await req.db.query(
-      'SELECT * FROM search_sessions WHERE session_id = $1',
-      [id]
-    );
+    const { data: sessionData, error } = await req.db.supabase
+      .from('search_sessions')
+      .select('*')
+      .eq('session_id', id)
+      .single();
     
-    if (sessionResult.rows.length === 0) {
+    if (error || !sessionData) {
       return res.status(404).json({
         success: false,
         error: 'Session not found'
       });
     }
     
-    const session = sessionResult.rows[0];
-    
     // Проверить статус
-    if (session.status === 'completed') {
+    if (sessionData.status === 'completed') {
       return res.status(400).json({
         success: false,
         error: 'Session already completed'
@@ -686,7 +700,7 @@ router.post('/:id/process', async (req, res) => {
     req.logger.info('Starting session processing', { sessionId: id });
     
     // Запустить обработку в фоне
-    req.orchestrator.processSession(id, session.search_query)
+    req.orchestrator.processSession(id, sessionData.search_query)
       .then(() => {
         req.logger.info('Session processing completed', { sessionId: id });
       })
