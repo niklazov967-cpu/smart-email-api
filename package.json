@@ -6,10 +6,14 @@
     "type": "git",
     "url": "https://github.com/niklazov967-cpu/smart-email-api.git"
   },
-  "main": "src/app.js",
+  "main": "src/app-simple.js",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "scripts": {
-    "start": "node src/app.js",
+    "start": "node src/app-simple.js",
     "dev": "nodemon src/app.js",
     "migrate": "node database/migrate.js",
     "seed": "node database/seed.js",
