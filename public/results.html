@@ -591,13 +591,14 @@
         // Загрузка сессий
         async function loadSessions() {
             try {
-                const response = await fetch('/api/sessions');
+                const response = await fetch('/api/debug/data');
                 const data = await response.json();
                 
                 const select = document.getElementById('sessionFilter');
                 select.innerHTML = '<option value="">Все сессии</option>';
                 
-                data.sessions?.forEach(session => {
+                const sessions = data.data?.search_sessions?.items || [];
+                sessions.forEach(session => {
                     const option = document.createElement('option');
                     option.value = session.session_id;
                     option.textContent = `${session.topic_description || 'Без темы'} (${new Date(session.created_at).toLocaleDateString('ru-RU')})`;
@@ -605,11 +606,15 @@
                 });
 
                 // Автовыбор последней сессии
-                if (data.sessions?.length > 0) {
-                    select.value = data.sessions[0].session_id;
+                if (sessions.length > 0) {
+                    select.value = sessions[0].session_id;
                 }
+                
+                console.log('Loaded sessions:', sessions.length);
             } catch (error) {
                 console.error('Error loading sessions:', error);
+                const select = document.getElementById('sessionFilter');
+                select.innerHTML = '<option value="">Ошибка загрузки сессий</option>';
             }
         }
 
@@ -700,15 +705,19 @@
                 let bVal = b[sortColumn];
 
                 // Обработка null/undefined
-                if (!aVal) aVal = '';
-                if (!bVal) bVal = '';
+                if (aVal === null || aVal === undefined) aVal = '';
+                if (bVal === null || bVal === undefined) bVal = '';
 
-                if (typeof aVal === 'string') {
-                    return sortDirection === 'asc' 
-                        ? aVal.localeCompare(bVal)
-                        : bVal.localeCompare(aVal);
-                } else {
+                // Приведение к строке если нужно
+                if (typeof aVal === 'number') {
                     return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                } else {
+                    // Приводим к строке для сравнения
+                    const aStr = String(aVal);
+                    const bStr = String(bVal);
+                    return sortDirection === 'asc' 
+                        ? aStr.localeCompare(bStr)
+                        : bStr.localeCompare(aStr);
                 }
             });
 
