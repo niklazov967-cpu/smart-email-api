@@ -44,11 +44,21 @@ router.post('/', async (req, res) => {
     
     const topic_description = `${main_topic} [${timeStr}]`;
     
-    await req.db.query(
-      `INSERT INTO search_sessions (session_id, search_query, topic_description, target_count, status, created_at)
-       VALUES ($1, $2, $3, $4, 'pending', NOW())`,
-      [sessionId, main_topic, topic_description, target_count]
-    );
+    // Сохранить сессию в БД через Supabase API
+    const { error: insertError } = await req.db.supabase
+      .from('search_sessions')
+      .insert({
+        session_id: sessionId,
+        search_query: main_topic,
+        topic_description: topic_description,
+        target_count: target_count,
+        status: 'pending',
+        created_at: now
+      });
+    
+    if (insertError) {
+      throw new Error(`Failed to create session: ${insertError.message}`);
+    }
 
     // Генерировать под-запросы
     const result = await req.queryExpander.expandTopic(main_topic, target_count);
@@ -92,21 +102,22 @@ router.post('/:sessionId/generate', async (req, res) => {
     const { sessionId } = req.params;
     const { target_count = 10 } = req.body;
 
-    // Получить тему из сессии
-    const sessionResult = await req.db.query(
-      'SELECT search_query, topic_description FROM search_sessions WHERE session_id = $1',
-      [sessionId]
-    );
+    // Получить тему из сессии через Supabase API
+    const { data: sessionData, error: sessionError } = await req.db.supabase
+      .from('search_sessions')
+      .select('search_query, topic_description')
+      .eq('session_id', sessionId)
+      .single();
 
-    if (sessionResult.rows.length === 0) {
+    if (sessionError || !sessionData) {
       return res.status(404).json({
         success: false,
         error: 'Session not found'
       });
     }
 
-    const mainTopic = sessionResult.rows[0].search_query;
-    const oldDescription = sessionResult.rows[0].topic_description;
+    const mainTopic = sessionData.search_query;
+    const oldDescription = sessionData.topic_description;
 
     // Генерировать запросы
     const result = await req.queryExpander.expandTopic(mainTopic, target_count);
@@ -134,11 +145,15 @@ router.post('/:sessionId/generate', async (req, res) => {
       newDescription = `${mainTopic} [${timeStr}, ${queriesCount} запросов]`;
     }
     
-    // Обновить topic_description в БД
-    await req.db.query(
-      'UPDATE search_sessions SET topic_description = $1 WHERE session_id = $2',
-      [newDescription, sessionId]
-    );
+    // Обновить topic_description в БД через Supabase API
+    const { error: updateError } = await req.db.supabase
+      .from('search_sessions')
+      .update({ topic_description: newDescription })
+      .eq('session_id', sessionId);
+    
+    if (updateError) {
+      req.logger.warn('Failed to update topic_description', { error: updateError.message });
+    }
 
     req.logger.info('Topics API: Queries generated and saved', { 
       sessionId, 
@@ -280,17 +295,23 @@ router.get('/:sessionId/selected', async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const result = await req.db.query(
-      `SELECT * FROM session_queries 
-       WHERE session_id = $1 AND is_selected = true
-       ORDER BY is_main DESC, relevance DESC`,
-      [sessionId]
-    );
+    // Получить выбранные запросы через Supabase API
+    const { data: queries, error } = await req.db.supabase
+      .from('session_queries')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('is_selected', true)
+      .order('is_main', { ascending: false })
+      .order('relevance', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to fetch selected queries: ${error.message}`);
+    }
 
     res.json({
       success: true,
-      count: result.rows.length,
-      data: result.rows
+      count: queries?.length || 0,
+      data: queries || []
     });
 
   } catch (error) {
