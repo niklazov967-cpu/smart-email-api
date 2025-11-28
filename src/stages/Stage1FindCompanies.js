@@ -66,11 +66,14 @@ class Stage1FindCompanies {
         companies.push(...moreCompanies);
       }
 
-      // Удалить дубликаты
+      // Удалить дубликаты внутри текущего запроса
       const uniqueCompanies = this._removeDuplicates(companies);
 
+      // Проверить существующие компании в БД (между сессиями)
+      const newCompanies = await this._checkExistingCompanies(uniqueCompanies, sessionId);
+
       // Фильтровать маркетплейсы
-      const filteredCompanies = this._filterMarketplaces(uniqueCompanies);
+      const filteredCompanies = this._filterMarketplaces(newCompanies);
 
       // Нормализовать email и website (один домен = один адрес)
       const normalizedCompanies = this._normalizeCompanyData(filteredCompanies);
@@ -275,15 +278,98 @@ STRICT JSON OUTPUT ONLY.`;
   }
 
   _removeDuplicates(companies) {
-    const seen = new Set();
+    const seenNames = new Set();
+    const seenDomains = new Set();
+    
     return companies.filter(company => {
-      const key = company.name.toLowerCase();
-      if (seen.has(key)) {
+      // Проверка по названию
+      const nameKey = company.name.toLowerCase().trim();
+      if (seenNames.has(nameKey)) {
+        this.logger.debug('Stage 1: Duplicate name filtered', { name: company.name });
         return false;
       }
-      seen.add(key);
+      
+      // Проверка по домену (если есть website)
+      if (company.website) {
+        const domain = this._extractMainDomain(company.website);
+        if (domain && seenDomains.has(domain)) {
+          this.logger.debug('Stage 1: Duplicate domain filtered', { 
+            name: company.name, 
+            website: company.website,
+            domain: domain 
+          });
+          return false;
+        }
+        if (domain) {
+          seenDomains.add(domain);
+        }
+      }
+      
+      seenNames.add(nameKey);
       return true;
     });
+  }
+
+  /**
+   * Проверяет существующие компании в БД по домену (между всеми сессиями)
+   * Фильтрует компании, которые уже есть в базе данных
+   */
+  async _checkExistingCompanies(companies, sessionId) {
+    const domains = companies
+      .filter(c => c.website)
+      .map(c => this._extractMainDomain(c.website))
+      .filter(d => d);
+    
+    if (domains.length === 0) {
+      return companies; // Нет сайтов для проверки
+    }
+    
+    // Проверить в БД по доменам (во всех сессиях)
+    // Получаем все компании с website из БД
+    const { data: existing, error } = await this.db.supabase
+      .from('pending_companies')
+      .select('website, company_name')
+      .not('website', 'is', null);
+    
+    if (error) {
+      this.logger.error('Stage 1: Failed to check existing companies', { error: error.message });
+      return companies; // В случае ошибки пропускаем проверку
+    }
+    
+    // Извлечь домены из существующих компаний
+    const existingDomains = new Set(
+      (existing || [])
+        .filter(e => e.website)
+        .map(e => this._extractMainDomain(e.website))
+        .filter(d => d)
+    );
+    
+    // Фильтровать компании с существующими доменами
+    const filtered = companies.filter(company => {
+      if (!company.website) return true; // Без сайта - пропускаем
+      
+      const domain = this._extractMainDomain(company.website);
+      if (!domain) return true;
+      
+      if (existingDomains.has(domain)) {
+        this.logger.info('Stage 1: Company already exists in DB', {
+          name: company.name,
+          website: company.website,
+          domain: domain
+        });
+        return false; // Уже есть в БД
+      }
+      
+      return true;
+    });
+    
+    this.logger.info('Stage 1: Filtered existing companies', {
+      total: companies.length,
+      existing: companies.length - filtered.length,
+      remaining: filtered.length
+    });
+    
+    return filtered;
   }
 
   /**
@@ -556,24 +642,62 @@ STRICT JSON OUTPUT ONLY.`;
     try {
       if (!url) return null;
       
-      // Убрать протокол и параметры
-      let domain = url.replace(/^https?:\/\//, '').split('/')[0].split('?')[0];
+      // Убрать протокол
+      let domain = url.replace(/^https?:\/\//, '');
       
-      // Оставляем www. если есть (для корректности)
-      // domain = domain.replace(/^www\./, '');
+      // Убрать все после первого слэша (пути, параметры)
+      domain = domain.split('/')[0].split('?')[0].split('#')[0];
       
-      return `https://${domain}`;
+      // Убрать порт если есть
+      domain = domain.split(':')[0];
+      
+      // Убрать www. для нормализации
+      domain = domain.replace(/^www\./, '');
+      
+      // Извлечь основной домен (второй уровень)
+      // us.jingdiao.com → jingdiao.com
+      // blog.example.co.uk → example.co.uk
+      const parts = domain.split('.');
+      
+      if (parts.length > 2) {
+        // Проверить на двойные TLD (.co.uk, .com.cn и т.д.)
+        const doubleTLDs = ['co.uk', 'com.cn', 'net.cn', 'org.cn', 'co.jp', 'com.au'];
+        const lastTwoParts = parts.slice(-2).join('.');
+        
+        if (doubleTLDs.includes(lastTwoParts)) {
+          // Для двойных TLD берем последние 3 части: example.co.uk
+          domain = parts.slice(-3).join('.');
+        } else {
+          // Для обычных доменов берем последние 2 части: example.com
+          domain = parts.slice(-2).join('.');
+        }
+      }
+      
+      return domain.toLowerCase(); // Возвращаем только домен
     } catch (error) {
       this.logger.error('Stage 1: Failed to extract domain', { url, error: error.message });
-      return url;
+      return null;
     }
   }
 
   async _saveCompanies(companies, sessionId) {
     for (const company of companies) {
+      // Нормализовать website: убрать лишние пути
+      let normalizedWebsite = company.website;
+      if (normalizedWebsite && this._isBlogOrArticle(normalizedWebsite)) {
+        const mainDomain = this._extractMainDomain(normalizedWebsite);
+        if (mainDomain) {
+          normalizedWebsite = `https://${mainDomain}`; // Сохранить только основной домен
+          this.logger.debug('Stage 1: Normalized blog URL to main domain', {
+            original: company.website,
+            normalized: normalizedWebsite
+          });
+        }
+      }
+      
       // Определяем stage в зависимости от наличия данных
       let stage = 'names_found';
-      if (company.website) {
+      if (normalizedWebsite) {
         stage = company.email ? 'contacts_found' : 'website_found';
       }
       
@@ -594,7 +718,7 @@ STRICT JSON OUTPUT ONLY.`;
       await this.db.directInsert('pending_companies', {
         session_id: sessionId,
         company_name: company.name,
-        website: company.website,
+        website: normalizedWebsite, // Используем нормализованный URL
         email: company.email,
         description: company.description,
         services: services,

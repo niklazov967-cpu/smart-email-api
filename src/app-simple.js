@@ -3,12 +3,45 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// Инициализация авторизации
+const AuthMiddleware = require('./middleware/auth');
+const auth = new AuthMiddleware();
+
 const app = express();
 const PORT = process.env.PORT || 3030;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Инициализация сессий (должно быть ДО static middleware)
+app.use(auth.initSession());
+
+// API endpoints для авторизации (БЕЗ защиты)
+app.post('/api/auth/login', (req, res) => auth.handleLogin(req, res));
+app.post('/api/auth/logout', (req, res) => auth.handleLogout(req, res));
+app.get('/api/auth/status', (req, res) => auth.checkAuth(req, res));
+
+// Разрешить доступ к login.html без авторизации
+app.get('/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/login.html'));
+});
+
+// Защита всех остальных статических файлов
+app.use((req, res, next) => {
+  // Проверять авторизацию только для HTML страниц и API
+  if (req.path.endsWith('.html') || req.path.startsWith('/api')) {
+    // Пропустить login.html и auth API
+    if (req.path === '/login.html' || req.path.startsWith('/api/auth')) {
+      return next();
+    }
+    // Требовать авторизацию
+    return auth.requireAuth(req, res, next);
+  }
+  // Для CSS, JS, изображений - разрешить без авторизации
+  next();
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 // API Info endpoint
