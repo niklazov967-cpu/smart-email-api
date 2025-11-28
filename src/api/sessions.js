@@ -158,38 +158,60 @@ router.delete('/clear-all', async (req, res) => {
   try {
     req.logger.info('Clearing all database data');
 
-    // Удаляем все записи из таблиц (CASCADE удалит связанные записи)
-    // Supabase требует WHERE clause
-    await req.db.query('DELETE FROM search_sessions WHERE true');
+    // Удаляем все записи из таблиц используя Supabase API
+    const tables = [
+      'processing_progress',      // Сначала зависимые таблицы
+      'session_queries',
+      'pending_companies',
+      'found_companies',
+      'pending_companies_ru',     // Переводы
+      'search_sessions'            // Главная таблица последней
+    ];
+
+    const cleared = [];
     
-    // Для уверенности очищаем и другие таблицы
-    await req.db.query('DELETE FROM session_queries WHERE true');
-    await req.db.query('DELETE FROM pending_companies WHERE true');
-    await req.db.query('DELETE FROM found_companies WHERE true');
-    await req.db.query('DELETE FROM processing_progress WHERE true');
+    for (const table of tables) {
+      try {
+        // Supabase delete требует фильтр, используем neq с несуществующим значением
+        const { error } = await req.db.supabase
+          .from(table)
+          .delete()
+          .neq('created_at', '1900-01-01'); // Удалит все записи
+        
+        if (error) {
+          req.logger.warn(`Failed to clear ${table}`, { error: error.message });
+        } else {
+          cleared.push(table);
+          req.logger.debug(`Cleared table: ${table}`);
+        }
+      } catch (err) {
+        req.logger.warn(`Could not clear ${table}`, { error: err.message });
+      }
+    }
     
     // Опционально: очистить кеш (если таблица существует)
-    try {
-      await req.db.query('DELETE FROM perplexity_cache WHERE true');
-      await req.db.query('DELETE FROM api_calls WHERE true');
-    } catch (error) {
-      req.logger.warn('Could not clear cache tables', { error: error.message });
+    const cacheTables = ['perplexity_cache', 'api_calls'];
+    for (const table of cacheTables) {
+      try {
+        const { error } = await req.db.supabase
+          .from(table)
+          .delete()
+          .neq('created_at', '1900-01-01');
+        
+        if (!error) {
+          cleared.push(table);
+        }
+      } catch (error) {
+        // Игнорируем ошибки для необязательных таблиц
+      }
     }
 
-    req.logger.info('Database cleared successfully');
+    req.logger.info('Database cleared successfully', { tables: cleared });
 
     res.json({
       success: true,
       message: 'База данных очищена',
-      cleared_tables: [
-        'search_sessions',
-        'session_queries',
-        'pending_companies',
-        'found_companies',
-        'processing_progress',
-        'perplexity_cache',
-        'api_calls'
-      ]
+      cleared_tables: cleared
     });
 
   } catch (error) {
