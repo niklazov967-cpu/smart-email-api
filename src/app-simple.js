@@ -27,6 +27,11 @@ app.get('/login.html', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/login.html'));
 });
 
+// Защита главной страницы
+app.get('/', (req, res, next) => {
+  return auth.requireAuth(req, res, next);
+});
+
 // Защита всех остальных статических файлов
 app.use((req, res, next) => {
   // Проверять авторизацию только для HTML страниц и API

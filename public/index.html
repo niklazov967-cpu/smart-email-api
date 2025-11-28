@@ -30,6 +30,25 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             margin-bottom: 30px;
             text-align: center;
+            position: relative;
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #dc2626;
         }
 
         .header h1 {
@@ -163,6 +182,7 @@
 <body>
     <div class="container">
         <div class="header">
+            <button class="logout-btn" onclick="logout()">🚪 Выйти</button>
             <h1>🚀 Smart Email API</h1>
             <p>Портал сбора и обработки контактов китайских производителей</p>
             <span class="status" id="status">● Работает</span>
@@ -499,6 +519,31 @@
 
             console.log('All event listeners attached successfully');
         });
+
+        // Функция выхода
+        async function logout() {
+            if (!confirm('Вы уверены, что хотите выйти?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Редирект на страницу логина
+                    window.location.href = '/login.html';
+                } else {
+                    alert('Ошибка при выходе');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('Ошибка при выходе');
+            }
+        }
     </script>
 </body>
 </html>
