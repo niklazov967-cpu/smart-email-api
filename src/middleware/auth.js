@@ -7,6 +7,9 @@ const session = require('express-session');
 
 class AuthMiddleware {
   constructor() {
+    // Проверить включена ли авторизация
+    this.enabled = process.env.AUTH_ENABLED === 'true';
+    
     this.sessionMiddleware = session({
       secret: process.env.SESSION_SECRET || 'smart-email-api-secret-key-change-in-production',
       resave: false,
@@ -21,6 +24,13 @@ class AuthMiddleware {
     // Учетные данные из переменных окружения
     this.username = process.env.AUTH_USERNAME || 'admin';
     this.password = process.env.AUTH_PASSWORD || 'admin123';
+    
+    // Логирование статуса авторизации
+    if (this.enabled) {
+      console.log('🔐 Авторизация ВКЛЮЧЕНА');
+    } else {
+      console.log('⚠️  Авторизация ОТКЛЮЧЕНА (режим тестирования)');
+    }
   }
 
   /**
@@ -34,6 +44,11 @@ class AuthMiddleware {
    * Проверка авторизации
    */
   requireAuth(req, res, next) {
+    // Если авторизация отключена - пропустить всех
+    if (!this.enabled) {
+      return next();
+    }
+    
     // Проверить сессию
     if (req.session && req.session.isAuthenticated) {
       return next();
@@ -102,6 +117,16 @@ class AuthMiddleware {
    * Проверка статуса авторизации
    */
   checkAuth(req, res) {
+    // Если авторизация отключена
+    if (!this.enabled) {
+      return res.json({
+        success: true,
+        isAuthenticated: true, // Для совместимости с фронтендом
+        username: 'test_mode',
+        authDisabled: true
+      });
+    }
+    
     if (req.session && req.session.isAuthenticated) {
       return res.json({
         success: true,
