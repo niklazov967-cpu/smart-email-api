@@ -187,10 +187,10 @@ ${servicesText}
       );
 
       // Сохранить результат валидации
-      await this._saveValidation(company.pending_id, validation, sessionId);
+      await this._saveValidation(company.company_id, validation, sessionId);
 
       results.push({
-        company_id: company.pending_id,
+        company_id: company.company_id,
         company_name: company.company_name,
         validation
       });
@@ -217,7 +217,7 @@ ${servicesText}
              relevance_score = $2,
              validation_status = $3,
              updated_at = NOW()
-         WHERE pending_id = $4`,
+         WHERE company_id = $4`,
         [
           JSON.stringify(validation),
           validation.relevance_score,
@@ -229,7 +229,7 @@ ${servicesText}
       // Логировать в отдельную таблицу
       await this.db.query(
         `INSERT INTO validation_log 
-         (pending_id, session_id, relevance_score, is_relevant, recommendation, reason, created_at)
+         (company_id, session_id, relevance_score, is_relevant, recommendation, reason, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
         [
           pendingId,

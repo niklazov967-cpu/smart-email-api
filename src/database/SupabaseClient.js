@@ -237,9 +237,9 @@ class SupabaseClient {
       if (text.includes('WHERE session_id')) {
         const sessionId = params[params.length - 1];
         query = query.eq('session_id', sessionId);
-      } else if (text.includes('WHERE pending_id')) {
-        const pendingId = params[params.length - 1];
-        query = query.eq('pending_id', pendingId);
+      } else if (text.includes('WHERE company_id')) {
+        const companyId = params[params.length - 1];
+        query = query.eq('company_id', companyId);
       } else if (text.includes('WHERE query_id')) {
         const queryId = params[params.length - 1];
         query = query.eq('query_id', queryId);

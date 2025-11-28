@@ -5,18 +5,39 @@ const axios = require('axios');
  * Используется для задач без доступа к интернету:
  * - Генерация под-запросов
  * - Валидация компаний
- * - Генерация тегов
+ * - Генерация описаний и тегов
  * - Переводы
+ * 
+ * Поддерживаемые модели:
+ * - deepseek-chat (базовая, дешёвая)
+ * - deepseek-reasoner (продвинутая, для сложного анализа)
  */
 class DeepSeekClient {
-  constructor(apiKey, logger) {
+  constructor(apiKey, logger, modelType = 'chat') {
     this.apiKey = apiKey;
     this.baseUrl = 'https://api.deepseek.com/v1';
     this.logger = logger;
-    this.model = 'deepseek-chat'; // Основная модель
+    
+    // Выбор модели в зависимости от типа задачи
+    this.models = {
+      chat: 'deepseek-chat',           // Базовая: быстро, дёшево
+      reasoner: 'deepseek-reasoner'    // Продвинутая: умнее, для сложных задач
+    };
+    
+    this.model = this.models[modelType] || this.models.chat;
     this.maxRetries = 3;
-    this.retryDelay = 2000; // 2 секунды
-    this.timeout = 60000; // 60 секунд
+    this.retryDelay = 2000;
+    this.timeout = 120000; // 2 минуты для reasoner (он может думать дольше)
+  }
+
+  /**
+   * Сменить модель для следующих запросов
+   */
+  setModel(modelType) {
+    if (this.models[modelType]) {
+      this.model = this.models[modelType];
+      this.logger.info('DeepSeek model changed', { model: this.model });
+    }
   }
 
   /**
@@ -33,9 +54,23 @@ class DeepSeekClient {
       stage = 'unknown'
     } = options;
 
+    // ВАЖНО: Проверка длины промпта (DeepSeek Chat имеет лимиты)
+    const estimatedInputTokens = Math.ceil(prompt.length / 4); // Примерно 4 символа = 1 токен
+    
+    if (estimatedInputTokens > 4000) {
+      this.logger.warn('DeepSeekClient: Prompt too long, truncating', {
+        originalLength: prompt.length,
+        estimatedTokens: estimatedInputTokens,
+        stage
+      });
+      // Обрезать промпт до безопасного размера
+      prompt = prompt.substring(0, 12000); // ~3000 токенов
+    }
+
     this.logger.debug('DeepSeekClient: Starting query', {
       stage,
       promptLength: prompt.length,
+      estimatedInputTokens,
       maxTokens
     });
 
@@ -68,18 +103,36 @@ class DeepSeekClient {
         );
 
         const responseTime = Date.now() - startTime;
-        const content = response.data.choices[0].message.content;
+        const messageData = response.data.choices[0].message;
+        
+        // DeepSeek Reasoner может возвращать reasoning_content отдельно
+        const content = messageData.content || '';
+        const reasoningContent = messageData.reasoning_content || '';
+        
+        // Если content пустой, используем reasoning_content
+        const finalContent = content || reasoningContent;
+        
         const usage = response.data.usage;
+
+        // Debug: логируем структуру ответа
+        this.logger.debug('DeepSeekClient: Response structure', {
+          hasContent: !!content,
+          hasReasoningContent: !!reasoningContent,
+          contentLength: content.length,
+          reasoningContentLength: reasoningContent.length,
+          finalContentLength: finalContent.length
+        });
 
         this.logger.info('DeepSeekClient: Query successful', {
           stage,
           responseTime,
           inputTokens: usage.prompt_tokens,
           outputTokens: usage.completion_tokens,
-          totalTokens: usage.total_tokens
+          totalTokens: usage.total_tokens,
+          costEstimate: this._estimateCost(usage.prompt_tokens, usage.completion_tokens)
         });
 
-        return content;
+        return finalContent;
 
       } catch (error) {
         attempt++;
@@ -122,6 +175,17 @@ class DeepSeekClient {
     } catch (error) {
       return { healthy: false, error: error.message };
     }
+  }
+
+  /**
+   * Оценить стоимость запроса в USD
+   * DeepSeek Chat: $0.14/1M input tokens, $0.28/1M output tokens
+   */
+  _estimateCost(inputTokens, outputTokens) {
+    const inputCost = (inputTokens / 1000000) * 0.14;
+    const outputCost = (outputTokens / 1000000) * 0.28;
+    const totalCost = inputCost + outputCost;
+    return `$${totalCost.toFixed(6)}`;
   }
 
   _sleep(ms) {

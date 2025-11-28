@@ -1,0 +1,132 @@
+/**
+ * Утилита для извлечения тегов из текста
+ * Извлекает виды обработки, материалы и другие характеристики
+ */
+class TagExtractor {
+  constructor() {
+    // Словарь ключевых слов для тегов
+    this.tagPatterns = {
+      // Виды обработки
+      'ЧПУ обработка': ['CNC', '数控', 'cnc', 'ЧПУ'],
+      'токарная обработка': ['turning', '车床', '车削', 'токарн'],
+      'фрезерная обработка': ['milling', '铣床', '铣削', 'фрезерн'],
+      'штамповка': ['stamping', '冲压', 'штамповк'],
+      'литье': ['casting', '铸造', 'литье', 'литьё'],
+      'сварка': ['welding', '焊接', 'сварк'],
+      'шлифовка': ['grinding', '磨削', 'шлифов'],
+      '5-осевая обработка': ['5-axis', '5轴', '五轴', '5 axis', '5 осей', '5-осев'],
+      'лазерная резка': ['laser cutting', '激光切割', 'лазерн'],
+      'гибка': ['bending', '弯曲', 'гибк'],
+      'EDM обработка': ['EDM', 'electrical discharge', '电火花', 'электроэрозионн'],
+      'анодирование': ['anodizing', '阳极氧化', 'анодиров'],
+      'пескоструйная обработка': ['sandblasting', '喷砂', 'пескоструй'],
+      'полировка': ['polishing', '抛光', 'полировк'],
+      'нарезка резьбы': ['threading', '螺纹', 'резьб'],
+      'сверление': ['drilling', '钻孔', 'сверлен'],
+      
+      // Материалы
+      'нержавеющая сталь': ['stainless steel', '不锈钢', 'SS304', 'SS316', 'нержавеющ', 'нержавейк'],
+      'алюминий': ['aluminum', 'aluminium', '铝', 'алюмини'],
+      'латунь': ['brass', '黄铜', 'латунь'],
+      'медь': ['copper', '铜', 'медь'],
+      'титан': ['titanium', '钛', 'титан'],
+      'сталь': ['steel', '钢', 'сталь'],
+      'пластик': ['plastic', '塑料', 'пластик'],
+      'углеродистая сталь': ['carbon steel', '碳钢', 'углеродист'],
+      'магний': ['magnesium', '镁', 'магни'],
+      'цинк': ['zinc', '锌', 'цинк'],
+      
+      // Типы производства
+      'мелкосерийное': ['small batch', 'low volume', '小批量', 'мелкосерийн', 'малосерийн'],
+      'прототипирование': ['prototype', 'prototyping', '样品', '原型', 'прототип'],
+      'массовое производство': ['mass production', 'large volume', '批量生产', 'массов', 'крупносерийн'],
+      'единичное производство': ['one-off', 'single piece', '单件', 'единичн'],
+      
+      // Отрасли
+      'автомобильная': ['automotive', 'automobile', '汽车', 'автомобиль'],
+      'аэрокосмическая': ['aerospace', 'aviation', '航空航天', 'аэрокосм', 'авиаци'],
+      'медицинская': ['medical', '医疗', 'медицинск'],
+      'электроника': ['electronics', '电子', 'электроник'],
+      'робототехника': ['robotics', '机器人', 'робототехник', 'роботехник'],
+      
+      // Точность
+      'высокая точность': ['high precision', 'precision', '高精度', '精密', 'высок точн', 'прецизионн'],
+      'микрообработка': ['micro machining', '微加工', 'микрообработк']
+    };
+  }
+
+  /**
+   * Извлекает теги из текста
+   * @param {string} text - Текст для анализа (описание компании)
+   * @returns {Array<string>} - Массив найденных тегов (максимум 20)
+   */
+  extractTags(text) {
+    if (!text || typeof text !== 'string') {
+      return [];
+    }
+
+    const foundTags = new Set();
+    const normalizedText = text.toLowerCase();
+
+    // Поиск по всем паттернам
+    for (const [tag, keywords] of Object.entries(this.tagPatterns)) {
+      for (const keyword of keywords) {
+        if (normalizedText.includes(keyword.toLowerCase())) {
+          foundTags.add(tag);
+          break; // Найден - переходим к следующему тегу
+        }
+      }
+    }
+
+    // Ограничение до 20 тегов
+    return Array.from(foundTags).slice(0, 20);
+  }
+
+  /**
+   * Извлекает теги и форматирует для сохранения в БД
+   * @param {string} description - Описание компании
+   * @returns {Object} - Объект с полями tag1, tag2, ..., tag20
+   */
+  extractTagsForDB(description) {
+    const tags = this.extractTags(description);
+    const result = {};
+    
+    // Заполнить поля tag1 - tag20
+    for (let i = 1; i <= 20; i++) {
+      result[`tag${i}`] = tags[i - 1] || null;
+    }
+    
+    return result;
+  }
+
+  /**
+   * Извлекает основные сервисы из описания
+   * @param {string} description - Описание компании
+   * @returns {string} - Краткое описание сервисов
+   */
+  extractServices(description) {
+    if (!description) return null;
+
+    const tags = this.extractTags(description);
+    
+    // Фильтруем только теги связанные с обработкой (не материалы, не отрасли)
+    const serviceTags = tags.filter(tag => 
+      tag.includes('обработка') || 
+      tag.includes('резка') || 
+      tag.includes('гибка') ||
+      tag.includes('штамповка') ||
+      tag.includes('литье') ||
+      tag.includes('сварка')
+    );
+
+    if (serviceTags.length === 0) {
+      // Если нет явных тегов обработки, вернуть первые 100 символов описания
+      return description.substring(0, 100) + (description.length > 100 ? '...' : '');
+    }
+
+    return serviceTags.join(', ');
+  }
+}
+
+module.exports = TagExtractor;
+

@@ -86,7 +86,7 @@ class Stage6Finalize {
           company: company.company_name || 'unknown'
         });
         
-        await this._markAsFailed(company.pending_id, 'missing_required_fields');
+        await this._markAsFailed(company.company_id, 'missing_required_fields');
         return { success: false };
       }
 
@@ -99,7 +99,7 @@ class Stage6Finalize {
           company: company.company_name
         });
         
-        await this._markAsFailed(company.pending_id, 'no_emails');
+        await this._markAsFailed(company.company_id, 'no_emails');
         return { success: false };
       }
 
@@ -129,8 +129,8 @@ class Stage6Finalize {
       await this.db.query(
         `UPDATE pending_companies 
          SET stage = 'completed', updated_at = NOW()
-         WHERE pending_id = $1`,
-        [company.pending_id]
+         WHERE company_id = $1`,
+        [company.company_id]
       );
 
       this.logger.debug('Stage 6: Company finalized', {
@@ -145,7 +145,7 @@ class Stage6Finalize {
         error: error.message
       });
 
-      await this._markAsFailed(company.pending_id, error.message);
+      await this._markAsFailed(company.company_id, error.message);
       return { success: false, error: error.message };
     }
   }
@@ -203,7 +203,7 @@ class Stage6Finalize {
        SET stage = 'failed', 
            error_message = $2,
            updated_at = NOW()
-       WHERE pending_id = $1`,
+       WHERE company_id = $1`,
       [pendingId, reason]
     );
   }

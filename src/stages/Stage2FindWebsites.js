@@ -2,12 +2,15 @@
  * Stage 2: Поиск официальных сайтов
  * Находит URL для каждой компании (параллельно с ограничениями)
  */
+const TagExtractor = require('../utils/TagExtractor');
+
 class Stage2FindWebsites {
   constructor(sonarClient, settingsManager, database, logger) {
     this.sonar = sonarClient;
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
+    this.tagExtractor = new TagExtractor();
   }
 
   async execute(sessionId) {
@@ -84,7 +87,7 @@ class Stage2FindWebsites {
     // Получить только компании БЕЗ сайта
     // (Stage 1 уже мог найти сайты для некоторых)
     const result = await this.db.query(
-      `SELECT pending_id, company_name 
+      `SELECT company_id, company_name 
        FROM pending_companies 
        WHERE session_id = $1 
          AND stage = 'names_found'
@@ -102,7 +105,7 @@ class Stage2FindWebsites {
 
   async _findWebsite(company, sessionId) {
     try {
-      const prompt = `Найди официальный веб-сайт и email компании из Китая через поиск в интернете.
+      const prompt = `Найди официальный веб-сайт, email и описание услуг компании из Китая через поиск в интернете.
 
 КОМПАНИЯ: ${company.company_name}
 
@@ -113,21 +116,29 @@ class Stage2FindWebsites {
    - Основной домен компании, не подразделений
 
 2. **Email для связи**:
-   - Поищи email в профилях на B2B площадках (Alibaba, Made-in-China, 1688)
-   - Проверь каталоги и справочники компаний
+   - Поищи email на официальном сайте компании (если найден)
+   - Проверь отраслевые каталоги и справочники компаний
+   - Проверь новости и статьи о компании
    - Любые упоминания компании с контактами в интернете
+   - ❌ НЕ ищи email на маркетплейсах (Alibaba, 1688, Made-in-China) - там его нет!
+
+3. **Описание услуг** (1-2 предложения):
+   - Что производит/обрабатывает компания
+   - Какие услуги предоставляет (токарная, фрезерная, штамповка и т.д.)
+   - Какие материалы использует (нержавейка, алюминий и т.д.)
 
 РЕЗУЛЬТАТ: JSON формат:
 {
   "website": "https://www.example.cn",
   "email": "info@example.com",
+  "description": "краткое описание услуг компании",
   "source": "откуда взят email (Alibaba/каталог/сайт)"
 }
 
-Если сайт не найден: {"website": null, "email": "...если найден", "source": "..."}
-Если ничего не найдено: {"website": null, "email": null, "source": null}
+Если сайт не найден: {"website": null, "email": "...если найден", "description": "...", "source": "..."}
+Если ничего не найдено: {"website": null, "email": null, "description": null, "source": null}
 
-ВАЖНО: Email можно взять с Alibaba/Made-in-China даже если сайт не найден!
+ВАЖНО: Email и описание можно взять с Alibaba/Made-in-China даже если сайт не найден!
 
 ВЕРНИ ТОЛЬКО JSON, без дополнительного текста.`;
 
@@ -139,7 +150,25 @@ class Stage2FindWebsites {
 
       const result = this._parseResponse(response);
 
-      if (result.website || result.email) {
+      // Нормализовать данные (один домен = один email)
+      if (result.email && (typeof result.email !== 'string' || result.email.includes(','))) {
+        const emails = typeof result.email === 'string' 
+          ? result.email.split(',').map(e => e.trim()) 
+          : Array.isArray(result.email) ? result.email : [result.email];
+        
+        const filtered = this._filterEmailsByDomain(emails);
+        result.email = filtered.length > 0 ? filtered[0] : null;
+        
+        if (emails.length > 1) {
+          this.logger.debug('Stage 2: Multiple emails normalized', {
+            company: company.company_name,
+            original: emails,
+            selected: result.email
+          });
+        }
+      }
+
+      if (result.website || result.email || result.description) {
         // Определяем новый stage
         let newStage = 'names_found';
         if (result.website && result.email) {
@@ -147,21 +176,58 @@ class Stage2FindWebsites {
         } else if (result.website) {
           newStage = 'website_found';
         } else if (result.email) {
-          newStage = 'email_found'; // новый stage для случая когда есть email но нет сайта
+          newStage = 'email_found';
         }
 
-        // Сохранить найденные данные
+        // Извлечь теги и сервисы из описания
+        let tagData = { tag1: null, tag2: null, tag3: null, tag4: null, tag5: null,
+                       tag6: null, tag7: null, tag8: null, tag9: null, tag10: null,
+                       tag11: null, tag12: null, tag13: null, tag14: null, tag15: null,
+                       tag16: null, tag17: null, tag18: null, tag19: null, tag20: null };
+        let services = null;
+        
+        if (result.description) {
+          tagData = this.tagExtractor.extractTagsForDB(result.description);
+          services = this.tagExtractor.extractServices(result.description);
+        }
+
+        // Подготовить raw data для Stage 2
+        const rawData = {
+          company: company.company_name,
+          full_response: response ? response.substring(0, 10000) : null,
+          timestamp: new Date().toISOString(),
+          source: 'perplexity_sonar_pro'
+        };
+
+        // Сохранить найденные данные (включая описание, теги и сервисы)
         await this.db.query(
-          `UPDATE pending_companies 
-           SET website = $1, email = $2, stage = $3, updated_at = NOW()
-           WHERE pending_id = $4`,
-          [result.website, result.email, newStage, company.pending_id]
+            `UPDATE pending_companies 
+             SET website = $1, email = $2, description = COALESCE($3, description), 
+                 services = COALESCE($4, services), stage = $5,
+                 tag1 = COALESCE($6, tag1), tag2 = COALESCE($7, tag2), tag3 = COALESCE($8, tag3), 
+                 tag4 = COALESCE($9, tag4), tag5 = COALESCE($10, tag5), tag6 = COALESCE($11, tag6),
+                 tag7 = COALESCE($12, tag7), tag8 = COALESCE($13, tag8), tag9 = COALESCE($14, tag9),
+                 tag10 = COALESCE($15, tag10), tag11 = COALESCE($16, tag11), tag12 = COALESCE($17, tag12),
+                 tag13 = COALESCE($18, tag13), tag14 = COALESCE($19, tag14), tag15 = COALESCE($20, tag15),
+                 tag16 = COALESCE($21, tag16), tag17 = COALESCE($22, tag17), tag18 = COALESCE($23, tag18),
+                 tag19 = COALESCE($24, tag19), tag20 = COALESCE($25, tag20),
+                 stage2_raw_data = $27,
+                 updated_at = NOW()
+             WHERE company_id = $26`,
+            [result.website, result.email, result.description, services, newStage,
+             tagData.tag1, tagData.tag2, tagData.tag3, tagData.tag4, tagData.tag5,
+             tagData.tag6, tagData.tag7, tagData.tag8, tagData.tag9, tagData.tag10,
+             tagData.tag11, tagData.tag12, tagData.tag13, tagData.tag14, tagData.tag15,
+             tagData.tag16, tagData.tag17, tagData.tag18, tagData.tag19, tagData.tag20,
+             company.company_id, JSON.stringify(rawData)]
         );
 
         this.logger.info('Stage 2: Data found', {
           company: company.company_name,
           website: result.website || 'not found',
           email: result.email || 'not found',
+          description: result.description ? 'found' : 'not found',
+          tags: Object.values(tagData).filter(t => t).length,
           source: result.source
         });
 
@@ -171,8 +237,8 @@ class Stage2FindWebsites {
         await this.db.query(
           `UPDATE pending_companies 
            SET website_status = 'not_found', updated_at = NOW()
-           WHERE pending_id = $1`,
-          [company.pending_id]
+           WHERE company_id = $1`,
+          [company.company_id]
         );
 
         this.logger.warn('Stage 2: Nothing found', {
@@ -201,6 +267,7 @@ class Stage2FindWebsites {
         return {
           website: urlMatch ? urlMatch[1] : null,
           email: null,
+          description: null,
           source: null
         };
       }
@@ -210,6 +277,7 @@ class Stage2FindWebsites {
       return {
         website: data.website || null,
         email: data.email || null,
+        description: data.description || null,
         source: data.source || null
       };
 
@@ -218,7 +286,7 @@ class Stage2FindWebsites {
         error: error.message,
         response: response.substring(0, 200)
       });
-      return { website: null, email: null, source: null };
+      return { website: null, email: null, description: null, source: null };
     }
   }
 
@@ -247,6 +315,51 @@ class Stage2FindWebsites {
     }
 
     return null;
+  }
+
+  _filterEmailsByDomain(emails) {
+    if (emails.length === 0) return emails;
+
+    const domainMap = new Map();
+    
+    for (const email of emails) {
+      if (!email || typeof email !== 'string') continue;
+      
+      const domain = this._extractDomain(email);
+      if (!domain) continue;
+      
+      if (!domainMap.has(domain)) {
+        domainMap.set(domain, []);
+      }
+      domainMap.get(domain).push(email);
+    }
+
+    const filtered = [];
+    for (const emailList of domainMap.values()) {
+      filtered.push(this._selectBestEmail(emailList));
+    }
+
+    return filtered;
+  }
+
+  _extractDomain(email) {
+    const match = email.match(/@(.+)$/);
+    return match ? match[1].toLowerCase() : null;
+  }
+
+  _selectBestEmail(emails) {
+    if (emails.length === 1) return emails[0];
+
+    const priorities = ['info', 'sales', 'contact', 'service', 'enquiry', 'inquiry'];
+    
+    for (const priority of priorities) {
+      const found = emails.find(email => 
+        email.toLowerCase().startsWith(priority + '@')
+      );
+      if (found) return found;
+    }
+
+    return emails[0];
   }
 
   _sleep(ms) {

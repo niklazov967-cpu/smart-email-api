@@ -99,7 +99,7 @@ class SonarApiClient {
             messages: [
               {
                 role: 'system',
-                content: 'You are a helpful assistant that provides accurate, structured data.'
+                content: 'You are a helpful assistant that ALWAYS returns valid JSON. Never include explanatory text outside the JSON structure.'
               },
               {
                 role: 'user',
@@ -110,6 +110,7 @@ class SonarApiClient {
             top_p: this.topP,
             max_tokens: maxTokens,
             stream: false
+            // Note: Perplexity does not support response_format parameter
           },
           {
             headers: {
@@ -123,6 +124,18 @@ class SonarApiClient {
         const result = response.data.choices[0].message.content;
         const tokensUsed = response.data.usage?.total_tokens || 0;
         const responseTime = Date.now() - startTime;
+        
+        // Логировать полный ответ для отладки (первые 500 символов)
+        this.logger.debug('Sonar API full response preview', {
+          content_preview: result.substring(0, 500),
+          has_citations: !!response.data.citations,
+          has_usage: !!response.data.usage,
+          metadata: {
+            model: response.data.model,
+            tokensUsed,
+            responseTime
+          }
+        });
 
         // Сохранить в кеш
         if (useCache) {
@@ -148,22 +161,22 @@ class SonarApiClient {
         // Определить тип ошибки
         let status = 'error';
         let httpStatus = error.response?.status || 0;
+        const isLastAttempt = attempt >= this.maxRetries;
         
         if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
           status = 'timeout';
-          this.logger.warn(`Sonar API timeout (attempt ${attempt})`);
+          this.logger.warn(`Sonar API timeout (attempt ${attempt}/${this.maxRetries})`);
         } else if (httpStatus === 429) {
           status = 'rate_limited';
-          this.logger.warn(`Sonar API rate limited (attempt ${attempt})`);
-          
-          // Увеличить задержку для rate limit
-          const waitTime = this.retryDelay * Math.pow(2, attempt - 1);
-          this.logger.info(`Waiting ${waitTime}ms before retry`);
-          await this._sleep(waitTime);
+          this.logger.warn(`Sonar API rate limited (attempt ${attempt}/${this.maxRetries})`);
+        } else if (httpStatus >= 500) {
+          status = 'server_error';
+          this.logger.warn(`Sonar API server error ${httpStatus} (attempt ${attempt}/${this.maxRetries})`);
         } else {
-          this.logger.error(`Sonar API error (attempt ${attempt})`, {
+          this.logger.error(`Sonar API error (attempt ${attempt}/${this.maxRetries})`, {
             error: error.message,
-            status: httpStatus
+            status: httpStatus,
+            willRetry: !isLastAttempt
           });
         }
 
@@ -181,14 +194,33 @@ class SonarApiClient {
         );
 
         // Если это последняя попытка, бросить ошибку
-        if (attempt >= this.maxRetries) {
+        if (isLastAttempt) {
+          this.logger.error(`Sonar API: All ${this.maxRetries} retries exhausted`, {
+            stage,
+            finalError: error.message
+          });
           throw new Error(`Sonar API failed after ${this.maxRetries} attempts: ${lastError.message}`);
         }
 
-        // Задержка перед повтором
-        if (status !== 'rate_limited') {
-          await this._sleep(this.retryDelay);
-        }
+        // EXPONENTIAL BACKOFF с jitter для следующей попытки
+        const baseDelay = this.retryDelay || 1000; // 1 секунда по умолчанию
+        const exponentialDelay = baseDelay * Math.pow(2, attempt - 1);
+        const maxDelay = 32000; // Максимум 32 секунды
+        const delay = Math.min(exponentialDelay, maxDelay);
+        
+        // Добавляем jitter (случайность 0-50% от delay) чтобы избежать thundering herd
+        const jitter = Math.random() * delay * 0.5;
+        const totalDelay = delay + jitter;
+        
+        this.logger.info(`⏳ Exponential backoff: waiting ${Math.round(totalDelay)}ms before retry ${attempt + 1}/${this.maxRetries}`, {
+          baseDelay,
+          exponentialDelay,
+          jitter: Math.round(jitter),
+          totalDelay: Math.round(totalDelay),
+          errorType: status
+        });
+        
+        await this._sleep(totalDelay);
       }
     }
   }

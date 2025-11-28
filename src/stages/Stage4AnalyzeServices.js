@@ -1,67 +1,163 @@
 /**
- * Stage 4: Описание услуг компании
- * Анализирует услуги и продукцию компании
+ * Stage 4: AI-валидация и обогащение данных
+ * Собирает ВСЮ информацию от всех этапов и использует DeepSeek Reasoner для:
+ * 1. Валидации соответствия теме
+ * 2. Генерации улучшенного описания
+ * 3. Улучшения тегов
+ * 4. Оценки уверенности в данных
  */
 class Stage4AnalyzeServices {
-  constructor(sonarClient, settingsManager, database, logger) {
-    this.sonar = sonarClient;
+  constructor(deepseekClient, settingsManager, database, logger) {
+    this.deepseek = deepseekClient; // DeepSeek (reasoner для сложного анализа)
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
   }
 
   async execute(sessionId) {
-    this.logger.info('Stage 4: Starting services analysis', { sessionId });
+    this.logger.info('Stage 4: Starting AI enrichment and validation', { sessionId });
 
     try {
-      // Получить компании после Stage 3
-      const companies = await this._getCompanies(sessionId);
+      // Получить тему сессии
+      const { data: sessionData, error: sessionError } = await this.db.supabase
+        .from('search_sessions')
+        .select('topic_description')
+        .eq('session_id', sessionId)
+        .single();
       
-      if (companies.length === 0) {
-        this.logger.warn('Stage 4: No companies to process');
-        return { success: true, processed: 0 };
+      if (sessionError || !sessionData) {
+        this.logger.error('Stage 4: Session not found', {
+          sessionId,
+          error: sessionError?.message
+        });
+        throw new Error('Session not found');
       }
+      
+      const mainTopic = sessionData.topic_description || 'Unknown topic';
+      
+      this.logger.info('Stage 4: Session topic loaded', {
+        sessionId,
+        topic: mainTopic
+      });
+      
+      // Получить ВСЕ компании со ВСЕМИ данными
+      const { data: companies, error: companiesError } = await this.db.supabase
+        .from('pending_companies')
+        .select(`
+          company_id, company_name, website, email, description, services,
+          tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10,
+          tag11, tag12, tag13, tag14, tag15, tag16, tag17, tag18, tag19, tag20,
+          stage1_raw_data, stage2_raw_data, stage3_raw_data, stage
+        `)
+        .eq('session_id', sessionId);
 
-      // Получить настройки
-      const settings = await this.settings.getCategory('processing_stages');
-      const concurrentRequests = settings.stage4_concurrent_requests || 2;
-      const batchDelay = settings.stage4_batch_delay_ms || 3000;
+      if (companiesError) {
+        this.logger.error('Stage 4: Failed to get companies', { error: companiesError.message });
+        throw companiesError;
+      }
+      let validated = 0;
+      let rejected = 0;
+      let needsReview = 0;
 
-      this.logger.info('Stage 4: Processing companies', {
-        count: companies.length,
-        concurrent: concurrentRequests
+      this.logger.info('Stage 4: Processing companies with DeepSeek Reasoner', {
+        total: companies.length,
+        sessionId
       });
 
-      // Обработать батчами
-      let processed = 0;
-      for (let i = 0; i < companies.length; i += concurrentRequests) {
-        const batch = companies.slice(i, i + concurrentRequests);
+      // Использовать DeepSeek Chat (не reasoner!) для структурированных JSON ответов
+      // Reasoner дает рассуждения, а не чистый JSON
+      this.deepseek.setModel('deepseek-chat');
+
+      // Обрабатывать компании батчами для скорости
+      const BATCH_SIZE = 3; // Меньше батч для reasoner (он медленнее, но умнее)
+      const DELAY_BETWEEN_BATCHES = 1000; // 1 секунда между батчами
+      
+      for (let i = 0; i < companies.length; i += BATCH_SIZE) {
+        const batch = companies.slice(i, i + BATCH_SIZE);
         
-        this.logger.debug(`Stage 4: Processing batch ${Math.floor(i / concurrentRequests) + 1}`);
-
-        await Promise.all(
-          batch.map(company => this._analyzeServices(company, sessionId))
+        this.logger.debug('Stage 4: Processing batch', {
+          batch: Math.floor(i / BATCH_SIZE) + 1,
+          total: Math.ceil(companies.length / BATCH_SIZE),
+          companies: batch.length
+        });
+        
+        // Обработать батч параллельно
+        const batchResults = await Promise.all(
+          batch.map(company => this._enrichAndValidateCompany(company, mainTopic))
         );
-
-        processed += batch.length;
-
-        if (i + concurrentRequests < companies.length) {
-          await this._sleep(batchDelay);
+        
+        // Сохранить результаты батча
+        for (let j = 0; j < batch.length; j++) {
+          const company = batch[j];
+          const result = batchResults[j];
+          
+          const updateData = {
+            stage: result.stage,
+            validation_score: result.score,
+            validation_reason: result.reason,
+            ai_generated_description: result.aiDescription,
+            ai_confidence_score: result.confidence,
+            updated_at: new Date().toISOString()
+          };
+          
+          // Добавляем services если есть
+          if (result.services) {
+            updateData.services = result.services;
+          }
+          
+          // Добавляем теги если есть
+          for (let k = 1; k <= 20; k++) {
+            const tagKey = `tag${k}`;
+            if (result.tags && result.tags[tagKey]) {
+              updateData[tagKey] = result.tags[tagKey];
+            }
+          }
+          
+          const { error: updateError } = await this.db.supabase
+            .from('pending_companies')
+            .update(updateData)
+            .eq('company_id', company.company_id);
+          
+          if (updateError) {
+            this.logger.error('Stage 4: Failed to update company', {
+              company: company.company_name,
+              error: updateError.message
+            });
+          }
+          
+          if (result.stage === 'completed') {
+            validated++;
+          } else if (result.stage === 'rejected') {
+            rejected++;
+          } else {
+            needsReview++;
+          }
+        }
+        
+        // Задержка между батчами
+        if (i + BATCH_SIZE < companies.length) {
+          await this._sleep(DELAY_BETWEEN_BATCHES);
         }
       }
 
-      this.logger.info('Stage 4: Completed', {
-        processed,
+      this.logger.info('Stage 4: AI enrichment completed', {
+        total: companies.length,
+        validated,
+        rejected,
+        needsReview,
         sessionId
       });
 
       return {
         success: true,
-        processed
+        total: companies.length,
+        validated,
+        rejected,
+        needsReview
       };
 
     } catch (error) {
-      this.logger.error('Stage 4: Failed', {
+      this.logger.error('Stage 4: AI enrichment failed', {
         error: error.message,
         sessionId
       });
@@ -69,106 +165,309 @@ class Stage4AnalyzeServices {
     }
   }
 
-  async _getCompanies(sessionId) {
-    const result = await this.db.query(
-      `SELECT pending_id, company_name, website, contacts_json 
-       FROM pending_companies 
-       WHERE session_id = $1 AND stage = 'site_analyzed'`,
-      [sessionId]
-    );
-    return result.rows;
-  }
-
-  async _analyzeServices(company, sessionId) {
+  /**
+   * Обогатить и валидировать компанию через DeepSeek Reasoner
+   * Собирает ВСЮ информацию от всех этапов
+   */
+  async _enrichAndValidateCompany(company, mainTopic) {
     try {
-      const prompt = `Проанализируй сайт компании и опиши её услуги и продукцию.
+      // Базовая проверка
+      if (!company.company_name) {
+        return this._basicValidation(company);
+      }
 
-КОМПАНИЯ: ${company.company_name}
-САЙТ: ${company.website}
+      // Собрать ВСЮ информацию от всех этапов
+      const allData = this._collectAllData(company);
+      
+      // Если данных вообще нет - skip AI
+      if (!allData.hasAnyData) {
+        return {
+          stage: 'needs_review',
+          score: 10,
+          reason: 'Нет данных для анализа',
+          aiDescription: null,
+          confidence: 0,
+          services: company.services,
+          tags: this._extractCurrentTags(company)
+        };
+      }
 
-ЗАДАЧА:
-1. Определи основное направление деятельности
-2. Перечисли ключевые услуги и продукты
-3. Укажи производственные возможности
-4. Выдели конкурентные преимущества
-
-РЕЗУЛЬТАТ: JSON с описанием (на русском языке):
-{
-  "main_activity": "основное направление",
-  "services": ["услуга 1", "услуга 2", "услуга 3"],
-  "products": ["продукт 1", "продукт 2"],
-  "capabilities": ["возможность 1", "возможность 2"],
-  "advantages": ["преимущество 1", "преимущество 2"],
-  "summary": "краткое описание в 1-2 предложениях"
-}`;
-
-      const response = await this.sonar.query(prompt, {
-        stage: 'stage4_analyze_services',
-        sessionId,
-        useCache: true
+      // Создать промпт для DeepSeek Reasoner
+      const prompt = this._createEnrichmentPrompt(company, mainTopic, allData);
+      
+      // Запросить DeepSeek Reasoner (умная модель)
+      const response = await this.deepseek.query(prompt, {
+        stage: 'stage4_enrichment',
+        maxTokens: 2000, // Больше токенов для полного анализа
+        temperature: 0.3,
+        systemPrompt: 'You are an expert business analyst. Analyze all available data and provide comprehensive insights in JSON format.'
       });
-
-      const result = this._parseResponse(response);
-
-      // Сохранить описание услуг
-      await this.db.query(
-        `UPDATE pending_companies 
-         SET services_json = $1, updated_at = NOW()
-         WHERE pending_id = $2`,
-        [JSON.stringify(result), company.pending_id]
-      );
-
-      this.logger.debug('Stage 4: Services analyzed', {
+      
+      // Парсить ответ
+      const result = this._parseEnrichmentResponse(response, company);
+      
+      this.logger.debug('Stage 4: Company enriched', {
         company: company.company_name,
-        serviceCount: result.services?.length || 0
+        relevance: result.score,
+        confidence: result.confidence
       });
-
-      return { success: true };
+      
+      return result;
 
     } catch (error) {
-      this.logger.error('Stage 4: Error analyzing services', {
+      this.logger.error('Stage 4: Company enrichment error', {
         company: company.company_name,
         error: error.message
       });
-      return { success: false, error: error.message };
+      
+      // Fallback на базовую валидацию
+      return this._basicValidation(company);
     }
   }
 
-  _parseResponse(response) {
+  /**
+   * Собрать ВСЮ информацию от всех этапов
+   */
+  _collectAllData(company) {
+    const data = {
+      // Основные поля
+      name: company.company_name,
+      website: company.website,
+      email: company.email,
+      description: company.description,
+      services: company.services,
+      
+      // Теги
+      tags: [company.tag1, company.tag2, company.tag3, company.tag4, company.tag5,
+             company.tag6, company.tag7, company.tag8, company.tag9, company.tag10].filter(t => t),
+      
+      // Сырые данные от каждого этапа
+      stage1Data: company.stage1_raw_data,
+      stage2Data: company.stage2_raw_data,
+      stage3Data: company.stage3_raw_data,
+      
+      // Флаг наличия данных
+      hasAnyData: !!(company.description || company.services || company.tag1 || 
+                     company.stage1_raw_data || company.stage2_raw_data || company.stage3_raw_data)
+    };
+    
+    return data;
+  }
+
+  /**
+   * Создать промпт для DeepSeek Reasoner (полный анализ)
+   */
+  _createEnrichmentPrompt(company, mainTopic, allData) {
+    // Подготовить данные для промпта
+    const tags = allData.tags.join(', ') || 'none';
+    const stage1Info = allData.stage1Data ? JSON.stringify(allData.stage1Data).substring(0, 500) : 'none';
+    const stage2Info = allData.stage2Data ? JSON.stringify(allData.stage2Data).substring(0, 500) : 'none';
+    const stage3Info = allData.stage3Data ? JSON.stringify(allData.stage3Data).substring(0, 500) : 'none';
+    
+    return `You are analyzing a company for relevance to a search topic.
+
+SEARCH TOPIC:
+"${mainTopic}"
+
+COMPANY DATA:
+Name: ${allData.name}
+Website: ${allData.website || 'unknown'}
+Email: ${allData.email || 'unknown'}
+
+Current Description: ${(allData.description || '').substring(0, 300)}
+Current Services: ${allData.services || 'none'}
+Current Tags: ${tags}
+
+RAW DATA FROM AI STAGES:
+Stage 1 (Perplexity search): ${stage1Info}
+Stage 2 (Website search): ${stage2Info}
+Stage 3 (Contact search): ${stage3Info}
+
+TASK:
+Analyze ALL available information and provide:
+1. Relevance score (0-100) to search topic
+2. Improved description (merge all info)
+3. Improved services list
+4. Improved tags (up to 20)
+5. Confidence in data quality (0-100)
+6. Validation reason
+
+RULES:
+- Equipment manufacturer = score <30
+- Trading company = score <40  
+- Service provider matching topic = score >70
+- Use ALL data from stages to create comprehensive description
+- Extract maximum value from raw AI responses
+
+Return JSON:
+{
+  "relevance": 85,
+  "confidence": 90,
+  "description": "comprehensive description based on all data",
+  "services": "service1, service2, service3",
+  "tags": ["tag1", "tag2", ..., "tag20"],
+  "reason": "why this score"
+}`.trim();
+  }
+
+  /**
+   * Парсить ответ от DeepSeek Reasoner
+   */
+  _parseEnrichmentResponse(response, company) {
     try {
+      // Проверить что response не пустой
+      if (!response || response.trim().length === 0) {
+        throw new Error('Empty response from DeepSeek');
+      }
+      
+      // DeepSeek Reasoner может возвращать рассуждения перед JSON
+      // Ищем JSON блок в любой части ответа
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        return this._getDefaultResult();
+        // Если нет полного JSON, попробуем найти начало
+        const partialMatch = response.match(/\{\s*"relevance"[\s\S]*/);
+        if (partialMatch) {
+          // Есть начало JSON, но он обрезан - попробуем восстановить
+          this.logger.warn('Partial JSON detected, attempting to reconstruct', {
+            preview: partialMatch[0].substring(0, 200)
+          });
+          
+          // Извлекаем хотя бы relevance и confidence
+          const relevanceMatch = response.match(/"relevance":\s*(\d+)/);
+          const confidenceMatch = response.match(/"confidence":\s*(\d+)/);
+          
+          if (relevanceMatch) {
+            const relevance = parseInt(relevanceMatch[1]);
+            const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 50;
+            
+            return this._createFallbackResult(relevance, confidence, company, 'Partial JSON response');
+          }
+        }
+        
+        throw new Error('No JSON in response');
       }
 
-      const data = JSON.parse(jsonMatch[0]);
+      let jsonText = jsonMatch[0];
+      
+      // Проверить закрыт ли JSON
+      if (!jsonText.endsWith('}')) {
+        this.logger.warn('JSON appears truncated, attempting to fix');
+        // Попробуем закрыть незакрытые структуры
+        const openBraces = (jsonText.match(/\{/g) || []).length;
+        const closeBraces = (jsonText.match(/\}/g) || []).length;
+        
+        if (openBraces > closeBraces) {
+          jsonText += '}'.repeat(openBraces - closeBraces);
+        }
+      }
+
+      const data = JSON.parse(jsonText);
+      
+      // Определить stage
+      let stage = 'needs_review';
+      const score = data.relevance || 0;
+      
+      if (score >= 80) {
+        stage = 'completed';
+      } else if (score < 50) {
+        stage = 'rejected';
+      }
+      
+      // Подготовить теги
+      const tags = {};
+      const tagArray = Array.isArray(data.tags) ? data.tags : [];
+      for (let i = 0; i < 20; i++) {
+        tags[`tag${i + 1}`] = tagArray[i] || null;
+      }
       
       return {
-        main_activity: data.main_activity || 'Не определено',
-        services: Array.isArray(data.services) ? data.services : [],
-        products: Array.isArray(data.products) ? data.products : [],
-        capabilities: Array.isArray(data.capabilities) ? data.capabilities : [],
-        advantages: Array.isArray(data.advantages) ? data.advantages : [],
-        summary: data.summary || ''
+        stage,
+        score,
+        reason: data.reason || 'AI analysis completed',
+        aiDescription: data.description || null,
+        confidence: data.confidence || 50,
+        services: data.services || company.services,
+        tags
       };
 
     } catch (error) {
-      this.logger.error('Failed to parse Stage 4 response', {
+      this.logger.error('Failed to parse enrichment response', {
         error: error.message,
-        response: response.substring(0, 200)
+        responseLength: response ? response.length : 0,
+        responsePreview: response ? response.substring(0, 500) : 'empty'
       });
-      return this._getDefaultResult();
+      throw error;
     }
   }
-
-  _getDefaultResult() {
+  
+  /**
+   * Создать fallback результат из частичных данных
+   */
+  _createFallbackResult(relevance, confidence, company, reason) {
+    let stage = 'needs_review';
+    if (relevance >= 80) stage = 'completed';
+    if (relevance < 50) stage = 'rejected';
+    
+    // Сохранить существующие теги
+    const tags = {};
+    for (let i = 1; i <= 20; i++) {
+      tags[`tag${i}`] = company[`tag${i}`] || null;
+    }
+    
     return {
-      main_activity: 'Анализ не выполнен',
-      services: [],
-      products: [],
-      capabilities: [],
-      advantages: [],
-      summary: ''
+      stage,
+      score: relevance,
+      reason: `${reason} (relevance: ${relevance})`,
+      aiDescription: null,
+      confidence,
+      services: company.services,
+      tags
+    };
+  }
+
+  _extractCurrentTags(company) {
+    const tags = {};
+    for (let i = 1; i <= 20; i++) {
+      tags[`tag${i}`] = company[`tag${i}`] || null;
+    }
+    return tags;
+  }
+
+  /**
+   * Базовая валидация без AI (fallback)
+   */
+  _basicValidation(company) {
+    const hasDescription = company.description && company.description.length > 0;
+    const hasServices = company.services && company.services.length > 0;
+    const hasTags = company.tag1 || company.tag2 || company.tag3;
+    const hasEmail = company.email && company.email.length > 0;
+    const hasWebsite = company.website && company.website.length > 0;
+
+    let score = 0;
+    const missing = [];
+    
+    if (hasDescription) score += 20; else missing.push('description');
+    if (hasServices) score += 20; else missing.push('services');
+    if (hasTags) score += 20; else missing.push('tags');
+    if (hasEmail || hasWebsite) score += 40; else missing.push('contacts');
+    
+    let stage = 'needs_review';
+    if (score >= 80) stage = 'completed';
+    if (score < 40) stage = 'rejected';
+    
+    // Сохранить существующие теги
+    const tags = this._extractCurrentTags(company);
+    
+    return {
+      stage,
+      score,
+      reason: missing.length > 0 
+        ? `Базовая валидация: отсутствует ${missing.join(', ')}` 
+        : 'Базовая валидация: все данные присутствуют',
+      aiDescription: null,
+      confidence: score,
+      services: company.services,
+      tags
     };
   }
 

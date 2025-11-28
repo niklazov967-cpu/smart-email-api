@@ -6,8 +6,9 @@ class QueryOrchestrator {
   constructor(services) {
     this.db = services.database;
     this.settings = services.settingsManager;
-    this.sonarPro = services.sonarApiClient; // Pro для Stage 1, 4
+    this.sonarPro = services.sonarApiClient; // Pro для Stage 1
     this.sonarBasic = services.sonarBasicClient; // Basic для Stage 2, 3
+    this.deepseek = services.deepseekClient; // DeepSeek для Stage 4 валидации
     this.logger = services.logger;
     this.progressTracker = services.progressTracker || null;
     this.companyValidator = services.companyValidator || null;
@@ -17,19 +18,17 @@ class QueryOrchestrator {
     const Stage2FindWebsites = require('../stages/Stage2FindWebsites');
     const Stage3AnalyzeContacts = require('../stages/Stage3AnalyzeContacts');
     const Stage4AnalyzeServices = require('../stages/Stage4AnalyzeServices');
-    const Stage5GenerateTags = require('../stages/Stage5GenerateTags');
     const Stage6Finalize = require('../stages/Stage6Finalize');
     
-    // Stage 1, 4 используют Sonar Pro (сложный анализ)
+    // Stage 1 использует Sonar Pro (поиск с интернетом)
     this.stage1 = new Stage1FindCompanies(this.sonarPro, this.settings, this.db, this.logger);
-    this.stage4 = new Stage4AnalyzeServices(this.sonarPro, this.settings, this.db, this.logger);
     
     // Stage 2, 3 используют Sonar Basic (простой поиск)
     this.stage2 = new Stage2FindWebsites(this.sonarBasic, this.settings, this.db, this.logger);
     this.stage3 = new Stage3AnalyzeContacts(this.sonarBasic, this.settings, this.db, this.logger);
     
-    // Stage 5 использует DeepSeek (уже в конструкторе Stage5)
-    this.stage5 = new Stage5GenerateTags(services.deepseekClient || this.sonarPro, this.settings, this.db, this.logger);
+    // Stage 4 использует DeepSeek (умная валидация, дешево и эффективно)
+    this.stage4 = new Stage4AnalyzeServices(this.deepseek, this.settings, this.db, this.logger);
     
     // Stage 6 не использует AI
     this.stage6 = new Stage6Finalize(this.sonarPro, this.settings, this.db, this.logger);
@@ -105,73 +104,30 @@ class QueryOrchestrator {
         foundContacts: stage3Result.found
       });
 
-      // Stage 4: Описание услуг
+      // Stage 4: Валидация данных
       if (this.progressTracker) {
-        await this.progressTracker.startStage(sessionId, 'stage4', 'Описание услуг', stage3Result.processed);
+        await this.progressTracker.startStage(sessionId, 'stage4', 'Валидация данных', stage3Result.processed);
       }
       
-      this.logger.info('Orchestrator: Stage 4 - Analyzing services');
+      this.logger.info('Orchestrator: Stage 4 - Validating data');
       const stage4Result = await this.stage4.execute(sessionId);
       
       if (this.progressTracker) {
-        await this.progressTracker.completeStage(sessionId, `Проанализировано: ${stage4Result.processed}`);
+        await this.progressTracker.completeStage(
+          sessionId, 
+          `Валидация: ✅${stage4Result.validated} ⚠️${stage4Result.needsReview}`
+        );
       }
       
       this.logger.info('Orchestrator: Stage 4 completed', {
-        processed: stage4Result.processed
-      });
-
-      // Stage 4.5: Валидация компаний (НОВОЕ!)
-      if (this.companyValidator && this.progressTracker) {
-        await this.progressTracker.startStage(sessionId, 'stage4.5', 'Валидация по теме', stage4Result.processed);
-        
-        this.logger.info('Orchestrator: Stage 4.5 - Validating companies');
-        
-        // Получить компании для валидации
-        const companies = await this.db.query(
-          `SELECT * FROM pending_companies 
-           WHERE session_id = $1 AND stage = 'site_analyzed'`,
-          [sessionId]
-        );
-
-        const validationResults = await this.companyValidator.validateBatch(
-          companies.rows,
-          searchQuery,
-          sessionId
-        );
-
-        const validationStats = await this.companyValidator.getValidationStats(sessionId);
-        
-        if (this.progressTracker) {
-          await this.progressTracker.completeStage(
-            sessionId, 
-            `Валидация: ✅${validationStats.accepted} 📋${validationStats.review} ❌${validationStats.rejected}`,
-            validationStats
-          );
-        }
-        
-        this.logger.info('Orchestrator: Stage 4.5 completed', validationStats);
-      }
-
-      // Stage 5: Генерация тегов
-      if (this.progressTracker) {
-        await this.progressTracker.startStage(sessionId, 'stage5', 'Генерация тегов', stage4Result.processed);
-      }
-      
-      this.logger.info('Orchestrator: Stage 5 - Generating tags');
-      const stage5Result = await this.stage5.execute(sessionId);
-      
-      if (this.progressTracker) {
-        await this.progressTracker.completeStage(sessionId, `Теги сгенерированы: ${stage5Result.processed}`);
-      }
-      
-      this.logger.info('Orchestrator: Stage 5 completed', {
-        processed: stage5Result.processed
+        total: stage4Result.total,
+        validated: stage4Result.validated,
+        needsReview: stage4Result.needsReview
       });
 
       // Stage 6: Финализация
       if (this.progressTracker) {
-        await this.progressTracker.startStage(sessionId, 'stage6', 'Финализация', stage5Result.processed);
+        await this.progressTracker.startStage(sessionId, 'stage6', 'Финализация', stage4Result.total);
       }
       
       this.logger.info('Orchestrator: Stage 6 - Finalization');
@@ -204,7 +160,6 @@ class QueryOrchestrator {
           stage2: stage2Result,
           stage3: stage3Result,
           stage4: stage4Result,
-          stage5: stage5Result,
           stage6: stage6Result
         }
       };
@@ -377,13 +332,53 @@ class QueryOrchestrator {
   async runStage2Only(sessionId) {
     this.logger.info('Running Stage 2 only', { sessionId });
     
+    // Сначала проверим сколько компаний уже имеют website (найдены в Stage 1)
+    const alreadyHaveWebsiteResult = await this.db.query(
+      `SELECT COUNT(*) as count FROM pending_companies 
+       WHERE session_id = $1 AND website IS NOT NULL`,
+      [sessionId]
+    );
+    
+    const alreadyHaveWebsite = parseInt(alreadyHaveWebsiteResult.rows[0]?.count || 0);
+    
+    // Если все компании уже имеют website - пропустить Stage 2
+    if (alreadyHaveWebsite > 0) {
+      // Получить компании которые уже имеют website
+      const companiesResult = await this.db.query(
+        `SELECT company_name, website, email, stage, confidence_score 
+         FROM pending_companies 
+         WHERE session_id = $1 AND website IS NOT NULL`,
+        [sessionId]
+      );
+      
+      this.logger.info('Stage 2: All websites already found in Stage 1', {
+        sessionId,
+        count: alreadyHaveWebsite
+      });
+      
+      return {
+        skipped: true,
+        reason: 'Все сайты найдены в Stage 1',
+        companiesProcessed: alreadyHaveWebsite,
+        websites: companiesResult.rows.map(row => ({
+          company_name: row.company_name,
+          website: row.website,
+          email: row.email,
+          stage: row.stage,
+          confidence: row.confidence_score,
+          foundInStage1: true
+        }))
+      };
+    }
+    
+    // Иначе выполнить Stage 2
     const result = await this.stage2.execute(sessionId);
     
-    // Получить компании с сайтами
+    // Получить компании с сайтами и email
     const companiesResult = await this.db.query(
-      `SELECT company_name, website, confidence_score 
+      `SELECT company_name, website, email, stage, confidence_score 
        FROM pending_companies 
-       WHERE session_id = $1 AND website IS NOT NULL`,
+       WHERE session_id = $1`,
       [sessionId]
     );
     
@@ -392,6 +387,8 @@ class QueryOrchestrator {
       websites: companiesResult.rows.map(row => ({
         company_name: row.company_name,
         website: row.website,
+        email: row.email,
+        stage: row.stage,
         confidence: row.confidence_score
       }))
     };
@@ -426,41 +423,26 @@ class QueryOrchestrator {
     
     const result = await this.stage4.execute(sessionId);
     
-    // Получить компании с сервисами
+    // Получить валидированные компании с причинами
     const companiesResult = await this.db.query(
-      `SELECT company_name, services 
+      `SELECT company_name, stage, validation_score, validation_reason 
        FROM pending_companies 
-       WHERE session_id = $1 AND services IS NOT NULL`,
+       WHERE session_id = $1
+       ORDER BY validation_score DESC`,
       [sessionId]
     );
     
     return {
-      companiesProcessed: result.processed || 0,
-      services: companiesResult.rows.map(row => ({
+      success: true,
+      total: result.total || 0,
+      validated: result.validated || 0,
+      rejected: result.rejected || 0,
+      needsReview: result.needsReview || 0,
+      companies: companiesResult.rows.map(row => ({
         company_name: row.company_name,
-        services: row.services ? JSON.parse(row.services) : []
-      }))
-    };
-  }
-
-  async runStage5Only(sessionId) {
-    this.logger.info('Running Stage 5 only', { sessionId });
-    
-    const result = await this.stage5.execute(sessionId);
-    
-    // Получить компании с тегами
-    const companiesResult = await this.db.query(
-      `SELECT company_name, tags 
-       FROM pending_companies 
-       WHERE session_id = $1 AND tags IS NOT NULL`,
-      [sessionId]
-    );
-    
-    return {
-      companiesProcessed: result.processed || 0,
-      tags: companiesResult.rows.map(row => ({
-        company_name: row.company_name,
-        tags: row.tags ? JSON.parse(row.tags) : []
+        stage: row.stage,
+        validation_score: row.validation_score || 0,
+        validation_reason: row.validation_reason || ''
       }))
     };
   }

@@ -33,7 +33,7 @@ class SettingsManager {
     this.logger.debug('Loading settings from database');
     
     const result = await this.db.query(
-      'SELECT category, setting_key, setting_value, setting_type FROM settings ORDER BY category, setting_key'
+      'SELECT category, setting_key, setting_value, setting_type FROM system_settings ORDER BY category, setting_key'
     );
 
     this.cachedSettings = this._parseSettings(result.rows);
@@ -128,7 +128,7 @@ class SettingsManager {
     // Получить старое значение и метаданные
     const settingInfo = await this.db.query(
       `SELECT setting_id, setting_value, setting_type, validation_rules, require_restart 
-       FROM settings 
+       FROM system_settings 
        WHERE category = $1 AND setting_key = $2`,
       [category, settingKey]
     );
@@ -180,7 +180,7 @@ class SettingsManager {
    */
   async resetSetting(category, settingKey, changedBy) {
     const setting = await this.db.query(
-      'SELECT default_value, setting_type FROM settings WHERE category = $1 AND setting_key = $2',
+      'SELECT default_value, setting_type FROM system_settings WHERE category = $1 AND setting_key = $2',
       [category, settingKey]
     );
 
@@ -199,7 +199,7 @@ class SettingsManager {
    */
   async resetCategory(category, changedBy) {
     const settings = await this.db.query(
-      'SELECT setting_key FROM settings WHERE category = $1',
+      'SELECT setting_key FROM system_settings WHERE category = $1',
       [category]
     );
 

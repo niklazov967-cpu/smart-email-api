@@ -125,6 +125,31 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * DELETE /api/sessions/clear-cache
+ * Очистить только кэш (processing_progress) не удаляя сессии и компании
+ */
+router.delete('/clear-cache', async (req, res) => {
+  try {
+    req.logger.info('Clearing processing_progress cache only');
+    
+    await req.db.query('DELETE FROM processing_progress WHERE true');
+    
+    req.logger.info('Cache cleared successfully');
+    
+    res.json({
+      success: true,
+      message: 'Processing progress cache cleared'
+    });
+  } catch (error) {
+    req.logger.error('Failed to clear cache', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * DELETE /api/sessions/clear-all
  * Очистить всю базу данных (удалить все сессии и связанные данные)
  * ВАЖНО: Должен быть ПЕРЕД /:id чтобы не воспринимался как UUID
@@ -366,17 +391,20 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
       });
     }
     
-    if (stage < 1 || stage > 5) {
+    if (stage < 1 || stage > 4) {
       return res.status(400).json({
         success: false,
-        error: 'Stage must be between 1 and 5'
+        error: 'Stage must be between 1 and 4'
       });
     }
     
+    // ====== КЭШИРОВАНИЕ ОТКЛЮЧЕНО ======
+    // Всегда выполняем stage заново, не проверяем processing_progress
+    /*
     // Проверить, не был ли этап уже выполнен
     const progressCheck = await req.db.query(
       `SELECT * FROM processing_progress 
-       WHERE session_id = $1 AND stage_name = $2 AND status = 'completed'
+       WHERE session_id = $1 AND stage = $2 AND status = 'completed'
        ORDER BY completed_at DESC LIMIT 1`,
       [id, `stage${stage}`]
     );
@@ -384,8 +412,19 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
     if (progressCheck.rows.length > 0) {
       req.logger.info(`Stage ${stage} already completed, returning cached result`, { 
         sessionId: id,
+        cachedSessionId: progressCheck.rows[0].session_id,
+        stage: progressCheck.rows[0].stage,
         completedAt: progressCheck.rows[0].completed_at
       });
+      
+      // ВАЖНО: Проверить что это кэш ИМЕННО для ЭТОЙ сессии
+      if (progressCheck.rows[0].session_id !== id) {
+        req.logger.error('Cache mismatch! Cached session_id does not match requested session_id', {
+          requested: id,
+          cached: progressCheck.rows[0].session_id
+        });
+        // НЕ использовать неправильный кэш - пропустить и выполнить stage заново
+      } else {
       
       // Вернуть сохраненный результат
       let cachedResult = {};
@@ -405,10 +444,36 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
         }
       }
       
+      // СПЕЦИАЛЬНАЯ ЛОГИКА ДЛЯ STAGE 2: если был пропущен, загрузить актуальные данные
+      if (stage === 2 && cachedResult.skipped) {
+        req.logger.info('Stage 2 was skipped, reloading actual company data from DB');
+        
+        // Загрузить все компании с сайтами из Stage 1
+        const companiesResult = await req.db.query(
+          `SELECT company_name, website, email, stage, confidence_score, 
+                  (website IS NOT NULL AND stage = 'names_found') as "foundInStage1"
+           FROM pending_companies 
+           WHERE session_id = $1`,
+          [id]
+        );
+        
+        cachedResult.websites = companiesResult.rows.map(row => ({
+          company_name: row.company_name,
+          website: row.website,
+          email: row.email,
+          stage: row.stage,
+          confidence: row.confidence_score,
+          foundInStage1: row.foundInStage1
+        }));
+        
+        cachedResult.companiesProcessed = companiesResult.rows.length;
+        cachedResult.websitesFound = companiesResult.rows.filter(r => r.website).length;
+      }
+      
       req.logger.info(`Returning cached result for stage ${stage}`, { 
         sessionId: id,
         hasData: !!cachedResult,
-        companiesCount: cachedResult.companies?.length || 0
+        companiesCount: cachedResult.companies?.length || cachedResult.websites?.length || 0
       });
       
       return res.json({
@@ -419,7 +484,9 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
         duration: progressCheck.rows[0].duration_seconds,
         data: cachedResult
       });
+      } // Закрываем else блок для проверки session_id
     }
+    */
     
     req.logger.info(`Starting stage ${stage} processing`, { sessionId: id });
     
@@ -438,11 +505,8 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
         // Stage 3: Find Contacts
         result = await req.orchestrator.runStage3Only(id);
       } else if (stage === 4) {
-        // Stage 4: Analyze Services
+        // Stage 4: Validate Data
         result = await req.orchestrator.runStage4Only(id);
-      } else if (stage === 5) {
-        // Stage 5: Generate Tags
-        result = await req.orchestrator.runStage5Only(id);
       }
       
       const endTime = new Date();
@@ -451,11 +515,12 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
       // Сохранить прогресс этапа
       await req.db.query(
         `INSERT INTO processing_progress 
-         (session_id, stage_name, status, started_at, completed_at, result_data, duration_seconds)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         (session_id, stage, stage_name, status, started_at, completed_at, result_data, duration_seconds)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           id, 
-          `stage${stage}`, 
+          `stage${stage}`,  // stage (обязательное поле)
+          `stage${stage}`,  // stage_name (для совместимости)
           'completed', 
           startTime, 
           endTime, 
@@ -482,9 +547,9 @@ router.post('/:id/process-stage/:stageNum', async (req, res) => {
       // Сохранить ошибку
       await req.db.query(
         `INSERT INTO processing_progress 
-         (session_id, stage_name, status, started_at, error_message)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [id, `stage${stage}`, 'failed', startTime, stageError.message]
+         (session_id, stage, stage_name, status, started_at, error_message)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, `stage${stage}`, `stage${stage}`, 'failed', startTime, stageError.message]
       );
       
       req.logger.error(`Stage ${stage} failed`, { 
@@ -527,7 +592,7 @@ router.get('/:id/stage-progress', async (req, res) => {
     
     // Сгруппировать по этапам (последняя попытка каждого)
     const stageStatus = {};
-    const stages = ['stage1', 'stage2', 'stage3', 'stage4', 'stage5'];
+    const stages = ['stage1', 'stage2', 'stage3', 'stage4'];
     
     stages.forEach((stageName, index) => {
       const stageNum = index + 1;
@@ -554,7 +619,7 @@ router.get('/:id/stage-progress', async (req, res) => {
     
     // Определить последний завершенный этап
     let lastCompletedStage = 0;
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 4; i++) {
       if (stageStatus[`stage${i}`].status === 'completed') {
         lastCompletedStage = i;
       } else {
@@ -566,9 +631,9 @@ router.get('/:id/stage-progress', async (req, res) => {
       success: true,
       sessionId: id,
       lastCompletedStage,
-      nextStage: lastCompletedStage < 5 ? lastCompletedStage + 1 : null,
+      nextStage: lastCompletedStage < 4 ? lastCompletedStage + 1 : null,
       stages: stageStatus,
-      canContinue: lastCompletedStage > 0 && lastCompletedStage < 5
+      canContinue: lastCompletedStage > 0 && lastCompletedStage < 4
     });
     
   } catch (error) {

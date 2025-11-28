@@ -536,68 +536,40 @@
         </div>
       </div>
 
-      <!-- Stage 4: Анализ сервисов -->
+      <!-- Stage 4: AI Валидация -->
       <div class="stage-card" id="stage4" data-stage="4">
         <div class="stage-header">
           <div class="stage-title">
-            <div class="stage-icon">🔍</div>
-            <span>Этап 4: Анализ сервисов</span>
+            <div class="stage-icon">🤖</div>
+            <span>Этап 4: AI Валидация</span>
           </div>
           <div class="stage-status status-pending" id="status4">Ожидание</div>
         </div>
         <div class="stage-content">
           <div id="loading4" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <div class="loading-text">Анализирую предоставляемые сервисы...</div>
+            <div class="loading-text">AI проверяет соответствие компаний теме поиска...</div>
           </div>
           <div id="results4" style="display: none;">
             <div class="stats">
               <div class="stat-card">
-                <div class="stat-value" id="stat4-companies">0</div>
-                <div class="stat-label">Компаний проанализировано</div>
+                <div class="stat-value" id="stat4-total">0</div>
+                <div class="stat-label">Всего компаний</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-value" id="stat4-services">0</div>
-                <div class="stat-label">Сервисов определено</div>
+              <div class="stat-card" style="background: linear-gradient(135deg, #00C851 0%, #007E33 100%);">
+                <div class="stat-value" id="stat4-validated">0</div>
+                <div class="stat-label">✅ Прошли валидацию</div>
+              </div>
+              <div class="stat-card" style="background: linear-gradient(135deg, #ffbb33 0%, #ff8800 100%);">
+                <div class="stat-value" id="stat4-review">0</div>
+                <div class="stat-label">⚠️ Требуют проверки</div>
+              </div>
+              <div class="stat-card" style="background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);">
+                <div class="stat-value" id="stat4-rejected">0</div>
+                <div class="stat-label">❌ Отклонены</div>
               </div>
             </div>
             <div class="results-list" id="resultsList4"></div>
-            <div class="action-buttons">
-              <button class="btn btn-success" id="continue4">
-                <span>✅</span>
-                Продолжить к следующему этапу
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Stage 5: Генерация тегов -->
-      <div class="stage-card" id="stage5" data-stage="5">
-        <div class="stage-header">
-          <div class="stage-title">
-            <div class="stage-icon">🏷️</div>
-            <span>Этап 5: Генерация тегов</span>
-          </div>
-          <div class="stage-status status-pending" id="status5">Ожидание</div>
-        </div>
-        <div class="stage-content">
-          <div id="loading5" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <div class="loading-text">Генерирую теги и категории...</div>
-          </div>
-          <div id="results5" style="display: none;">
-            <div class="stats">
-              <div class="stat-card">
-                <div class="stat-value" id="stat5-companies">0</div>
-                <div class="stat-label">Компаний обработано</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value" id="stat5-tags">0</div>
-                <div class="stat-label">Тегов создано</div>
-              </div>
-            </div>
-            <div class="results-list" id="resultsList5"></div>
             <div class="action-buttons">
               <button class="btn btn-primary" onclick="window.location.href='/companies.html'">
                 <span>📊</span>
@@ -831,7 +803,7 @@
         
         // Настроить кнопку продолжения
         const continueBtn = document.getElementById(`continue${stageNum}`);
-        if (continueBtn && stageNum < 5) {
+        if (continueBtn && stageNum < 4) {
           continueBtn.onclick = () => runStage(stageNum + 1);
         }
         
@@ -882,7 +854,30 @@
         document.getElementById('stat2-companies').textContent = data.companiesProcessed || 0;
         document.getElementById('stat2-websites').textContent = websites.length;
         
-        if (websites.length === 0) {
+        // Проверить если Stage 2 был пропущен
+        if (data.skipped) {
+          listEl.innerHTML = `
+            <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 10px 0;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <span style="font-size: 24px;">✨</span>
+                <strong style="color: #1976d2;">Stage 2 пропущен</strong>
+              </div>
+              <p style="margin: 0 0 15px 0; color: #555;">${data.reason} - Stage 2 не требуется!</p>
+            </div>
+            ${websites.map(site => `
+              <div class="result-item">
+                <div class="result-title">
+                  <span>🌐</span>
+                  <span>${site.company_name}</span>
+                  <span class="result-badge found-immediately">✨ Stage 1</span>
+                </div>
+                <div class="result-detail">🔗 <a href="${site.website}" target="_blank">${site.website}</a></div>
+                ${site.email ? `<div class="result-detail">✉️ Email: ${site.email}</div>` : ''}
+                ${site.confidence ? `<div class="result-detail">✅ Уверенность: ${site.confidence}%</div>` : ''}
+              </div>
+            `).join('')}
+          `;
+        } else if (websites.length === 0) {
           listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Сайты не найдены</p></div>';
         } else {
           listEl.innerHTML = websites.map(site => `
@@ -920,49 +915,51 @@
         }
         
       } else if (stageNum === 4) {
-        // Stage 4: Сервисы
-        const services = data.services || [];
-        document.getElementById('stat4-companies').textContent = data.companiesProcessed || 0;
-        document.getElementById('stat4-services').textContent = services.reduce((sum, s) => sum + (s.services?.length || 0), 0);
+        // Stage 4: AI Валидация
+        const companies = data.companies || [];
+        document.getElementById('stat4-total').textContent = data.total || 0;
+        document.getElementById('stat4-validated').textContent = data.validated || 0;
+        document.getElementById('stat4-review').textContent = data.needsReview || 0;
+        document.getElementById('stat4-rejected').textContent = data.rejected || 0;
         
-        if (services.length === 0) {
-          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Сервисы не определены</p></div>';
+        if (companies.length === 0) {
+          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Нет данных для отображения</p></div>';
         } else {
-          listEl.innerHTML = services.map(item => `
-            <div class="result-item">
-              <div class="result-title">
-                <span>🔍</span>
-                <span>${item.company_name}</span>
+          listEl.innerHTML = companies.map(company => {
+            let icon = '⚠️';
+            let statusText = 'Требует проверки';
+            let statusColor = '#ffbb33';
+            
+            if (company.stage === 'completed') {
+              icon = '✅';
+              statusText = 'Прошла валидацию';
+              statusColor = '#00C851';
+            } else if (company.stage === 'rejected') {
+              icon = '❌';
+              statusText = 'Отклонена';
+              statusColor = '#ff4444';
+            }
+            
+            return `
+              <div class="result-item">
+                <div class="result-title">
+                  <span>${icon}</span>
+                  <span>${company.company_name}</span>
+                  <span class="result-badge" style="background: ${statusColor}">
+                    ${company.validation_score || 0}%
+                  </span>
+                </div>
+                <div class="result-detail">
+                  <strong style="color: ${statusColor}">${statusText}</strong>
+                </div>
+                ${company.validation_reason ? `
+                  <div class="result-detail" style="opacity: 0.8">
+                    💬 ${company.validation_reason}
+                  </div>
+                ` : ''}
               </div>
-              ${item.services && item.services.length > 0 ? 
-                `<div class="result-detail">🛠️ Сервисы: ${item.services.join(', ')}</div>` : 
-                '<div class="result-detail">⚠️ Сервисы не определены</div>'
-              }
-            </div>
-          `).join('');
-        }
-        
-      } else if (stageNum === 5) {
-        // Stage 5: Теги
-        const tags = data.tags || [];
-        document.getElementById('stat5-companies').textContent = data.companiesProcessed || 0;
-        document.getElementById('stat5-tags').textContent = tags.reduce((sum, t) => sum + (t.tags?.length || 0), 0);
-        
-        if (tags.length === 0) {
-          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Теги не созданы</p></div>';
-        } else {
-          listEl.innerHTML = tags.map(item => `
-            <div class="result-item">
-              <div class="result-title">
-                <span>🏷️</span>
-                <span>${item.company_name}</span>
-              </div>
-              ${item.tags && item.tags.length > 0 ? 
-                `<div class="result-detail">🏷️ ${item.tags.map(tag => `<span class="result-badge">${tag}</span>`).join(' ')}</div>` : 
-                '<div class="result-detail">⚠️ Теги не созданы</div>'
-              }
-            </div>
-          `).join('');
+            `;
+          }).join('');
         }
       }
     }
@@ -975,7 +972,7 @@
 
     // Обновить общий прогресс
     function updateProgress() {
-      const progress = (currentStage / 5) * 100;
+      const progress = (currentStage / 4) * 100;
       document.getElementById('overallProgress').style.width = `${progress}%`;
     }
 
