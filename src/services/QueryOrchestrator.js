@@ -334,7 +334,16 @@ class QueryOrchestrator {
   async runStage2Only(sessionId) {
     this.logger.info('Running Stage 2 only', { sessionId });
     
-    // Сначала проверим сколько компаний уже имеют website (найдены в Stage 1)
+    // Проверить сколько компаний ВСЕГО
+    const totalCompaniesResult = await this.db.query(
+      `SELECT COUNT(*) as count FROM pending_companies 
+       WHERE session_id = $1`,
+      [sessionId]
+    );
+    
+    const totalCompanies = parseInt(totalCompaniesResult.rows[0]?.count || 0);
+    
+    // Проверить сколько уже имеют website
     const alreadyHaveWebsiteResult = await this.db.query(
       `SELECT COUNT(*) as count FROM pending_companies 
        WHERE session_id = $1 AND website IS NOT NULL`,
@@ -343,8 +352,8 @@ class QueryOrchestrator {
     
     const alreadyHaveWebsite = parseInt(alreadyHaveWebsiteResult.rows[0]?.count || 0);
     
-    // Если все компании уже имеют website - пропустить Stage 2
-    if (alreadyHaveWebsite > 0) {
+    // Если ВСЕ компании уже имеют website - пропустить Stage 2
+    if (totalCompanies > 0 && alreadyHaveWebsite === totalCompanies) {
       // Получить компании которые уже имеют website
       const companiesResult = await this.db.query(
         `SELECT company_name, website, email, stage, confidence_score 
@@ -355,13 +364,19 @@ class QueryOrchestrator {
       
       this.logger.info('Stage 2: All websites already found in Stage 1', {
         sessionId,
-        count: alreadyHaveWebsite
+        total: totalCompanies,
+        withWebsite: alreadyHaveWebsite
       });
       
       return {
+        success: true,
         skipped: true,
         reason: 'Все сайты найдены в Stage 1',
-        companiesProcessed: alreadyHaveWebsite,
+        total: 0,                           // Компаний БЕЗ сайтов для обработки
+        found: 0,                           // Новых сайтов не искали
+        notFound: 0,                        // Не было чего искать
+        companiesProcessed: alreadyHaveWebsite,  // Общее количество
+        websitesFound: alreadyHaveWebsite,       // Все найдены в Stage 1
         websites: companiesResult.rows.map(row => ({
           company_name: row.company_name,
           website: row.website,
@@ -385,7 +400,12 @@ class QueryOrchestrator {
     );
     
     return {
-      companiesProcessed: result.total || 0,
+      success: true,
+      total: result.total || 0,           // Компаний без сайтов (обработано)
+      found: result.found || 0,           // Сайтов найдено
+      notFound: result.notFound || 0,     // Не найдено
+      companiesProcessed: result.total || 0,  // Для обратной совместимости
+      websitesFound: result.found || 0,       // Для обратной совместимости
       websites: companiesResult.rows.map(row => ({
         company_name: row.company_name,
         website: row.website,
