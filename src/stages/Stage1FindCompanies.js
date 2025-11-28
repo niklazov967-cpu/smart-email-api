@@ -123,53 +123,47 @@ class Stage1FindCompanies {
   }
 
   _createPrompt(searchQuery, minCompanies, maxCompanies) {
-    return `Find ${minCompanies}-${maxCompanies} Chinese manufacturing companies that match this criteria:
+    return `在中国找到 ${minCompanies}-${maxCompanies} 家制造公司，符合以下条件：
 ${searchQuery}
 
-REQUIREMENTS:
-- Real manufacturers (NOT trading companies, dealers, or marketplaces)
-- Companies with official corporate websites
-- Active companies currently operating
+要求：
+- 真正的制造商（不是贸易公司、经销商或市场）
+- 有官方企业网站的公司
+- 目前正在运营的活跃公司
 
-FOR EACH COMPANY FIND:
-1. **Company name** (full Chinese name)
-2. **Official website (MAIN PAGE ONLY)**:
-   - Corporate site MAIN PAGE (https://company.com)
-   - NOT marketplace URLs (Alibaba, 1688, Made-in-China)
-   - NOT blog/article pages (NO /blog/, /article/, /news/, /products/)
-   - If you find only a blog post - extract the main domain
-3. **Email** (from company website, directories, or search results)
-4. **Brief description** (1-2 sentences about services)
+对于每家公司，查找：
+1. **公司名称** - 完整的中文公司名称（必须是中文！例如：深圳市精密制造有限公司）
+2. **官方网站（仅主页）**：
+   - 企业网站主页（https://company.com）
+   - 不要市场网址（阿里巴巴、1688、中国制造网）
+   - 不要博客/文章页面（无 /blog/、/article/、/news/、/products/）
+   - 如果只找到博客文章 - 提取主域名
+3. **电子邮件**（来自公司网站、目录或搜索结果）
+4. **简要描述**（1-2句关于服务的话）
 
-IMPORTANT about website:
-- Provide MAIN PAGE of the website (e.g., https://company.com)
-- DO NOT provide links to blogs (https://company.com/blog/article)
-- DO NOT provide links to product pages
-- If you find only an article - extract the domain and provide main page
-- If no corporate website exists, set website = null
+重要说明：
+- 至少找到 ${minCompanies} 家公司
+- 公司名称必须是中文（例如：深圳市XX精密制造有限公司）
+- 不要英文名称，只要中文名称
+- 如果没有企业网站，设置 website = null
+- 如果未找到电子邮件，设置 email = null
 
-IMPORTANT:
-- Find at least ${minCompanies} companies
-- DO NOT include marketplace URLs (Alibaba, 1688, Made-in-China) as website
-- If no corporate website exists, set website = null
-- If email not found, set email = null
-
-OUTPUT FORMAT (STRICT JSON ONLY):
+输出格式（仅严格JSON）：
 {
   "companies": [
     {
-      "name": "公司全名",
+      "name": "深圳市精密制造有限公司",
       "website": "https://company.com",
       "email": "info@company.com",
-      "brief_description": "brief service description",
+      "brief_description": "专业从事精密CNC加工服务",
       "likely_domain_extension": ".cn"
     }
   ],
   "total": ${minCompanies},
-  "note": "source info"
+  "note": "数据来源信息"
 }
 
-RETURN ONLY VALID JSON. NO ADDITIONAL TEXT.`;
+返回纯JSON，不要其他文本。公司名称必须是中文！`;
   }
 
   _createRetryPrompt(searchQuery) {
