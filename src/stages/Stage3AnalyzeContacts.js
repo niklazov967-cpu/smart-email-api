@@ -48,7 +48,7 @@ class Stage3AnalyzeContacts {
       // Получить настройки
       const settings = await this.settings.getCategory('processing_stages');
       const concurrentRequests = settings.stage3_concurrent_requests || 2;
-      const batchDelay = settings.stage3_batch_delay_ms || 3000;
+      const batchDelay = settings.stage3_batch_delay_ms || 5000; // Увеличено с 3000 до 5000 для избежания rate limit 429
 
       this.logger.info('Stage 3: Processing companies', {
         count: companies.length,

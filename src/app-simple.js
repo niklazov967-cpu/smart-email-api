@@ -1,7 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
+
+// Создать директорию для логов если её нет
+const logsDir = path.join(__dirname, '../logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+  console.log('✅ Created logs directory:', logsDir);
+}
 
 // Инициализация авторизации
 const AuthMiddleware = require('./middleware/auth');
