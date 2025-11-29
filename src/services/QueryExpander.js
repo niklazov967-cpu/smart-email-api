@@ -26,7 +26,7 @@ class QueryExpander {
     try {
       let allQueries = [];
       let attempts = 0;
-      const maxAttempts = 3; // Максимум 3 попытки генерации
+      const maxAttempts = 10; // Увеличено до 10 попыток для гарантии получения нужного количества
       
       // Продолжать генерацию пока не достигнем целевого количества
       while (allQueries.length < targetCount && attempts < maxAttempts) {
@@ -40,7 +40,8 @@ class QueryExpander {
         
         // Сколько еще нужно запросов
         const needed = targetCount - allQueries.length;
-        const generateCount = Math.min(needed + 5, targetCount * 2); // Генерируем с запасом
+        // Генерируем больше с запасом, учитывая что будут дубликаты
+        const generateCount = Math.max(needed * 2, 15); // Минимум 15, или в 2 раза больше чем нужно
         
         // Создать промпт для генерации под-запросов
         const prompt = attempts === 1 
@@ -81,23 +82,29 @@ class QueryExpander {
         
         // Если достигли целевого количества - выходим
         if (allQueries.length >= targetCount) {
+          this.logger.info('QueryExpander: Target count reached!', {
+            generated: allQueries.length,
+            target: targetCount,
+            attempts
+          });
           break;
         }
         
-        // Если это первая попытка и запросов мало - сразу пробуем еще раз
-        if (attempts === 1 && allQueries.length < Math.floor(targetCount / 2)) {
-          this.logger.info('QueryExpander: Too few unique queries, retrying immediately');
-          continue;
-        }
+        // Продолжаем генерировать пока не достигнем цели
+        this.logger.info('QueryExpander: Need more queries, continuing...', {
+          needed: targetCount - allQueries.length
+        });
       }
 
-      // Если после всех попыток все равно мало запросов
+      // Если после всех попыток все равно мало запросов - это ошибка
       if (allQueries.length < targetCount) {
-        this.logger.warn('QueryExpander: Could not generate enough unique queries', {
+        const errorMsg = `Could not generate enough unique queries after ${attempts} attempts. Generated ${allQueries.length}, needed ${targetCount}`;
+        this.logger.error('QueryExpander: FAILED to reach target count', {
           generated: allQueries.length,
           target: targetCount,
           attempts
         });
+        throw new Error(errorMsg);
       }
 
       // Ограничить до целевого количества (взять лучшие по релевантности)
@@ -105,7 +112,7 @@ class QueryExpander {
         .sort((a, b) => (b.relevance || 50) - (a.relevance || 50))
         .slice(0, targetCount);
 
-      this.logger.info('QueryExpander: Completed', {
+      this.logger.info('QueryExpander: Completed successfully', {
         totalAttempts: attempts,
         uniqueGenerated: allQueries.length,
         finalCount: finalQueries.length,

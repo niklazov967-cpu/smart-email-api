@@ -292,6 +292,16 @@ app.get('/api/sonar/stats', async (req, res) => {
 const creditsRouter = require('./routes/credits');
 app.use('/api/credits', creditsRouter);
 
+// API endpoint для получения версии
+app.get('/api/version', (req, res) => {
+  const packageJson = require('../package.json');
+  res.json({
+    success: true,
+    version: packageJson.version,
+    name: packageJson.name
+  });
+});
+
 // Обработка 404
 app.use((req, res) => {
   res.status(404).json({
