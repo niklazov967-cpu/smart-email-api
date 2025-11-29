@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Автоматический массовый поиск - Smart Email API</title>
+  <link rel="stylesheet" href="/queue-monitor.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      position: relative;
+    }
+
+    .header h1 {
+      color: #333;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .config-card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .config-section {
+      margin-bottom: 25px;
+    }
+
+    .config-section h3 {
+      color: #333;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      color: #333;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .form-group small {
+      display: block;
+      color: #666;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .info-box {
+      background: #f0f7ff;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+
+    .info-box p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .warning-box {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+
+    .warning-box p {
+      color: #856404;
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .stats-preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #c82333;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .progress-container {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      display: none;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #e0e0e0;
+      border-radius: 15px;
+      overflow: hidden;
+      position: relative;
+      margin: 20px 0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .live-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .live-stat {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 15px;
+      text-align: center;
+    }
+
+    .live-stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 5px;
+    }
+
+    .live-stat-label {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .log-container {
+      background: #1e1e1e;
+      border-radius: 8px;
+      padding: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      margin-top: 20px;
+    }
+
+    .log-entry {
+      color: #d4d4d4;
+      padding: 5px 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-timestamp {
+      color: #858585;
+      margin-right: 10px;
+    }
+
+    .log-info { color: #4fc3f7; }
+    .log-success { color: #81c784; }
+    .log-warning { color: #ffb74d; }
+    .log-error { color: #e57373; }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .results-card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      display: none;
+    }
+
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    .results-table th,
+    .results-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .results-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .results-table tr:hover {
+      background: #f8f9fa;
+    }
+
+    @media (max-width: 768px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>
+        <span>🤖</span>
+        Автоматический массовый поиск
+      </h1>
+      <p>
+        Система автоматически создаст множество вариаций вашей темы, 
+        сгенерирует под-запросы и найдет сотни компаний.
+        Весь процесс работает автоматически с контролем бюджета и лимитов.
+      </p>
+      
+      <!-- API Queue Status Badge -->
+      <div class="queue-badge loading queue-badge-absolute-top-right" id="queueBadge">
+        <span class="queue-pulse"></span>
+        <span>Очередь AI:</span>
+        <span class="queue-count" id="queueCount">—</span>
+      </div>
+    </div>
+
+    <!-- Configuration Card -->
+    <div class="config-card" id="configCard">
+      <div class="config-section">
+        <h3>🎯 Основная тема поиска</h3>
+        <div class="form-group">
+          <label for="mainTopic">Опишите что вы ищете (на русском или китайском)</label>
+          <textarea 
+            id="mainTopic" 
+            placeholder="Например: CNC токарная обработка нержавеющей стали для мелких партий"
+          ></textarea>
+          <small>💡 Чем подробнее описание, тем лучше система подберет вариации</small>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>📊 Параметры поиска</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="targetCompanies">Целевое количество компаний</label>
+            <input 
+              type="number" 
+              id="targetCompanies" 
+              value="500" 
+              min="50" 
+              max="10000"
+            >
+            <small>Система будет искать пока не наберет это количество</small>
+          </div>
+          <div class="form-group">
+            <label for="variationFrequency">Создавать новую вариацию каждые N компаний</label>
+            <input 
+              type="number" 
+              id="variationFrequency" 
+              value="30" 
+              min="10" 
+              max="100"
+            >
+            <small>Рекомендуется: 20-50 компаний на вариацию</small>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="maxVariations">Максимум вариаций темы</label>
+            <input 
+              type="number" 
+              id="maxVariations" 
+              value="20" 
+              min="5" 
+              max="100"
+            >
+            <small>Сколько разных вариаций темы создать</small>
+          </div>
+          <div class="form-group">
+            <label for="queriesPerVariation">Под-запросов на каждую вариацию</label>
+            <input 
+              type="number" 
+              id="queriesPerVariation" 
+              value="10" 
+              min="5" 
+              max="20"
+            >
+            <small>Сколько под-запросов генерировать для каждой вариации</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🛡️ Лимиты безопасности</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="maxBudget">Максимальный бюджет (USD)</label>
+            <input 
+              type="number" 
+              id="maxBudget" 
+              value="10" 
+              min="1" 
+              max="1000" 
+              step="0.5"
+            >
+            <small>Поиск остановится при достижении этого бюджета</small>
+          </div>
+          <div class="form-group">
+            <label for="maxDuration">Максимальная длительность (часы)</label>
+            <input 
+              type="number" 
+              id="maxDuration" 
+              value="6" 
+              min="1" 
+              max="48"
+            >
+            <small>Поиск остановится через это время</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estimated costs -->
+      <div class="stats-preview" id="estimatedStats">
+        <div class="stat-card">
+          <div class="stat-value" id="estVariations">-</div>
+          <div class="stat-label">Вариаций темы</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="estQueries">-</div>
+          <div class="stat-label">Всего под-запросов</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="estCost">-</div>
+          <div class="stat-label">Примерная стоимость</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="estDuration">-</div>
+          <div class="stat-label">Примерное время</div>
+        </div>
+      </div>
+
+      <div class="warning-box">
+        <p>
+          <strong>⚠️ Важно:</strong> Автоматический поиск может занять несколько часов и потратить значительное количество токенов. 
+          Убедитесь что установлены правильные лимиты безопасности.
+        </p>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn btn-primary" id="startBtn" onclick="startAutoSearch()">
+          <span>🚀</span>
+          Запустить автопоиск
+        </button>
+        <button class="btn btn-secondary" onclick="window.location.href='/'">
+          <span>🏠</span>
+          На главную
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress Container -->
+    <div class="progress-container" id="progressContainer">
+      <h2 style="margin-bottom: 20px;">
+        <span>⚙️</span>
+        Автопоиск в процессе...
+      </h2>
+
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill">0%</div>
+      </div>
+
+      <div class="live-stats">
+        <div class="live-stat">
+          <div class="live-stat-value" id="liveCompanies">0</div>
+          <div class="live-stat-label">Компаний найдено</div>
+        </div>
+        <div class="live-stat">
+          <div class="live-stat-value" id="liveVariations">0</div>
+          <div class="live-stat-label">Вариаций обработано</div>
+        </div>
+        <div class="live-stat">
+          <div class="live-stat-value" id="liveQueries">0</div>
+          <div class="live-stat-label">Запросов выполнено</div>
+        </div>
+        <div class="live-stat">
+          <div class="live-stat-value" id="liveCost">$0.00</div>
+          <div class="live-stat-label">Потрачено</div>
+        </div>
+        <div class="live-stat">
+          <div class="live-stat-value" id="liveEmail">0</div>
+          <div class="live-stat-label">Email найдено</div>
+        </div>
+        <div class="live-stat">
+          <div class="live-stat-value" id="liveTime">0м</div>
+          <div class="live-stat-label">Прошло времени</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 30px; margin-bottom: 15px;">📝 Лог выполнения</h3>
+      <div class="log-container" id="logContainer"></div>
+
+      <div class="action-buttons">
+        <button class="btn btn-danger" id="stopBtn" onclick="stopAutoSearch()">
+          <span>⏹️</span>
+          Остановить поиск
+        </button>
+        <button class="btn btn-secondary" onclick="window.location.href='/results.html'">
+          <span>📊</span>
+          Посмотреть результаты
+        </button>
+      </div>
+    </div>
+
+    <!-- Results Card -->
+    <div class="results-card" id="resultsCard">
+      <h2>✅ Автопоиск завершен!</h2>
+      <div class="stats-preview" style="margin: 20px 0;">
+        <div class="stat-card" style="background: #10b981;">
+          <div class="stat-value" id="finalCompanies">0</div>
+          <div class="stat-label">Компаний найдено</div>
+        </div>
+        <div class="stat-card" style="background: #3b82f6;">
+          <div class="stat-value" id="finalEmail">0</div>
+          <div class="stat-label">С email адресами</div>
+        </div>
+        <div class="stat-card" style="background: #8b5cf6;">
+          <div class="stat-value" id="finalCost">$0.00</div>
+          <div class="stat-label">Потрачено</div>
+        </div>
+        <div class="stat-card" style="background: #f59e0b;">
+          <div class="stat-value" id="finalDuration">0м</div>
+          <div class="stat-label">Время выполнения</div>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn btn-primary" onclick="window.location.href='/results.html'">
+          <span>📊</span>
+          Посмотреть все результаты
+        </button>
+        <button class="btn btn-secondary" onclick="location.reload()">
+          <span>🔄</span>
+          Начать новый поиск
+        </button>
+        <button class="btn btn-secondary" onclick="window.location.href='/'">
+          <span>🏠</span>
+          На главную
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let autoSearchId = null;
+    let pollingInterval = null;
+    let startTime = null;
+
+    // Calculate estimates when parameters change
+    ['targetCompanies', 'variationFrequency', 'maxVariations', 'queriesPerVariation'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateEstimates);
+    });
+
+    function updateEstimates() {
+      const targetCompanies = parseInt(document.getElementById('targetCompanies').value);
+      const variationFreq = parseInt(document.getElementById('variationFrequency').value);
+      const maxVariations = parseInt(document.getElementById('maxVariations').value);
+      const queriesPerVar = parseInt(document.getElementById('queriesPerVariation').value);
+
+      // Estimate variations needed
+      const estVariations = Math.min(Math.ceil(targetCompanies / variationFreq), maxVariations);
+      
+      // Estimate total queries
+      const estQueries = estVariations * queriesPerVar;
+      
+      // Estimate cost ($0.15 per 10 companies average)
+      const estCost = (targetCompanies * 0.015).toFixed(2);
+      
+      // Estimate duration (~ 3 minutes per 10 companies)
+      const estMinutes = Math.ceil(targetCompanies * 0.3);
+      const estHours = Math.floor(estMinutes / 60);
+      const estMins = estMinutes % 60;
+      const estDurationStr = estHours > 0 ? `${estHours}ч ${estMins}м` : `${estMins}м`;
+
+      document.getElementById('estVariations').textContent = estVariations;
+      document.getElementById('estQueries').textContent = estQueries;
+      document.getElementById('estCost').textContent = `$${estCost}`;
+      document.getElementById('estDuration').textContent = estDurationStr;
+    }
+
+    // Start auto search
+    async function startAutoSearch() {
+      const mainTopic = document.getElementById('mainTopic').value.trim();
+      
+      if (!mainTopic) {
+        alert('❌ Пожалуйста, введите основную тему поиска');
+        return;
+      }
+
+      if (!confirm('Запустить автоматический поиск? Процесс может занять несколько часов.')) {
+        return;
+      }
+
+      const config = {
+        mainTopic: mainTopic,
+        targetCompanies: parseInt(document.getElementById('targetCompanies').value),
+        variationFrequency: parseInt(document.getElementById('variationFrequency').value),
+        maxVariations: parseInt(document.getElementById('maxVariations').value),
+        queriesPerVariation: parseInt(document.getElementById('queriesPerVariation').value),
+        maxBudget: parseFloat(document.getElementById('maxBudget').value),
+        maxDuration: parseInt(document.getElementById('maxDuration').value)
+      };
+
+      try {
+        const response = await fetch('/api/auto-search/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          autoSearchId = data.searchId;
+          startTime = Date.now();
+          
+          // Hide config, show progress
+          document.getElementById('configCard').style.display = 'none';
+          document.getElementById('progressContainer').style.display = 'block';
+          
+          // Start polling for updates
+          startPolling();
+          
+          addLog('info', 'Автопоиск запущен');
+          addLog('info', `ID: ${autoSearchId}`);
+        } else {
+          alert('❌ Ошибка запуска: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Error starting auto search:', error);
+        alert('❌ Ошибка: ' + error.message);
+      }
+    }
+
+    // Stop auto search
+    async function stopAutoSearch() {
+      if (!confirm('Остановить автопоиск? Все найденные данные будут сохранены.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/auto-search/${autoSearchId}/stop`, {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          stopPolling();
+          addLog('warning', 'Автопоиск остановлен пользователем');
+          showResults();
+        }
+      } catch (error) {
+        console.error('Error stopping auto search:', error);
+        alert('❌ Ошибка: ' + error.message);
+      }
+    }
+
+    // Start polling for updates
+    function startPolling() {
+      pollingInterval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/auto-search/${autoSearchId}/status`);
+          const data = await response.json();
+
+          if (data.success) {
+            updateProgress(data.status);
+
+            if (data.status.state === 'completed' || data.status.state === 'failed' || data.status.state === 'stopped') {
+              stopPolling();
+              showResults();
+            }
+          }
+        } catch (error) {
+          console.error('Error polling status:', error);
+        }
+      }, 3000); // Poll every 3 seconds
+    }
+
+    // Stop polling
+    function stopPolling() {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    }
+
+    // Update progress display
+    function updateProgress(status) {
+      const progress = Math.min((status.companiesFound / status.targetCompanies) * 100, 100);
+      document.getElementById('progressFill').style.width = `${progress}%`;
+      document.getElementById('progressFill').textContent = `${Math.round(progress)}%`;
+
+      document.getElementById('liveCompanies').textContent = status.companiesFound || 0;
+      document.getElementById('liveVariations').textContent = status.variationsProcessed || 0;
+      document.getElementById('liveQueries').textContent = status.queriesExecuted || 0;
+      document.getElementById('liveCost').textContent = `$${(status.costSpent || 0).toFixed(2)}`;
+      document.getElementById('liveEmail').textContent = status.emailsFound || 0;
+      
+      const elapsed = Math.floor((Date.now() - startTime) / 60000);
+      document.getElementById('liveTime').textContent = elapsed > 60 
+        ? `${Math.floor(elapsed/60)}ч ${elapsed%60}м`
+        : `${elapsed}м`;
+
+      // Add new log entries
+      if (status.recentLogs && status.recentLogs.length > 0) {
+        status.recentLogs.forEach(log => {
+          addLog(log.level, log.message);
+        });
+      }
+    }
+
+    // Add log entry
+    function addLog(level, message) {
+      const logContainer = document.getElementById('logContainer');
+      const timestamp = new Date().toLocaleTimeString('ru-RU');
+      
+      const logEntry = document.createElement('div');
+      logEntry.className = `log-entry log-${level}`;
+      logEntry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span>${message}`;
+      
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // Show final results
+    function showResults() {
+      document.getElementById('progressContainer').style.display = 'none';
+      document.getElementById('resultsCard').style.display = 'block';
+
+      // Copy final stats
+      document.getElementById('finalCompanies').textContent = document.getElementById('liveCompanies').textContent;
+      document.getElementById('finalEmail').textContent = document.getElementById('liveEmail').textContent;
+      document.getElementById('finalCost').textContent = document.getElementById('liveCost').textContent;
+      document.getElementById('finalDuration').textContent = document.getElementById('liveTime').textContent;
+    }
+
+    // Initialize
+    updateEstimates();
+  </script>
+  
+  <!-- Queue Monitor Widget -->
+  <script src="/queue-monitor.js"></script>
+</body>
+</html>
+

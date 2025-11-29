@@ -502,6 +502,32 @@ router.delete('/translations/:companyId', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/debug/queue-status
+ * Получить текущий статус очереди API запросов
+ */
+router.get('/queue-status', async (req, res) => {
+  try {
+    const sonarProStatus = req.sonarProClient ? req.sonarProClient.getQueueStatus() : null;
+    const sonarBasicStatus = req.sonarBasicClient ? req.sonarBasicClient.getQueueStatus() : null;
+
+    res.json({
+      success: true,
+      timestamp: Date.now(),
+      queues: {
+        sonar_pro: sonarProStatus,
+        sonar_basic: sonarBasicStatus
+      }
+    });
+  } catch (error) {
+    req.logger.error('Error getting queue status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
 
 

@@ -105,8 +105,8 @@ class SettingsManager {
         max_tokens: 4000,
         max_retries: 3,
         api_timeout_seconds: 60,
-        retry_delay_seconds: 5,  // Увеличено с 2 до 5 секунд
-        rate_limit_requests_per_min: 20  // Снижено с 60 до 20 запросов в минуту
+        retry_delay_seconds: 5,
+        rate_limit_requests_per_min: 60  // Возвращено к 60 с защитой через mutex
       },
       deepseek: {
         api_key: process.env.DEEPSEEK_API_KEY || '',

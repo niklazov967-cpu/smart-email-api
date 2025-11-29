@@ -19,6 +19,8 @@ class SonarApiClient {
     this.lastRequestTime = 0;
     this.requestInProgress = false; // Глобальная блокировка для последовательных запросов
     this.requestPromise = null; // Promise текущего запроса
+    this.queueLength = 0; // Счетчик очереди для мониторинга
+    this.queueCallbacks = []; // Callbacks для уведомления об изменении очереди
   }
 
   /**
@@ -27,6 +29,43 @@ class SonarApiClient {
   setCreditsTracker(creditsTracker) {
     this.creditsTracker = creditsTracker;
     this.logger.info('CreditsTracker attached to SonarApiClient');
+  }
+
+  /**
+   * Подписаться на изменения очереди
+   */
+  onQueueChange(callback) {
+    this.queueCallbacks.push(callback);
+  }
+
+  /**
+   * Уведомить подписчиков об изменении очереди
+   */
+  _notifyQueueChange() {
+    const queueStatus = {
+      queueLength: this.queueLength,
+      inProgress: this.requestInProgress,
+      timestamp: Date.now()
+    };
+    
+    this.queueCallbacks.forEach(callback => {
+      try {
+        callback(queueStatus);
+      } catch (error) {
+        this.logger.error('Queue callback error', { error: error.message });
+      }
+    });
+  }
+
+  /**
+   * Получить текущий статус очереди
+   */
+  getQueueStatus() {
+    return {
+      queueLength: this.queueLength,
+      inProgress: this.requestInProgress,
+      timestamp: Date.now()
+    };
   }
 
   /**
@@ -79,12 +118,28 @@ class SonarApiClient {
     console.log(`   Prompt length: ${prompt?.length || 0} chars`);
 
     // 🔒 ГЛОБАЛЬНАЯ БЛОКИРОВКА: ждем пока предыдущий запрос завершится
+    let waitingStartTime = null;
+    
+    if (this.requestInProgress) {
+      waitingStartTime = Date.now();
+      this.queueLength++;
+      this._notifyQueueChange();
+      console.log(`   ⏸️  Added to queue. Queue length: ${this.queueLength}`);
+    }
+    
     while (this.requestInProgress) {
-      console.log(`   ⏸️  Waiting for previous request to complete...`);
       await this._sleep(100);
     }
     
+    if (waitingStartTime) {
+      const waitTime = Date.now() - waitingStartTime;
+      console.log(`   ⏳ Waited ${waitTime}ms in queue`);
+      this.queueLength--;
+      this._notifyQueueChange();
+    }
+    
     this.requestInProgress = true;
+    this._notifyQueueChange();
     console.log(`   🔓 Lock acquired, proceeding with request`);
 
     const startTime = Date.now();
@@ -99,6 +154,7 @@ class SonarApiClient {
         
         // 🔓 Освобождаем блокировку перед возвратом
         this.requestInProgress = false;
+        this._notifyQueueChange();
         console.log(`   🔓 Lock released (cache hit)`);
         
         return cached;
@@ -190,6 +246,7 @@ class SonarApiClient {
 
         // 🔓 Освобождаем блокировку перед возвратом
         this.requestInProgress = false;
+        this._notifyQueueChange();
         console.log(`   🔓 Lock released (success)`);
 
         return result;
@@ -245,6 +302,7 @@ class SonarApiClient {
           
           // 🔓 Освобождаем блокировку перед выбросом ошибки
           this.requestInProgress = false;
+          this._notifyQueueChange();
           console.log(`   🔓 Lock released (all retries failed)`);
           
           throw new Error(`Sonar API failed after ${this.maxRetries} attempts: ${lastError.message}`);

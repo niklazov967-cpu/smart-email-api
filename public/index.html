@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Smart Email API - Портал сбора и обработки контактов</title>
+  <link rel="stylesheet" href="/queue-monitor.css">
   <style>
     * {
       margin: 0;
@@ -330,6 +331,14 @@
       <p>Портал сбора и обработки контактов китайских производителей</p>
       <span class="status">● Работает</span>
       <p class="version" id="appVersion">Загрузка версии...</p>
+      
+      <!-- API Queue Status Badge -->
+      <div class="queue-badge loading queue-badge-fixed-top-right" id="queueBadge">
+        <span class="queue-pulse"></span>
+        <span>AI Queue:</span>
+        <span class="queue-count" id="queueCount">—</span>
+      </div>
+      
       <div class="header-buttons">
         <button onclick="clearDatabase()" class="button button-danger">
           🗑️ Очистить базу данных
@@ -1126,5 +1135,8 @@
       }
     }
   </script>
+  
+  <!-- Queue Monitor Widget -->
+  <script src="/queue-monitor.js"></script>
 </body>
 </html>

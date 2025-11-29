@@ -1,0 +1,152 @@
+/**
+ * API Queue Monitor Widget Styles
+ * 
+ * Скопируйте эти стили в <style> секцию вашей страницы
+ * или подключите как отдельный CSS файл: <link rel="stylesheet" href="/queue-monitor.css">
+ */
+
+/* Queue Status Badge */
+.queue-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 25px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+  cursor: help;
+  user-select: none;
+}
+
+/* Badge States */
+.queue-badge.loading {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.queue-badge.idle {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+}
+
+.queue-badge.busy {
+  background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%);
+  box-shadow: 0 4px 12px rgba(246, 173, 85, 0.3);
+}
+
+.queue-badge.overloaded {
+  background: linear-gradient(135deg, #fc8181 0%, #e53e3e 100%);
+  box-shadow: 0 4px 12px rgba(252, 129, 129, 0.3);
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Queue Count */
+.queue-count {
+  font-size: 18px;
+  font-weight: 700;
+  min-width: 24px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pulse Indicator */
+.queue-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: white;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* Hover Effect */
+.queue-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.queue-badge.idle:hover {
+  box-shadow: 0 6px 16px rgba(72, 187, 120, 0.4);
+}
+
+.queue-badge.busy:hover {
+  box-shadow: 0 6px 16px rgba(246, 173, 85, 0.4);
+}
+
+.queue-badge.overloaded:hover {
+  box-shadow: 0 6px 16px rgba(252, 129, 129, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .queue-badge {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  
+  .queue-count {
+    font-size: 16px;
+    min-width: 20px;
+  }
+  
+  .queue-pulse {
+    width: 6px;
+    height: 6px;
+  }
+}
+
+/* Position Helpers */
+.queue-badge-fixed-top-right {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.queue-badge-absolute-top-right {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+.queue-badge-inline {
+  display: inline-flex;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
