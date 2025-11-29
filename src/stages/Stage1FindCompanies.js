@@ -13,72 +13,64 @@ class Stage1FindCompanies {
     this.tagExtractor = new TagExtractor();
   }
 
-  async execute(searchQuery, sessionId) {
-    this.logger.info('Stage 1: Starting company search', { searchQuery, sessionId });
+  async execute(sessionId) {
+    this.logger.info('Stage 1: Starting company search', { sessionId });
 
     try {
-      // Получить topic_description из сессии
+      // Получить topic_description и запросы из сессии
       const { data: sessionData } = await this.db.supabase
         .from('search_sessions')
-        .select('topic_description')
+        .select('topic_description, search_query')
         .eq('session_id', sessionId)
         .single();
       
-      const topicDescription = sessionData?.topic_description || searchQuery;
+      const topicDescription = sessionData?.topic_description || sessionData?.search_query;
       
-      // Минимум и максимум компаний для поиска
-      const minCompanies = 5;
-      const maxCompanies = 50;
-
-      // Создать промпт для Sonar
-      const prompt = this._createPrompt(searchQuery, minCompanies, maxCompanies);
-
-      // Выполнить запрос к Sonar API
-      const response = await this.sonar.query(prompt, {
-        stage: 'stage1_find_companies',
-        sessionId,
-        useCache: true
-      });
-
-      // Парсить результат
-      const companies = this._parseResponse(response);
+      // Получить все запросы для этой сессии
+      const { data: queries, error: queriesError } = await this.db.supabase
+        .from('session_queries')
+        .select('query_cn, query_ru, query_id')
+        .eq('session_id', sessionId)
+        .order('relevance', { ascending: false });
       
-      // Сохранить сырой ответ для каждой компании
-      companies.forEach(company => {
-        company.rawResponse = response;
-        company.rawQuery = searchQuery;
-        company.topicDescription = topicDescription; // НОВОЕ: сохраняем тему
-      });
-
-      // Валидация
-      if (companies.length < minCompanies) {
-        this.logger.warn('Stage 1: Too few companies found, retrying', {
-          found: companies.length,
-          required: minCompanies
-        });
-
-        // Вторая попытка с другим углом
-        const retryPrompt = this._createRetryPrompt(searchQuery);
-        const retryResponse = await this.sonar.query(retryPrompt, {
-          stage: 'stage1_find_companies_retry',
-          sessionId,
-          useCache: true
-        });
-
-        const moreCompanies = this._parseResponse(retryResponse);
-        
-        // Сохранить сырой ответ для новых компаний
-        moreCompanies.forEach(company => {
-          company.rawResponse = retryResponse;
-          company.rawQuery = searchQuery;
-          company.topicDescription = topicDescription; // НОВОЕ
-        });
-        
-        companies.push(...moreCompanies);
+      if (queriesError || !queries || queries.length === 0) {
+        this.logger.error('Stage 1: No queries found for session', { sessionId, error: queriesError?.message });
+        return {
+          success: false,
+          error: 'No queries found for this session',
+          total: 0
+        };
       }
-
-      // Удалить дубликаты внутри текущего запроса
-      const uniqueCompanies = this._removeDuplicates(companies);
+      
+      this.logger.info('Stage 1: Processing queries', { 
+        sessionId, 
+        queriesCount: queries.length 
+      });
+      
+      // Обработать каждый запрос
+      let allCompanies = [];
+      
+      for (const query of queries) {
+        const searchQuery = query.query_cn || query.query_ru;
+        this.logger.info('Stage 1: Processing query', { 
+          query: searchQuery,
+          queryId: query.query_id
+        });
+        
+        const companies = await this._processQuery(searchQuery, sessionId, topicDescription);
+        allCompanies.push(...companies);
+        
+        // Небольшая задержка между запросами
+        await this._sleep(1000);
+      }
+      
+      this.logger.info('Stage 1: All queries processed', { 
+        totalCompanies: allCompanies.length,
+        queries: queries.length
+      });
+      
+      // Удалить дубликаты между всеми запросами
+      const uniqueCompanies = this._removeDuplicates(allCompanies);
 
       // Проверить существующие компании в БД (между сессиями)
       const newCompanies = await this._checkExistingCompanies(uniqueCompanies, sessionId);
@@ -90,6 +82,7 @@ class Stage1FindCompanies {
       const normalizedCompanies = this._normalizeCompanyData(filteredCompanies);
 
       // Ограничить до максимума
+      const maxCompanies = 50;
       const finalCompanies = normalizedCompanies.slice(0, maxCompanies);
 
       // Сохранить в БД (с сырыми данными и темой)
@@ -137,6 +130,76 @@ class Stage1FindCompanies {
       });
       throw error;
     }
+  }
+
+  /**
+   * Обработать один запрос и вернуть найденные компании
+   */
+  async _processQuery(searchQuery, sessionId, topicDescription) {
+    const minCompanies = 5;
+    const maxCompanies = 50;
+
+    // Создать промпт для Sonar
+    const prompt = this._createPrompt(searchQuery, minCompanies, maxCompanies);
+
+    // Выполнить запрос к Sonar API
+    const response = await this.sonar.query(prompt, {
+      stage: 'stage1_find_companies',
+      sessionId,
+      useCache: true
+    });
+
+    // Парсить результат
+    const companies = this._parseResponse(response);
+    
+    // Сохранить сырой ответ для каждой компании
+    companies.forEach(company => {
+      company.rawResponse = response;
+      company.rawQuery = searchQuery;
+      company.topicDescription = topicDescription;
+    });
+
+    // Валидация
+    if (companies.length < minCompanies) {
+      this.logger.warn('Stage 1: Too few companies found, retrying', {
+        found: companies.length,
+        required: minCompanies,
+        query: searchQuery
+      });
+
+      // Вторая попытка с другим углом
+      const retryPrompt = this._createRetryPrompt(searchQuery);
+      const retryResponse = await this.sonar.query(retryPrompt, {
+        stage: 'stage1_find_companies_retry',
+        sessionId,
+        useCache: true
+      });
+
+      const moreCompanies = this._parseResponse(retryResponse);
+      
+      // Сохранить сырой ответ для новых компаний
+      moreCompanies.forEach(company => {
+        company.rawResponse = retryResponse;
+        company.rawQuery = searchQuery;
+        company.topicDescription = topicDescription;
+      });
+      
+      companies.push(...moreCompanies);
+    }
+
+    this.logger.info('Stage 1: Query processed', { 
+      query: searchQuery,
+      companiesFound: companies.length
+    });
+
+    return companies;
+  }
+
+  /**
+   * Вспомогательная функция для задержки
+   */
+  async _sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   _createPrompt(searchQuery, minCompanies, maxCompanies) {
