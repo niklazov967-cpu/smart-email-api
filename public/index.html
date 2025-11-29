@@ -476,9 +476,9 @@
                                 c => c.session_id === session.session_id
                             ) || [];
                             
-                            // Подсчитать необработанные (без stage 'completed')
+                            // Подсчитать необработанные (current_stage < 4 ИЛИ stage4_status = NULL)
                             const unprocessed = sessionCompanies.filter(
-                                c => !c.stage || c.stage !== 'completed'
+                                c => (c.current_stage || 0) < 4 || c.stage4_status === null
                             ).length;
                             
                             return {
