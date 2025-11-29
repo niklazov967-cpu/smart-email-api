@@ -71,18 +71,48 @@ class Stage1FindCompanies {
       
       // Удалить дубликаты между всеми запросами
       const uniqueCompanies = this._removeDuplicates(allCompanies);
+      this.logger.info('Stage 1: After deduplication', {
+        before: allCompanies.length,
+        after: uniqueCompanies.length,
+        removed: allCompanies.length - uniqueCompanies.length,
+        duplicateRate: `${((allCompanies.length - uniqueCompanies.length) / allCompanies.length * 100).toFixed(1)}%`
+      });
 
       // Проверить существующие компании в БД (между сессиями)
       const newCompanies = await this._checkExistingCompanies(uniqueCompanies, sessionId);
+      this.logger.info('Stage 1: After existing companies check', {
+        before: uniqueCompanies.length,
+        after: newCompanies.length,
+        removed: uniqueCompanies.length - newCompanies.length,
+        existingRate: `${((uniqueCompanies.length - newCompanies.length) / uniqueCompanies.length * 100).toFixed(1)}%`
+      });
 
       // Фильтровать маркетплейсы
       const filteredCompanies = this._filterMarketplaces(newCompanies);
+      this.logger.info('Stage 1: After marketplace filtering', {
+        before: newCompanies.length,
+        after: filteredCompanies.length,
+        removed: newCompanies.length - filteredCompanies.length,
+        marketplaceRate: `${((newCompanies.length - filteredCompanies.length) / newCompanies.length * 100).toFixed(1)}%`
+      });
 
       // Нормализовать email и website (один домен = один адрес)
       const normalizedCompanies = this._normalizeCompanyData(filteredCompanies);
+      this.logger.info('Stage 1: After normalization', {
+        before: filteredCompanies.length,
+        after: normalizedCompanies.length,
+        removed: filteredCompanies.length - normalizedCompanies.length
+      });
 
       // Сохранить ВСЕ компании без ограничения (уже заплатили за данные!)
       const finalCompanies = normalizedCompanies;
+      
+      this.logger.info('Stage 1: Final companies summary', {
+        initial: allCompanies.length,
+        final: finalCompanies.length,
+        totalLoss: allCompanies.length - finalCompanies.length,
+        efficiencyRate: `${(finalCompanies.length / allCompanies.length * 100).toFixed(1)}%`
+      });
 
       // Сохранить в БД (с сырыми данными и темой)
       await this._saveCompanies(finalCompanies, sessionId);
@@ -138,6 +168,12 @@ class Stage1FindCompanies {
     const minCompanies = 5;
     const maxCompanies = 15;  // Уменьшено с 50 до 15 для оптимизации
 
+    this.logger.info('Stage 1: Starting query processing', {
+      query: searchQuery,
+      minCompanies,
+      maxCompanies
+    });
+
     // Создать промпт для Sonar
     const prompt = this._createPrompt(searchQuery, minCompanies, maxCompanies);
 
@@ -150,6 +186,12 @@ class Stage1FindCompanies {
 
     // Парсить результат
     const companies = this._parseResponse(response);
+    
+    this.logger.info('Stage 1: AI response parsed', {
+      query: searchQuery,
+      companiesFound: companies.length,
+      meetsMinimum: companies.length >= minCompanies
+    });
     
     // Сохранить сырой ответ для каждой компании
     companies.forEach(company => {
@@ -176,6 +218,12 @@ class Stage1FindCompanies {
 
       const moreCompanies = this._parseResponse(retryResponse);
       
+      this.logger.info('Stage 1: Retry completed', {
+        query: searchQuery,
+        additionalCompanies: moreCompanies.length,
+        totalNow: companies.length + moreCompanies.length
+      });
+      
       // Сохранить сырой ответ для новых компаний
       moreCompanies.forEach(company => {
         company.rawResponse = retryResponse;
@@ -186,9 +234,10 @@ class Stage1FindCompanies {
       companies.push(...moreCompanies);
     }
 
-    this.logger.info('Stage 1: Query processed', { 
+    this.logger.info('Stage 1: Query processed successfully', { 
       query: searchQuery,
-      companiesFound: companies.length
+      companiesFound: companies.length,
+      hadRetry: companies.length > 0 && companies.length < minCompanies
     });
 
     return companies;
@@ -223,7 +272,7 @@ ${searchQuery}
 - 提供CNC加工服务（对外接单）
 - 小批量定制加工
 - 可以加工客户提供的图纸
-- 员工50-500人的中小企业
+- 中小型制造企业
 
 对于每家公司，查找：
 1. **公司名称** - 完整的中文公司名称（必须是中文！例如：深圳市精密制造有限公司）
