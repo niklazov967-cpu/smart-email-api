@@ -203,9 +203,8 @@ try {
   };
   
   // Сервисы с правильными клиентами
-  // ВРЕМЕННО: QueryExpander использует Perplexity т.к. DeepSeek зависает (timeout/недоступен)
-  // TODO: Разобраться почему DeepSeek не отвечает и вернуть его для экономии
-  const queryExpander = new QueryExpander(sonarProClient, settingsManager, pool, logger);
+  // QueryExpander использует DeepSeek (дешево и быстро, теперь с логированием для диагностики)
+  const queryExpander = new QueryExpander(deepseekClient, settingsManager, pool, logger);
   const creditsTracker = new CreditsTracker(pool, logger);
   // CompanyValidator использует Perplexity Pro (нужен интернет для проверки)
   const companyValidator = new CompanyValidator(sonarProClient, settingsManager, pool, logger);

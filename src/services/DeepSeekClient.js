@@ -54,6 +54,14 @@ class DeepSeekClient {
       stage = 'unknown'
     } = options;
 
+    console.log(`\n🟢 DeepSeekClient.query() START`);
+    console.log(`   Stage: ${stage}`);
+    console.log(`   API Key exists: ${!!this.apiKey} (length: ${this.apiKey?.length || 0})`);
+    console.log(`   Model: ${this.model}`);
+    console.log(`   Prompt length: ${prompt?.length || 0} chars`);
+    console.log(`   Max tokens: ${maxTokens}`);
+    console.log(`   Temperature: ${temperature}`);
+
     // ВАЖНО: Проверка длины промпта (DeepSeek Chat имеет лимиты)
     const estimatedInputTokens = Math.ceil(prompt.length / 4); // Примерно 4 символа = 1 токен
     
@@ -63,6 +71,7 @@ class DeepSeekClient {
         estimatedTokens: estimatedInputTokens,
         stage
       });
+      console.log(`   ⚠️  WARNING: Prompt too long (${estimatedInputTokens} tokens), truncating...`);
       // Обрезать промпт до безопасного размера
       prompt = prompt.substring(0, 12000); // ~3000 токенов
     }
@@ -78,8 +87,13 @@ class DeepSeekClient {
     let lastError = null;
 
     while (attempt < this.maxRetries) {
+      attempt++;
+      console.log(`   🔄 DeepSeek Attempt ${attempt}/${this.maxRetries}`);
+      
       try {
         const startTime = Date.now();
+        
+        console.log(`   📤 Sending POST to ${this.baseUrl}/chat/completions`);
 
         const response = await axios.post(
           `${this.baseUrl}/chat/completions`,
@@ -114,6 +128,8 @@ class DeepSeekClient {
         
         const usage = response.data.usage;
 
+        console.log(`   ✅ DeepSeek SUCCESS! Got response (${finalContent?.length || 0} chars, ${usage.total_tokens} tokens)`);
+
         // Debug: логируем структуру ответа
         this.logger.debug('DeepSeekClient: Response structure', {
           hasContent: !!content,
@@ -135,8 +151,10 @@ class DeepSeekClient {
         return finalContent;
 
       } catch (error) {
-        attempt++;
         lastError = error;
+        
+        console.log(`   ❌ DeepSeek ERROR: ${error.message}`);
+        console.log(`   HTTP Status: ${error.response?.status || 'N/A'}`);
 
         this.logger.warn('DeepSeekClient: Query failed', {
           stage,
