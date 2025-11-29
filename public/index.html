@@ -1,868 +1,1018 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Email API - Портал сбора и обработки контактов</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Email API - Портал сбора и обработки контактов</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
 
-        .header {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-            text-align: center;
-            position: relative;
-        }
+    .header {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      position: relative;
+    }
 
-        .logout-btn {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: #ef4444;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
+    .header h1 {
+      color: #667eea;
+      margin-bottom: 10px;
+      font-size: 2.5em;
+    }
 
-        .logout-btn:hover {
-            background: #dc2626;
-        }
+    .header p {
+      color: #666;
+      font-size: 1.1em;
+    }
 
-        .header h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
+    .status {
+      display: inline-block;
+      padding: 5px 15px;
+      background: #10b981;
+      color: white;
+      border-radius: 20px;
+      margin-top: 10px;
+      font-size: 0.9em;
+    }
 
-        .header p {
-            color: #666;
-            font-size: 1.1em;
-        }
+    .version {
+      margin-top: 15px;
+      color: #999;
+      font-size: 0.9em;
+    }
 
-        .status {
-            display: inline-block;
-            padding: 5px 15px;
-            background: #10b981;
-            color: white;
-            border-radius: 20px;
-            margin-top: 10px;
-            font-size: 0.9em;
-        }
+    .header-buttons {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
 
-        .card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            margin-bottom: 20px;
-        }
+    .logout-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
 
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        }
+    .logout-btn:hover {
+      background: #dc2626;
+    }
 
-        .card h2 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 1.5em;
-        }
+    .stage-card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
 
-        .button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: all 0.3s ease;
-            margin: 5px;
-            position: relative;
-        }
+    .stage-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #f0f0f0;
+    }
 
-        .button:hover {
-            background: #5568d3;
-        }
+    .stage-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+    }
 
-        .button:active {
-            transform: scale(0.98);
-        }
+    .stage-badge {
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+    }
 
-        .button.loading {
-            background: #9ca3af;
-            cursor: wait;
-            pointer-events: none;
-        }
+    .badge-ready {
+      background: #d4edda;
+      color: #155724;
+    }
 
-        .button.loading::after {
-            content: "";
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 16px;
-            height: 16px;
-            border: 2px solid #fff;
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spinner 0.6s linear infinite;
-        }
+    .badge-empty {
+      background: #f8f9fa;
+      color: #6c757d;
+    }
 
-        @keyframes spinner {
-            to { transform: translateY(-50%) rotate(360deg); }
-        }
+    .badge-running {
+      background: #fff3cd;
+      color: #856404;
+    }
 
-        .button.secondary {
-            background: #6b7280;
-        }
+    .companies-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
 
-        .button.secondary:hover {
-            background: #4b5563;
-        }
+    .stat-box {
+      padding: 15px;
+      border-radius: 8px;
+      background: #f8f9fa;
+    }
 
-        .input-group {
-            margin: 15px 0;
-        }
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
 
-        .input-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #374151;
-            font-weight: 500;
-        }
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+    }
 
-        .input-group input,
-        .input-group select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 1em;
-        }
+    .companies-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
 
-        .input-group input:focus,
-        .input-group select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+    .company-item {
+      padding: 10px;
+      margin-bottom: 8px;
+      background: white;
+      border-radius: 6px;
+      font-size: 14px;
+    }
 
-        .footer {
-            text-align: center;
-            color: white;
-            margin-top: 30px;
-            opacity: 0.9;
-        }
-    </style>
+    .company-name {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .company-info {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      color: white;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .button-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .button-success {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+
+    .button-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+
+    .button-secondary {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    }
+
+    .status-message {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+
+    .status-success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .status-info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+
+    .input-group {
+      margin: 15px 0;
+    }
+
+    .input-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .input-group input, .input-group textarea, .input-group select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .input-group input:focus, .input-group textarea:focus, .input-group select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .queries-list {
+      margin-top: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .query-item {
+      background: #f8f9fa;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    .query-item:hover {
+      border-color: #667eea;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    .query-item.selected {
+      border-color: #667eea;
+      background: #f0f4ff;
+    }
+
+    .query-checkbox {
+      width: 20px;
+      height: 20px;
+      margin-right: 15px;
+      cursor: pointer;
+    }
+
+    .query-content {
+      flex: 1;
+    }
+
+    .query-cn {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .query-ru {
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <button class="logout-btn" onclick="logout()">🚪 Выйти</button>
-            <h1>🚀 Smart Email API</h1>
-            <p>Портал сбора и обработки контактов китайских производителей</p>
-            <span class="status" id="status">● Работает</span>
-            <p style="margin-top: 15px; color: #999;">Версия 1.3.0 | DeepSeek + Perplexity Integration (48% экономии)</p>
-            <div style="margin-top: 15px;">
-                <button onclick="clearDatabase()" style="background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
-                    🗑️ Очистить базу данных
-                </button>
-            </div>
-        </div>
-
-        <!-- Quick Start Instructions -->
-        <div class="card" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 5px solid #4caf50;">
-            <h2 style="color: #2e7d32;">📋 Быстрый старт</h2>
-            <div style="color: #1b5e20; line-height: 1.8;">
-                <p style="margin-bottom: 15px; font-weight: 600;">🎯 <strong>РЕКОМЕНДУЕМ:</strong> Используйте Единую панель управления для упрощенной работы!</p>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin: 20px 0;">
-                    <a href="/dashboard.html" style="display: block; text-decoration: none;">
-                        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s; height: 100%;">
-                            <h3 style="color: #667eea; margin-bottom: 10px;">📊 Единая панель управления</h3>
-                            <p style="color: #666; margin-bottom: 10px;">Все шаги в одном месте с автоматическими переходами</p>
-                            <span style="background: #667eea; color: white; padding: 8px 16px; border-radius: 5px; font-weight: 600; display: inline-block;">→ Открыть Dashboard</span>
-                        </div>
-                    </a>
-                    
-                    <a href="/step-by-step.html" style="display: block; text-decoration: none;">
-                        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s; height: 100%;">
-                            <h3 style="color: #10b981; margin-bottom: 10px;">👣 Пошаговая обработка</h3>
-                            <p style="color: #666; margin-bottom: 10px;">Контроль каждого этапа с подтверждением результатов</p>
-                            <span style="background: #10b981; color: white; padding: 8px 16px; border-radius: 5px; font-weight: 600; display: inline-block;">→ Запустить пошагово</span>
-                        </div>
-                    </a>
-                </div>
-
-                <p style="margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.5); border-radius: 5px;">
-                    <strong>Или используйте ручной режим:</strong>
-                </p>
-
-                <ol style="margin-left: 25px;">
-                    <li style="margin-bottom: 10px;">
-                        <strong>Сгенерируйте запросы:</strong> Перейдите на страницу 
-                        <a href="/queries.html" style="color: #1565c0; text-decoration: underline;">"Управление запросами"</a>, 
-                        введите тему и получите 10-50 под-запросов
-                    </li>
-                    <li style="margin-bottom: 10px;">
-                        <strong>Выберите и сохраните:</strong> Отметьте нужные запросы и нажмите "Сохранить"
-                    </li>
-                    <li style="margin-bottom: 10px;">
-                        <strong>Запустите обработку:</strong> Выберите сессию из списка ниже и нажмите "Запустить"
-                    </li>
-                    <li style="margin-bottom: 10px;">
-                        <strong>Следите за прогрессом:</strong> Откроется страница мониторинга в реальном времени
-                    </li>
-                </ol>
-                
-                <p style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.7); border-radius: 5px;">
-                    💡 <strong>Совет:</strong> Обработка 10 компаний занимает 5-10 минут. Используйте 
-                    <a href="/progress.html" style="color: #1565c0; text-decoration: underline;">"Прогресс обработки"</a> для мониторинга
-                </p>
-            </div>
-        </div>
-
-        <!-- Main Action Buttons -->
-        <div class="card">
-            <h2 style="color: #667eea; margin-bottom: 20px;">🎯 Управление обработкой</h2>
-            
-            <div class="input-group">
-                <label>Выберите сессию для обработки:</label>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <select id="processSessionId" style="flex: 1;">
-                        <option value="">-- Загрузка сессий... --</option>
-                    </select>
-                    <button class="button secondary" onclick="loadSessions()" style="white-space: nowrap;">🔄 Обновить</button>
-                </div>
-                
-                <!-- Расширенная информация о сессии -->
-                <div id="sessionInfo" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; display: none;">
-                    <p style="margin-bottom: 8px;"><strong>Запрос:</strong> <span id="sessionQuery" style="color: #667eea;"></span></p>
-                    <p style="margin-bottom: 8px;"><strong>Статус:</strong> <span id="sessionStatus"></span></p>
-                    <p style="margin-bottom: 8px;"><strong>Создано:</strong> <span id="sessionDate"></span></p>
-                    
-                    <!-- Статистика по компаниям -->
-                    <div id="companiesStats" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 2px solid #e0e0e0;">
-                        <h4 style="margin: 0 0 10px 0; color: #667eea;">📊 Найденные компании:</h4>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">
-                            <div style="padding: 10px; background: #f0f9ff; border-radius: 5px;">
-                                <div style="font-size: 24px; font-weight: bold; color: #0284c7;" id="totalCompanies">0</div>
-                                <div style="font-size: 12px; color: #666;">Всего найдено</div>
-                            </div>
-                            <div style="padding: 10px; background: #fef3c7; border-radius: 5px;">
-                                <div style="font-size: 24px; font-weight: bold; color: #d97706;" id="unprocessedCompanies">0</div>
-                                <div style="font-size: 12px; color: #666;">Необработано</div>
-                            </div>
-                            <div style="padding: 10px; background: #dcfce7; border-radius: 5px;">
-                                <div style="font-size: 24px; font-weight: bold; color: #16a34a;" id="completedCompanies">0</div>
-                                <div style="font-size: 12px; color: #666;">Обработано</div>
-                            </div>
-                        </div>
-                        
-                        <!-- Список необработанных компаний -->
-                        <div id="unprocessedList" style="display: none;">
-                            <h5 style="margin: 10px 0; color: #d97706;">⏳ Компании ожидающие обработки:</h5>
-                            <div id="unprocessedCompaniesContainer" style="max-height: 200px; overflow-y: auto; padding: 10px; background: #fffbeb; border-radius: 5px;">
-                                <!-- Список будет заполнен динамически -->
-                            </div>
-                        </div>
-                        
-                        <!-- Кнопка Stage 2 -->
-                        <div id="stage2ButtonContainer" style="display: none; margin-top: 15px;">
-                            <button onclick="runStage2()" class="button" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); width: 100%;">
-                                🌐 Запустить Stage 2: Поиск сайтов
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <button id="processBtn" class="button" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                🚀 Запустить обработку
-            </button>
-            
-            <!-- Кнопка повторного поиска email с DeepSeek -->
-            <button id="retryEmailBtn" class="button" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); margin-top: 10px;">
-                🔄 Повторный поиск email (DeepSeek)
-            </button>
-
-            <div id="retryEmailStatus" style="display: none; margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
-                <div id="retryEmailMessage"></div>
-            </div>
-            
-            <div style="margin-top: 20px;">
-                <a href="/dashboard.html" style="display: inline-block; text-decoration: none;">
-                    <button class="button" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                        📊 Единая панель (Dashboard)
-                    </button>
-                </a>
-                
-                <a href="/results.html" style="display: inline-block; text-decoration: none;">
-                    <button class="button" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
-                        📧 Просмотр результатов
-                    </button>
-                </a>
-                
-                <a href="/queries.html" style="display: inline-block; text-decoration: none;">
-                    <button class="button" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                        🔍 Управление запросами
-                    </button>
-                </a>
-                
-                <a href="/progress.html" style="display: inline-block; text-decoration: none;">
-                    <button class="button" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
-                        📊 Прогресс обработки
-                    </button>
-                </a>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p>Smart Email API © 2025 | Powered by DeepSeek + Perplexity Sonar</p>
-            <p style="margin-top: 10px; font-size: 0.9em;">
-                <a href="/" style="color: white;">http://localhost:3030</a>
-            </p>
-        </div>
+  <div class="container">
+    <div class="header">
+      <button onclick="logout()" class="logout-btn">🚪 Выйти</button>
+      <h1>🚀 Smart Email API</h1>
+      <p>Портал сбора и обработки контактов китайских производителей</p>
+      <span class="status">● Работает</span>
+      <p class="version">Версия 1.3.0 | DeepSeek + Perplexity Integration (48% экономии)</p>
+      <div class="header-buttons">
+        <button onclick="clearDatabase()" class="button button-danger">
+          🗑️ Очистить базу данных
+        </button>
+        <a href="/results.html" style="text-decoration: none;">
+          <button class="button button-success">
+            📧 Просмотр результатов
+          </button>
+        </a>
+      </div>
     </div>
 
-    <script>
-        async function clearDatabase() {
-            const confirmed = confirm(
-                '⚠️ ВНИМАНИЕ!\n\n' +
-                'Это действие удалит ВСЕ данные:\n' +
-                '• Все сессии\n' +
-                '• Все запросы\n' +
-                '• Все найденные компании\n' +
-                '• Весь прогресс обработки\n' +
-                '• Весь кеш API\n\n' +
-                'Это действие НЕОБРАТИМО!\n\n' +
-                'Вы уверены?'
-            );
+    <!-- Этап 0: Генерация запросов -->
+    <div class="stage-card">
+      <div class="stage-header">
+        <div class="stage-title">🔍 Шаг 0: Генерация поисковых запросов</div>
+      </div>
 
-            if (!confirmed) return;
+      <div class="input-group">
+        <label>Введите основную тему для генерации под-запросов:</label>
+        <textarea id="mainTopic" rows="3" placeholder="Например: Производители деталей для обработки металла в Китае"></textarea>
+      </div>
 
-            const doubleConfirmed = confirm(
-                '🔴 ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!\n\n' +
-                'Все данные будут безвозвратно удалены.\n\n' +
-                'Продолжить?'
-            );
+      <div class="input-group">
+        <label>Количество под-запросов (10-50):</label>
+        <input type="number" id="numQueries" value="10" min="10" max="50">
+      </div>
 
-            if (!doubleConfirmed) return;
+      <button class="button button-primary" onclick="generateQueries()">
+        ✨ Сгенерировать запросы
+      </button>
 
-            try {
-                const response = await fetch('/api/sessions/clear-all', {
-                    method: 'DELETE'
-                });
+      <div id="generationStatus" style="display: none;"></div>
 
-                const data = await response.json();
+      <!-- Список сгенерированных запросов -->
+      <div id="queriesSection" style="display: none;">
+        <h3 style="margin: 20px 0 10px; color: #667eea;">📝 Выберите запросы для обработки:</h3>
+        <div style="margin-bottom: 15px;">
+          <button class="button button-success" onclick="selectAllQueries(true)">✅ Выбрать все</button>
+          <button class="button button-danger" onclick="selectAllQueries(false)">❌ Снять все</button>
+          <span style="margin-left: 15px; color: #666;">
+            Выбрано: <strong id="selectedCount">0</strong> запросов
+          </span>
+        </div>
+        <div id="queriesList" class="queries-list"></div>
+        
+        <button class="button button-success" onclick="saveSelectedQueries()" style="margin-top: 20px;">
+          💾 Сохранить выбранные запросы и создать сессию
+        </button>
+      </div>
+    </div>
 
-                if (data.success) {
-                    alert('✅ База данных успешно очищена!\n\nСтраница будет перезагружена.');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
-                } else {
-                    alert('❌ Ошибка при очистке: ' + data.error);
-                }
-            } catch (error) {
-                alert('❌ Ошибка: ' + error.message);
-            }
+    <!-- Stage 1: Поиск компаний -->
+    <div class="stage-card" id="stage1Card">
+      <div class="stage-header">
+        <div class="stage-title">🏢 Stage 1: Поиск компаний</div>
+        <div class="stage-badge badge-ready" id="stage1Badge">Готово к запуску</div>
+      </div>
+
+      <div class="input-group">
+        <label>Выберите сессию для поиска компаний:</label>
+        <select id="stage1SessionSelect">
+          <option value="">-- Сначала создайте сессию выше --</option>
+        </select>
+      </div>
+
+      <div id="stage1SessionInfo" style="display: none; padding: 15px; background: #f0f4ff; border-radius: 8px; margin: 15px 0;">
+        <p style="margin-bottom: 8px;"><strong>Запросов в сессии:</strong> <span id="stage1QueriesCount">0</span></p>
+        <p style="margin-bottom: 8px;"><strong>Статус:</strong> <span id="stage1SessionStatus"></span></p>
+      </div>
+
+      <button class="button button-primary" id="stage1Btn" onclick="runStage1()" disabled>
+        🚀 Запустить Stage 1
+      </button>
+
+      <div id="stage1Status" style="display: none;"></div>
+    </div>
+
+    <!-- Stage 2: Поиск сайтов -->
+    <div class="stage-card" id="stage2Card">
+      <div class="stage-header">
+        <div class="stage-title">🌐 Stage 2: Поиск сайтов</div>
+        <div class="stage-badge badge-ready" id="stage2Badge">Готово к обработке</div>
+      </div>
+
+      <div class="companies-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="stage2Count">-</div>
+          <div class="stat-label">Компаний без сайта</div>
+        </div>
+      </div>
+
+      <div id="stage2Companies" class="companies-list" style="display: none;"></div>
+
+      <button class="button button-primary" id="stage2Btn" onclick="runStage(2)">
+        🚀 Запустить Stage 2
+      </button>
+
+      <div id="stage2Status" style="display: none;"></div>
+    </div>
+
+    <!-- Stage 3: Поиск email -->
+    <div class="stage-card" id="stage3Card">
+      <div class="stage-header">
+        <div class="stage-title">📧 Stage 3: Поиск email</div>
+        <div class="stage-badge badge-ready" id="stage3Badge">Готово к обработке</div>
+      </div>
+
+      <div class="companies-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="stage3Count">-</div>
+          <div class="stat-label">Компаний без email</div>
+        </div>
+      </div>
+
+      <div id="stage3Companies" class="companies-list" style="display: none;"></div>
+
+      <button class="button button-primary" id="stage3Btn" onclick="runStage(3)">
+        🚀 Запустить Stage 3
+      </button>
+
+      <div id="stage3Status" style="display: none;"></div>
+    </div>
+
+    <!-- Stage 4: AI Валидация -->
+    <div class="stage-card" id="stage4Card">
+      <div class="stage-header">
+        <div class="stage-title">🤖 Stage 4: AI Валидация</div>
+        <div class="stage-badge badge-ready" id="stage4Badge">Готово к обработке</div>
+      </div>
+
+      <div class="companies-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="stage4Count">-</div>
+          <div class="stat-label">Компаний для валидации</div>
+        </div>
+      </div>
+
+      <div id="stage4Companies" class="companies-list" style="display: none;"></div>
+
+      <button class="button button-primary" id="stage4Btn" onclick="runStage(4)">
+        🚀 Запустить Stage 4
+      </button>
+
+      <div id="stage4Status" style="display: none;"></div>
+    </div>
+
+    <!-- Итоговая статистика -->
+    <div class="stage-card">
+      <div class="stage-header">
+        <div class="stage-title">✅ Готовые компании</div>
+      </div>
+
+      <div class="companies-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="completedCount">-</div>
+          <div class="stat-label">Прошли все этапы</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="totalInDb">-</div>
+          <div class="stat-label">Всего в базе</div>
+        </div>
+      </div>
+
+      <p style="color: #666; margin-top: 15px;">
+        Компании прошедшие все этапы доступны на 
+        <a href="/results.html" style="color: #667eea; font-weight: 600;">странице результатов</a>.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align: center; color: white; margin-top: 30px; opacity: 0.9;">
+      <p>Smart Email API © 2025 | Powered by DeepSeek + Perplexity Sonar</p>
+    </div>
+  </div>
+
+  <script>
+    let isProcessing = false;
+    let generatedQueries = [];
+    let createdSessionId = null;
+
+    // Загрузить статистику при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStatistics();
+      loadSessions();
+      
+      // Обновлять каждые 10 секунд
+      setInterval(() => {
+        if (!isProcessing) {
+          loadStatistics();
         }
+      }, 10000);
+    });
 
-        async function processSession(event) {
-            console.log('=== processSession START ===');
-            
-            const sessionSelect = document.getElementById('processSessionId');
-            const sessionId = sessionSelect.value.trim();
-            console.log('Session ID:', sessionId);
+    async function generateQueries() {
+      const topic = document.getElementById('mainTopic').value.trim();
+      const numQueries = parseInt(document.getElementById('numQueries').value);
+      const statusDiv = document.getElementById('generationStatus');
 
-            if (!sessionId) {
-                console.warn('No session ID provided');
-                alert('Выберите сессию из списка');
-                return;
-            }
+      if (!topic) {
+        alert('Пожалуйста, введите тему для генерации запросов');
+        return;
+      }
 
-            // Get button element
-            const button = event.target;
-            console.log('Button clicked:', button.textContent);
+      if (numQueries < 10 || numQueries > 50) {
+        alert('Количество запросов должно быть от 10 до 50');
+        return;
+      }
 
-            // Show loading state
-            button.classList.add('loading');
-            button.disabled = true;
-            const originalText = button.textContent;
-            button.textContent = '⏳ Запускается...';
+      statusDiv.style.display = 'block';
+      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Генерируем запросы...</div>';
 
-            try {
-                console.log('Sending POST request to /api/sessions/' + sessionId + '/process');
-                
-                const res = await fetch(`/api/sessions/${sessionId}/process`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                console.log('Response status:', res.status);
-                const data = await res.json();
-                console.log('Response data:', data);
-
-                if (data.success) {
-                    alert('✅ Обработка запущена! Перенаправление на прогресс...');
-                    
-                    // Auto-redirect to progress page after 1 second
-                    console.log('Redirecting to progress page...');
-                    setTimeout(() => {
-                        window.location.href = `/progress.html?session=${sessionId}`;
-                    }, 1000);
-                } else {
-                    console.error('Error from API:', data.error);
-                    alert('❌ Ошибка: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Exception during processSession:', error);
-                alert('❌ Ошибка: ' + error.message);
-            } finally {
-                // Restore button state
-                button.classList.remove('loading');
-                button.disabled = false;
-                button.textContent = originalText;
-                console.log('=== processSession END ===');
-            }
-        }
-
-        async function loadSessions() {
-            console.log('Loading sessions...');
-            const select = document.getElementById('processSessionId');
-            const sessionInfo = document.getElementById('sessionInfo');
-            
-            select.innerHTML = '<option value="">⏳ Загрузка...</option>';
-            sessionInfo.style.display = 'none';
-            
-            try {
-                // Загрузить сессии
-                const response = await fetch('/api/sessions?limit=100');
-                const data = await response.json();
-                
-                if (!data.success || data.data.length === 0) {
-                    select.innerHTML = '<option value="">Нет доступных сессий</option>';
-                    console.warn('No sessions found');
-                    return;
-                }
-                
-                // Загрузить статистику по компаниям для каждой сессии
-                const sessionsWithStats = await Promise.all(
-                    data.data.map(async (session) => {
-                        try {
-                            const companiesRes = await fetch(`/api/debug/companies`);
-                            const companiesData = await companiesRes.json();
-                            
-                            // Фильтровать компании этой сессии
-                            const sessionCompanies = companiesData.companies?.filter(
-                                c => c.session_id === session.session_id
-                            ) || [];
-                            
-                            // Подсчитать необработанные (current_stage < 4 ИЛИ stage4_status = NULL)
-                            const unprocessed = sessionCompanies.filter(
-                                c => (c.current_stage || 0) < 4 || c.stage4_status === null
-                            ).length;
-                            
-                            return {
-                                ...session,
-                                totalCompanies: sessionCompanies.length,
-                                unprocessedCount: unprocessed,
-                                processedCount: sessionCompanies.length - unprocessed
-                            };
-                        } catch (err) {
-                            console.error('Failed to load stats for session:', session.session_id, err);
-                            return { ...session, totalCompanies: 0, unprocessedCount: 0, processedCount: 0 };
-                        }
-                    })
-                );
-                
-                select.innerHTML = '<option value="">-- Выберите сессию --</option>';
-                
-                sessionsWithStats.forEach(session => {
-                    const option = document.createElement('option');
-                    option.value = session.session_id;
-                    
-                    const date = new Date(session.created_at).toLocaleDateString('ru-RU');
-                    const status = session.status === 'pending' ? '⏳' : 
-                                 session.status === 'processing' ? '🔄' :
-                                 session.status === 'completed' ? '✅' : '❌';
-                    
-                    // Добавить количество необработанных в название
-                    let displayText = `${status} ${session.search_query} (${date})`;
-                    if (session.totalCompanies > 0) {
-                        displayText += ` | ${session.unprocessedCount} необраб.`;
-                    }
-                    
-                    option.textContent = displayText;
-                    option.dataset.query = session.search_query;
-                    option.dataset.status = session.status;
-                    option.dataset.date = session.created_at;
-                    option.dataset.totalCompanies = session.totalCompanies;
-                    option.dataset.unprocessedCount = session.unprocessedCount;
-                    option.dataset.processedCount = session.processedCount;
-                    
-                    select.appendChild(option);
-                });
-                
-                console.log(`Loaded ${sessionsWithStats.length} sessions with stats`);
-            } catch (error) {
-                console.error('Failed to load sessions:', error);
-                select.innerHTML = '<option value="">Ошибка загрузки</option>';
-            }
-        }
-
-        async function updateSessionInfo() {
-            const select = document.getElementById('processSessionId');
-            const sessionInfo = document.getElementById('sessionInfo');
-            const companiesStats = document.getElementById('companiesStats');
-            const selectedOption = select.options[select.selectedIndex];
-            
-            if (!selectedOption || !selectedOption.value) {
-                sessionInfo.style.display = 'none';
-                return;
-            }
-            
-            const sessionId = selectedOption.value;
-            
-            // Обновить базовую информацию
-            document.getElementById('sessionQuery').textContent = selectedOption.dataset.query || 'N/A';
-            
-            const statusMap = {
-                'pending': '⏳ Ожидание',
-                'processing': '🔄 Обработка',
-                'completed': '✅ Завершена',
-                'failed': '❌ Ошибка'
-            };
-            document.getElementById('sessionStatus').textContent = statusMap[selectedOption.dataset.status] || selectedOption.dataset.status;
-            
-            const date = new Date(selectedOption.dataset.date);
-            document.getElementById('sessionDate').textContent = date.toLocaleString('ru-RU');
-            
-            sessionInfo.style.display = 'block';
-            
-            // Показать статистику если есть компании
-            const totalCompanies = parseInt(selectedOption.dataset.totalCompanies) || 0;
-            
-            if (totalCompanies > 0) {
-                companiesStats.style.display = 'block';
-                
-                const unprocessed = parseInt(selectedOption.dataset.unprocessedCount) || 0;
-                const processed = parseInt(selectedOption.dataset.processedCount) || 0;
-                
-                document.getElementById('totalCompanies').textContent = totalCompanies;
-                document.getElementById('unprocessedCompanies').textContent = unprocessed;
-                document.getElementById('completedCompanies').textContent = processed;
-                
-                // Проверить есть ли компании только на стадии names_found (ждут Stage 2)
-                const needsStage2 = await checkCompaniesNeedStage2(sessionId);
-                
-                if (unprocessed > 0 && needsStage2.hasCompaniesForStage2) {
-                    // Есть компании ожидающие Stage 2
-                    await loadUnprocessedCompanies(sessionId);
-                    document.getElementById('unprocessedList').style.display = 'block';
-                    document.getElementById('stage2ButtonContainer').style.display = 'block';
-                } else if (unprocessed > 0 && !needsStage2.hasCompaniesForStage2) {
-                    // Все компании уже обработаны Stage 2+
-                    document.getElementById('unprocessedList').style.display = 'block';
-                    document.getElementById('unprocessedList').innerHTML = `
-                        <div style="padding: 15px; background: #fef2f2; border-radius: 5px; border-left: 4px solid #ef4444;">
-                            <h5 style="margin: 0 0 10px 0; color: #dc2626;">
-                                ✅ Все компании уже обработаны Stage 2+
-                            </h5>
-                            <p style="margin: 0; color: #991b1b; font-size: 14px;">
-                                Все ${totalCompanies} компаний в этой сессии уже были обработаны этапами 2, 3 или 4.
-                            </p>
-                            <p style="margin: 10px 0 0 0; color: #991b1b; font-size: 14px; font-weight: 600;">
-                                📝 Для продолжения работы создайте новую сессию через 
-                                <a href="/queries.html" style="color: #dc2626; text-decoration: underline;">Управление запросами</a>
-                            </p>
-                        </div>
-                    `;
-                    document.getElementById('stage2ButtonContainer').style.display = 'none';
-                } else {
-                    // Все обработано
-                    document.getElementById('unprocessedList').style.display = 'none';
-                    document.getElementById('stage2ButtonContainer').style.display = 'none';
-                }
-            } else {
-                companiesStats.style.display = 'none';
-            }
-        }
-
-        async function checkCompaniesNeedStage2(sessionId) {
-            try {
-                const response = await fetch(`/api/debug/companies`);
-                const data = await response.json();
-                
-                // Фильтровать компании этой сессии
-                const sessionCompanies = data.companies?.filter(
-                    c => c.session_id === sessionId
-                ) || [];
-                
-                // Компании на стадии names_found (ждут Stage 2)
-                const needsStage2 = sessionCompanies.filter(
-                    c => c.stage === 'names_found' && !c.website
-                );
-                
-                // Компании уже обработанные Stage 2+ (имеют website_found, contacts_found, completed, etc)
-                const alreadyProcessed = sessionCompanies.filter(
-                    c => c.stage && c.stage !== 'names_found'
-                );
-                
-                return {
-                    hasCompaniesForStage2: needsStage2.length > 0,
-                    needsStage2Count: needsStage2.length,
-                    alreadyProcessedCount: alreadyProcessed.length,
-                    totalCount: sessionCompanies.length
-                };
-            } catch (error) {
-                console.error('Failed to check companies stage:', error);
-                return {
-                    hasCompaniesForStage2: false,
-                    needsStage2Count: 0,
-                    alreadyProcessedCount: 0,
-                    totalCount: 0
-                };
-            }
-        }
-
-        async function loadUnprocessedCompanies(sessionId) {
-            try {
-                const response = await fetch(`/api/debug/companies`);
-                const data = await response.json();
-                
-                // Фильтровать компании этой сессии которые ждут Stage 2
-                const needsStage2 = data.companies?.filter(
-                    c => c.session_id === sessionId && c.stage === 'names_found' && !c.website
-                ) || [];
-                
-                const container = document.getElementById('unprocessedCompaniesContainer');
-                
-                if (needsStage2.length === 0) {
-                    container.innerHTML = '<p style="color: #666;">Нет компаний ожидающих Stage 2</p>';
-                    return;
-                }
-                
-                // Добавить заголовок
-                let html = `
-                    <div style="margin-bottom: 10px; padding: 10px; background: #fff7ed; border-radius: 5px;">
-                        <strong style="color: #ea580c;">
-                            ⏳ ${needsStage2.length} компаний ожидают поиска сайтов (Stage 2)
-                        </strong>
-                    </div>
-                `;
-                
-                html += needsStage2.map((company, index) => {
-                    const hasEmail = company.email ? '📧' : '❌';
-                    
-                    return `
-                        <div style="padding: 8px; margin-bottom: 5px; background: white; border-radius: 5px; border-left: 3px solid #f59e0b;">
-                            <div style="font-weight: 600; color: #333;">${index + 1}. ${company.company_name}</div>
-                            <div style="font-size: 12px; color: #666; margin-top: 3px;">
-                                ❌ Сайт не найден | ${hasEmail} Email | 🎯 Ожидает: Stage 2
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-                
-                container.innerHTML = html;
-            } catch (error) {
-                console.error('Failed to load unprocessed companies:', error);
-                document.getElementById('unprocessedCompaniesContainer').innerHTML = 
-                    '<p style="color: #ef4444;">Ошибка загрузки компаний</p>';
-            }
-        }
-
-        async function runStage2() {
-            const select = document.getElementById('processSessionId');
-            const sessionId = select.value;
-            
-            if (!sessionId) {
-                alert('Выберите сессию');
-                return;
-            }
-            
-            const confirmed = confirm(
-                '🌐 Запустить Stage 2: Поиск сайтов?\n\n' +
-                'Будут обработаны компании без сайтов.'
-            );
-            
-            if (!confirmed) return;
-            
-            try {
-                const response = await fetch(`/api/sessions/${sessionId}/process-stage/2`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ force: false })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert('✅ Stage 2 запущен! Перенаправление на прогресс...');
-                    setTimeout(() => {
-                        window.location.href = `/progress.html?session=${sessionId}`;
-                    }, 1000);
-                } else {
-                    alert('❌ Ошибка: ' + data.error);
-                }
-            } catch (error) {
-                alert('❌ Ошибка: ' + error.message);
-            }
-        }
-
-        async function checkStatus() {
-            try {
-                const res = await fetch('/health');
-                const data = await res.json();
-                
-                if (data.status === 'OK') {
-                    document.getElementById('status').textContent = '● Работает';
-                    document.getElementById('status').style.background = '#10b981';
-                }
-            } catch (error) {
-                document.getElementById('status').textContent = '● Ошибка';
-                document.getElementById('status').style.background = '#ef4444';
-            }
-        }
-
-        checkStatus();
-        setInterval(checkStatus, 30000);
-
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('DOM loaded, attaching event listeners...');
-
-            const processBtn = document.getElementById('processBtn');
-            if (processBtn) {
-                processBtn.addEventListener('click', async (event) => {
-                    console.log('Process button clicked');
-                    await processSession(event);
-                });
-                console.log('Process button listener attached');
-            }
-
-            const processSessionSelect = document.getElementById('processSessionId');
-            if (processSessionSelect) {
-                processSessionSelect.addEventListener('change', updateSessionInfo);
-                console.log('Session select listener attached');
-            }
-
-            // Load sessions on page load
-            loadSessions();
-
-            console.log('All event listeners attached successfully');
+      try {
+        const response = await fetch('/api/queries/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, numQueries })
         });
 
-        // Функция выхода
-        async function logout() {
-            if (!confirm('Вы уверены, что хотите выйти?')) {
-                return;
-            }
+        const result = await response.json();
 
-            try {
-                const response = await fetch('/api/auth/logout', {
-                    method: 'POST'
-                });
+        if (result.success) {
+          generatedQueries = result.queries || [];
+          displayQueries(generatedQueries);
+          statusDiv.innerHTML = '<div class="status-message status-success">✅ Запросы успешно сгенерированы!</div>';
+          document.getElementById('queriesSection').style.display = 'block';
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Generation error:', error);
+        statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${error.message}</div>`;
+      }
+    }
 
-                const data = await response.json();
+    function displayQueries(queries) {
+      const container = document.getElementById('queriesList');
+      container.innerHTML = queries.map((q, idx) => `
+        <div class="query-item" id="query-${idx}">
+          <input type="checkbox" class="query-checkbox" id="checkbox-${idx}" 
+                 onchange="updateSelectedCount()" checked>
+          <div class="query-content">
+            <div class="query-cn">${q.query_cn || q.chinese_query || q.query}</div>
+            <div class="query-ru">${q.query_ru || q.russian_query || q.translation || ''}</div>
+          </div>
+        </div>
+      `).join('');
+      updateSelectedCount();
+    }
 
-                if (data.success) {
-                    // Редирект на страницу логина
-                    window.location.href = '/login.html';
-                } else {
-                    alert('Ошибка при выходе');
-                }
-            } catch (error) {
-                console.error('Logout error:', error);
-                alert('Ошибка при выходе');
-            }
+    function selectAllQueries(checked) {
+      const checkboxes = document.querySelectorAll('.query-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = checked;
+        const item = cb.closest('.query-item');
+        if (checked) {
+          item.classList.add('selected');
+        } else {
+          item.classList.remove('selected');
+        }
+      });
+      updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+      const checked = document.querySelectorAll('.query-checkbox:checked').length;
+      document.getElementById('selectedCount').textContent = checked;
+    }
+
+    async function saveSelectedQueries() {
+      const topic = document.getElementById('mainTopic').value.trim();
+      const checkboxes = document.querySelectorAll('.query-checkbox:checked');
+      
+      if (checkboxes.length === 0) {
+        alert('Выберите хотя бы один запрос');
+        return;
+      }
+
+      const selectedQueries = Array.from(checkboxes).map(cb => {
+        const idx = parseInt(cb.id.replace('checkbox-', ''));
+        return generatedQueries[idx];
+      });
+
+      const statusDiv = document.getElementById('generationStatus');
+      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Сохраняем запросы...</div>';
+
+      try {
+        const response = await fetch('/api/queries/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            mainTopic: topic,
+            queries: selectedQueries 
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          createdSessionId = result.sessionId;
+          statusDiv.innerHTML = `<div class="status-message status-success">
+            ✅ Сохранено ${selectedQueries.length} запросов! Сессия создана: ${result.sessionId}
+          </div>`;
+          
+          // Обновить список сессий и выбрать новую
+          await loadSessions();
+          document.getElementById('stage1SessionSelect').value = createdSessionId;
+          await updateStage1SessionInfo();
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Save error:', error);
+        statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${error.message}</div>`;
+      }
+    }
+
+    async function loadSessions() {
+      try {
+        const response = await fetch('/api/sessions');
+        const data = await response.json();
+        
+        if (data.success) {
+          const select = document.getElementById('stage1SessionSelect');
+          const currentValue = select.value;
+          
+          select.innerHTML = '<option value="">-- Выберите сессию --</option>';
+          
+          (data.sessions || []).forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.session_id;
+            option.textContent = `${session.main_topic} (${new Date(session.created_at).toLocaleDateString()})`;
+            select.appendChild(option);
+          });
+          
+          // Восстановить выбранное значение если было
+          if (currentValue && createdSessionId) {
+            select.value = createdSessionId;
+            updateStage1SessionInfo();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading sessions:', error);
+      }
+    }
+
+    async function updateStage1SessionInfo() {
+      const sessionId = document.getElementById('stage1SessionSelect').value;
+      const infoDiv = document.getElementById('stage1SessionInfo');
+      const btn = document.getElementById('stage1Btn');
+
+      if (!sessionId) {
+        infoDiv.style.display = 'none';
+        btn.disabled = true;
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}`);
+        const data = await response.json();
+
+        if (data.success) {
+          document.getElementById('stage1QueriesCount').textContent = data.session.queries_count || 0;
+          document.getElementById('stage1SessionStatus').textContent = data.session.status || 'новая';
+          infoDiv.style.display = 'block';
+          btn.disabled = false;
+        }
+      } catch (error) {
+        console.error('Error loading session info:', error);
+      }
+    }
+
+    // Обработчик изменения сессии
+    document.getElementById('stage1SessionSelect')?.addEventListener('change', updateStage1SessionInfo);
+
+    async function runStage1() {
+      const sessionId = document.getElementById('stage1SessionSelect').value;
+      
+      if (!sessionId) {
+        alert('Выберите сессию');
+        return;
+      }
+
+      if (!confirm(`Запустить Stage 1 для выбранной сессии?`)) {
+        return;
+      }
+
+      const btn = document.getElementById('stage1Btn');
+      const statusDiv = document.getElementById('stage1Status');
+      const badge = document.getElementById('stage1Badge');
+
+      isProcessing = true;
+      btn.disabled = true;
+      btn.textContent = '⏳ Обработка...';
+      badge.textContent = 'Обработка...';
+      badge.className = 'stage-badge badge-running';
+      statusDiv.style.display = 'block';
+      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Ищем компании...</div>';
+
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}/stage1`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          statusDiv.innerHTML = `
+            <div class="status-message status-success">
+              ✅ <strong>Stage 1 завершен!</strong><br>
+              Найдено компаний: ${result.total || 0}
+            </div>
+          `;
+          
+          // Обновить статистику
+          setTimeout(() => loadStatistics(), 1000);
+        } else {
+          throw new Error(result.error || 'Unknown error');
         }
 
-        // Обработчик для кнопки повторного поиска email
-        document.getElementById('retryEmailBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('retryEmailBtn');
-            const statusDiv = document.getElementById('retryEmailStatus');
-            const messageDiv = document.getElementById('retryEmailMessage');
-            
-            if (!confirm('⚠️ ВНИМАНИЕ!\n\n' +
-                'Это запустит повторный поиск email для ВСЕХ компаний без email используя DeepSeek.\n\n' +
-                'DeepSeek медленнее, но может найти email там, где Perplexity не нашел.\n\n' +
-                'Процесс может занять несколько минут.\n\n' +
-                'Продолжить?')) {
-                return;
-            }
-            
-            btn.disabled = true;
-            btn.textContent = '🔄 Поиск email...';
-            statusDiv.style.display = 'block';
-            messageDiv.innerHTML = '⏳ Запускаем повторный поиск с DeepSeek...';
-            
-            try {
-                const response = await fetch('/api/sessions/retry-email-search', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    messageDiv.innerHTML = `
-                        <div style="color: #28a745;">
-                            ✅ <strong>Повторный поиск завершен!</strong><br>
-                            📊 Обработано компаний: ${result.total}<br>
-                            📧 Email найдено: ${result.found}<br>
-                            ❌ Email не найдено: ${result.total - result.found}
-                        </div>
-                    `;
-                    
-                    // Обновить статистику
-                    await loadSessions();
-                } else {
-                    throw new Error(result.error || 'Unknown error');
-                }
-                
-            } catch (error) {
-                console.error('Retry email search error:', error);
-                messageDiv.innerHTML = `
-                    <div style="color: #dc3545;">
-                        ❌ <strong>Ошибка:</strong> ${error.message}
-                    </div>
-                `;
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '🔄 Повторный поиск email (DeepSeek)';
-            }
+      } catch (error) {
+        console.error('Stage 1 error:', error);
+        statusDiv.innerHTML = `
+          <div class="status-message status-error">
+            ❌ <strong>Ошибка:</strong> ${error.message}
+          </div>
+        `;
+      } finally {
+        isProcessing = false;
+        btn.textContent = '🚀 Запустить Stage 1';
+        btn.disabled = false;
+        setTimeout(() => {
+          loadStatistics();
+          badge.className = 'stage-badge badge-ready';
+          badge.textContent = 'Готово к запуску';
+        }, 2000);
+      }
+    }
+
+    async function loadStatistics() {
+      try {
+        const response = await fetch('/api/debug/data');
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error('Failed to load data');
+        }
+
+        const companies = data.data.pending_companies?.items || [];
+        
+        // Stage 2: компании без сайта, current_stage >= 1, stage2_status = NULL
+        const stage2Ready = companies.filter(c => 
+          (!c.website || c.website === '') &&
+          c.stage2_status === null &&
+          c.current_stage >= 1
+        );
+
+        // Stage 3: компании с сайтом, без email, current_stage >= 2, stage3_status = NULL
+        const stage3Ready = companies.filter(c =>
+          c.website &&
+          (!c.email || c.email === '') &&
+          c.stage3_status === null &&
+          c.current_stage >= 2
+        );
+
+        // Stage 4: компании с email, current_stage >= 3, stage4_status = NULL
+        const stage4Ready = companies.filter(c =>
+          c.current_stage >= 3 &&
+          c.stage4_status === null
+        );
+
+        // Готовые компании: current_stage = 4 и stage4_status != NULL
+        const completed = companies.filter(c =>
+          c.current_stage === 4 &&
+          c.stage4_status !== null
+        );
+
+        // Обновить счетчики
+        document.getElementById('stage2Count').textContent = stage2Ready.length;
+        document.getElementById('stage3Count').textContent = stage3Ready.length;
+        document.getElementById('stage4Count').textContent = stage4Ready.length;
+        document.getElementById('completedCount').textContent = completed.length;
+        document.getElementById('totalInDb').textContent = companies.length;
+
+        // Обновить бейджи и кнопки
+        updateStageBadge(2, stage2Ready.length);
+        updateStageBadge(3, stage3Ready.length);
+        updateStageBadge(4, stage4Ready.length);
+
+        // Показать списки компаний
+        displayCompanies(2, stage2Ready);
+        displayCompanies(3, stage3Ready);
+        displayCompanies(4, stage4Ready);
+
+      } catch (error) {
+        console.error('Error loading statistics:', error);
+      }
+    }
+
+    function updateStageBadge(stage, count) {
+      const badge = document.getElementById(`stage${stage}Badge`);
+      const btn = document.getElementById(`stage${stage}Btn`);
+      
+      if (count === 0) {
+        badge.textContent = 'Нет компаний';
+        badge.className = 'stage-badge badge-empty';
+        btn.disabled = true;
+      } else {
+        badge.textContent = `${count} ${getCompanyWord(count)}`;
+        badge.className = 'stage-badge badge-ready';
+        btn.disabled = false;
+      }
+    }
+
+    function displayCompanies(stage, companies) {
+      const container = document.getElementById(`stage${stage}Companies`);
+      
+      if (companies.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+
+      container.style.display = 'block';
+      container.innerHTML = companies.slice(0, 10).map(c => `
+        <div class="company-item">
+          <div class="company-name">${c.company_name}</div>
+          <div class="company-info">
+            ${c.website ? `🌐 ${c.website}` : '❌ Нет сайта'} | 
+            ${c.email ? `📧 ${c.email}` : '❌ Нет email'}
+          </div>
+        </div>
+      `).join('');
+
+      if (companies.length > 10) {
+        container.innerHTML += `<div class="company-item" style="text-align: center; color: #999;">
+          И еще ${companies.length - 10} компаний...
+        </div>`;
+      }
+    }
+
+    async function runStage(stageNum) {
+      if (isProcessing) {
+        alert('Обработка уже выполняется. Дождитесь завершения.');
+        return;
+      }
+
+      const btn = document.getElementById(`stage${stageNum}Btn`);
+      const statusDiv = document.getElementById(`stage${stageNum}Status`);
+      const badge = document.getElementById(`stage${stageNum}Badge`);
+
+      if (!confirm(`Запустить Stage ${stageNum} для всех готовых компаний?`)) {
+        return;
+      }
+
+      isProcessing = true;
+      btn.disabled = true;
+      btn.textContent = '⏳ Обработка...';
+      badge.textContent = 'Обработка...';
+      badge.className = 'stage-badge badge-running';
+      statusDiv.style.display = 'block';
+      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Начинаем обработку...</div>';
+
+      try {
+        let endpoint;
+        if (stageNum === 2) endpoint = '/api/sessions/global/stage2';
+        else if (stageNum === 3) endpoint = '/api/sessions/global/stage3';
+        else if (stageNum === 4) endpoint = '/api/sessions/global/stage4';
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
         });
-    </script>
+
+        const result = await response.json();
+
+        if (result.success) {
+          statusDiv.innerHTML = `
+            <div class="status-message status-success">
+              ✅ <strong>Stage ${stageNum} завершен!</strong><br>
+              ${getStageResultMessage(stageNum, result)}
+            </div>
+          `;
+          
+          // Обновить статистику
+          setTimeout(() => loadStatistics(), 1000);
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+
+      } catch (error) {
+        console.error(`Stage ${stageNum} error:`, error);
+        statusDiv.innerHTML = `
+          <div class="status-message status-error">
+            ❌ <strong>Ошибка:</strong> ${error.message}
+          </div>
+        `;
+      } finally {
+        isProcessing = false;
+        btn.textContent = `🚀 Запустить Stage ${stageNum}`;
+        setTimeout(() => loadStatistics(), 2000);
+      }
+    }
+
+    function getStageResultMessage(stage, result) {
+      if (stage === 2) {
+        return `Обработано: ${result.total || 0} | Найдено сайтов: ${result.found || 0}`;
+      } else if (stage === 3) {
+        return `Обработано: ${result.processed || 0} | Найдено email: ${result.found || 0}`;
+      } else if (stage === 4) {
+        return `Обработано: ${result.total || 0} | Валидировано: ${result.validated || 0} | Отклонено: ${result.rejected || 0}`;
+      }
+      return 'Завершено';
+    }
+
+    function getCompanyWord(count) {
+      const lastDigit = count % 10;
+      const lastTwoDigits = count % 100;
+      
+      if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+        return 'компаний';
+      }
+      if (lastDigit === 1) {
+        return 'компания';
+      }
+      if (lastDigit >= 2 && lastDigit <= 4) {
+        return 'компании';
+      }
+      return 'компаний';
+    }
+
+    async function clearDatabase() {
+      if (!confirm('⚠️ ВНИМАНИЕ! Это удалит ВСЕ данные из базы:\n\n- Все сессии\n- Все запросы\n- Все найденные компании\n- Весь прогресс обработки\n\nВы уверены?')) {
+        return;
+      }
+
+      if (!confirm('Это действие НЕОБРАТИМО! Вы точно уверены?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/sessions/clear-all', {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert(`✅ База данных очищена!\n\nОчищено таблиц: ${result.cleared_tables.length}`);
+          window.location.reload();
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Clear database error:', error);
+        alert(`❌ Ошибка при очистке базы: ${error.message}`);
+      }
+    }
+
+    async function logout() {
+      if (!confirm('Вы уверены, что хотите выйти?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/auth/logout', {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          window.location.href = '/login.html';
+        } else {
+          alert('Ошибка при выходе');
+        }
+      } catch (error) {
+        console.error('Logout error:', error);
+        alert('Ошибка при выходе');
+      }
+    }
+  </script>
 </body>
 </html>
