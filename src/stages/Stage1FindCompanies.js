@@ -81,9 +81,8 @@ class Stage1FindCompanies {
       // Нормализовать email и website (один домен = один адрес)
       const normalizedCompanies = this._normalizeCompanyData(filteredCompanies);
 
-      // Ограничить до максимума
-      const maxCompanies = 50;
-      const finalCompanies = normalizedCompanies.slice(0, maxCompanies);
+      // Сохранить ВСЕ компании без ограничения (уже заплатили за данные!)
+      const finalCompanies = normalizedCompanies;
 
       // Сохранить в БД (с сырыми данными и темой)
       await this._saveCompanies(finalCompanies, sessionId);
@@ -137,7 +136,7 @@ class Stage1FindCompanies {
    */
   async _processQuery(searchQuery, sessionId, topicDescription) {
     const minCompanies = 5;
-    const maxCompanies = 50;
+    const maxCompanies = 15;  // Уменьшено с 50 до 15 для оптимизации
 
     // Создать промпт для Sonar
     const prompt = this._createPrompt(searchQuery, minCompanies, maxCompanies);
