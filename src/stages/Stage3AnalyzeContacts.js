@@ -60,11 +60,25 @@ class Stage3AnalyzeContacts {
       }
 
       const successful = results.filter(r => r.success && r.emails.length > 0).length;
+      const failed = results.filter(r => !r.success || r.emails.length === 0).length;
+      const hadFallback = results.filter(r => r.hadFallback).length;
 
       this.logger.info('Stage 3: Completed', {
         total: companies.length,
         foundContacts: successful,
+        failed,
+        hadFallback,
         sessionId: sessionId || 'ALL'
+      });
+
+      // Сохранить детальный отчет в файл
+      await this._saveDetailedReport({
+        sessionId: sessionId || 'ALL',
+        total: companies.length,
+        successful,
+        failed,
+        hadFallback,
+        results
       });
 
       return {
@@ -566,6 +580,86 @@ class Stage3AnalyzeContacts {
 
   _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Сохранить детальный отчет о прохождении Stage 3 в файл
+   */
+  async _saveDetailedReport(stats) {
+    const fs = require('fs').promises;
+    const path = require('path');
+    
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    const reportPath = path.join(__dirname, '../../logs', `stage3-report-${timestamp}.txt`);
+    
+    const report = `
+╔═══════════════════════════════════════════════════════════════╗
+║           STAGE 3 DETAILED REPORT - ${new Date().toLocaleString('ru-RU')}          ║
+╚═══════════════════════════════════════════════════════════════╝
+
+SESSION ID: ${stats.sessionId}
+COMPANIES PROCESSED: ${stats.total}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 OVERALL STATISTICS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Email Found:             ${stats.successful} (${(stats.successful / stats.total * 100).toFixed(1)}%)
+❌ Email NOT Found:         ${stats.failed} (${(stats.failed / stats.total * 100).toFixed(1)}%)
+🔄 Used Fallback Search:    ${stats.hadFallback} (${(stats.hadFallback / stats.total * 100).toFixed(1)}%)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 DETAILED RESULTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${stats.results.map((r, idx) => {
+  if (r.success && r.emails && r.emails.length > 0) {
+    return `${idx + 1}. ✅ SUCCESS: ${r.company || 'Unknown'}
+   Website: ${r.website || 'N/A'}
+   Emails Found: ${r.emails.join(', ')}
+   Source: ${r.source || 'N/A'}
+   ${r.hadFallback ? '🔄 Used Fallback' : ''}`;
+  } else {
+    return `${idx + 1}. ❌ FAILED: ${r.company || 'Unknown'}
+   Website: ${r.website || 'N/A'}
+   Reason: ${r.reason || r.note || 'No email found'}
+   ${r.hadFallback ? '🔄 Tried Fallback - still failed' : ''}`;
+  }
+}).join('\n\n')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 ANALYSIS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Success Rate: ${(stats.successful / stats.total * 100).toFixed(1)}% - ${this._analyzeEmailSuccessRate((stats.successful / stats.total * 100).toFixed(1))}
+
+Fallback Usage: ${(stats.hadFallback / stats.total * 100).toFixed(1)}% - ${stats.hadFallback > 0 ? '⚠️  Primary search struggling' : '✅ Primary search working well'}
+
+Recommendations:
+${stats.successful < stats.total * 0.3 ? '❌ CRITICAL: Only ' + (stats.successful / stats.total * 100).toFixed(1) + '% emails found!\n   - Consider using DeepSeek Retry for failed companies\n   - Review prompt effectiveness\n   - Check if websites have contact pages' : ''}
+${stats.successful >= stats.total * 0.3 && stats.successful < stats.total * 0.6 ? '⚠️  Moderate success rate\n   - Some companies need retry\n   - Consider improving prompts' : ''}
+${stats.successful >= stats.total * 0.6 ? '✅ Good performance!\n   - Stage 3 working as expected' : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+    try {
+      await fs.writeFile(reportPath, report, 'utf8');
+      this.logger.info(`Stage 3: Detailed report saved to ${reportPath}`);
+    } catch (error) {
+      this.logger.error(`Stage 3: Failed to save report: ${error.message}`);
+    }
+  }
+
+  _analyzeEmailSuccessRate(rate) {
+    const r = parseFloat(rate);
+    if (r > 60) return '🎉 Excellent!';
+    if (r > 40) return '✅ Good';
+    if (r > 20) return '⚠️  Poor - needs improvement';
+    return '🚨 Critical - review approach';
   }
 }
 
