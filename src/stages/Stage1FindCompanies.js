@@ -435,6 +435,12 @@ STRICT JSON OUTPUT ONLY.`;
     const seenDomains = new Set();
     
     return companies.filter(company => {
+      // Защита от undefined/null company или name
+      if (!company || !company.name || typeof company.name !== 'string') {
+        this.logger.warn('Stage 1: Company with invalid name filtered', { company });
+        return false;
+      }
+      
       // Проверка по названию
       const nameKey = company.name.toLowerCase().trim();
       if (seenNames.has(nameKey)) {
@@ -629,14 +635,22 @@ STRICT JSON OUTPUT ONLY.`;
   }
 
   _filterEmailsByDomain(emails) {
-    if (emails.length === 0) return emails;
+    // Защита от пустого массива или undefined/null
+    if (!emails || !Array.isArray(emails) || emails.length === 0) {
+      return [];
+    }
+    
+    // Фильтровать undefined/null/пустые строки сразу
+    const validEmails = emails.filter(email => 
+      email && typeof email === 'string' && email.trim().length > 0
+    );
+    
+    if (validEmails.length === 0) return [];
 
     // Группировать email по доменам
     const domainMap = new Map();
     
-    for (const email of emails) {
-      if (!email || typeof email !== 'string') continue;
-      
+    for (const email of validEmails) {
       // Валидация email
       if (!this._isValidEmail(email)) {
         this.logger.debug('Stage 1: Invalid email skipped in filtering', { value: email });
@@ -662,6 +676,11 @@ STRICT JSON OUTPUT ONLY.`;
   }
 
   _extractDomain(email) {
+    // Защита от undefined/null
+    if (!email || typeof email !== 'string') {
+      return null;
+    }
+    
     const match = email.match(/@(.+)$/);
     return match ? match[1].toLowerCase() : null;
   }
@@ -673,9 +692,11 @@ STRICT JSON OUTPUT ONLY.`;
     const priorities = ['info', 'sales', 'contact', 'service', 'enquiry', 'inquiry'];
     
     for (const priority of priorities) {
-      const found = emails.find(email => 
-        email.toLowerCase().startsWith(priority + '@')
-      );
+      const found = emails.find(email => {
+        // Защита от undefined/null
+        if (!email || typeof email !== 'string') return false;
+        return email.toLowerCase().startsWith(priority + '@');
+      });
       if (found) return found;
     }
 
