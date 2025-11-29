@@ -97,19 +97,22 @@ class Stage3AnalyzeContacts {
   }
 
   async _getCompanies(sessionId = null) {
-    // НОВОЕ: Получить ВСЕ компании готовые для Stage 3 (независимо от сессии)
-    // stage3_status должен быть NULL (не 'skipped', не 'completed', не 'failed')
-    // current_stage должен быть >= 2 (Stage 2 завершен)
+    // ИСПРАВЛЕНО: Получить компании готовые для Stage 3
+    // Условия:
+    // 1. Есть сайт (website IS NOT NULL)
+    // 2. Нет email (email IS NULL или пустой)
+    // 3. Stage 3 еще не обработан (stage3_status IS NULL)
+    // 4. Stage 2 завершен ИЛИ пропущен (stage2_status = 'completed' OR 'skipped')
     
     let query = this.db.supabase
       .from('pending_companies')
-      .select('company_id, company_name, website, current_stage, stage3_status')
-      .not('website', 'is', null)
-      .or('email.is.null,email.eq.""')
-      .is('stage3_status', null) // Только те у кого Stage 3 еще не обработан
-      .gte('current_stage', 2); // Минимум Stage 2 завершен
+      .select('company_id, company_name, website, current_stage, stage2_status, stage3_status')
+      .not('website', 'is', null)  // Есть сайт
+      .or('email.is.null,email.eq.""')  // Нет email
+      .is('stage3_status', null)  // Stage 3 не обработан
+      .in('stage2_status', ['completed', 'skipped']);  // Stage 2 завершен или пропущен
     
-    // Если указан sessionId, фильтруем только эту сессию (для обратной совместимости)
+    // Если указан sessionId, фильтруем только эту сессию
     if (sessionId) {
       query = query.eq('session_id', sessionId);
     }
@@ -123,6 +126,7 @@ class Stage3AnalyzeContacts {
     
     this.logger.info(`Stage 3: Found ${data?.length || 0} companies ready for processing`, {
       total: data?.length || 0,
+      withSkippedStage2: data?.filter(c => c.stage2_status === 'skipped').length || 0,
       sessionId: sessionId || 'ALL'
     });
     return data || [];
