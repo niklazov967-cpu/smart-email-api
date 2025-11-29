@@ -153,6 +153,10 @@ try {
   // Sonar Pro клиент (для сложного анализа - Stage 1, 4)
   const sonarProClient = new SonarApiClient(pool, settingsManager, logger, 'sonar-pro');
   
+  // Установить API ключ напрямую (из переменной окружения или дефолтный)
+  const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || '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';
+  console.log(`🔑 Using Perplexity API Key: ${PERPLEXITY_API_KEY.substring(0, 10)}... (length: ${PERPLEXITY_API_KEY.length})`);
+  
   // Флаги инициализации
   let sonarBasicReady = false;
   let sonarProReady = false;
@@ -161,11 +165,18 @@ try {
   (async () => {
     try {
       await sonarBasicClient.initialize();
+      // Установить API ключ после инициализации (перезаписать пустой ключ из БД)
+      sonarBasicClient.apiKey = PERPLEXITY_API_KEY;
       sonarBasicReady = true;
       logger.info('Sonar Basic client initialized');
+      
       await sonarProClient.initialize();
+      // Установить API ключ после инициализации (перезаписать пустой ключ из БД)
+      sonarProClient.apiKey = PERPLEXITY_API_KEY;
       sonarProReady = true;
       logger.info('Sonar Pro client initialized');
+      
+      console.log(`✅ Sonar clients ready with API key (${PERPLEXITY_API_KEY.substring(0, 10)}...)`);
     } catch (error) {
       logger.error('Failed to initialize API clients:', error);
     }
@@ -224,19 +235,45 @@ try {
     logger: logger
   });
   
-  // Загрузить базовые настройки
+  // Загрузить базовые настройки (UPSERT)
   (async () => {
+    // Использовать API ключ из переменной окружения или дефолтный
+    const perplexityApiKey = process.env.PERPLEXITY_API_KEY || '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';
+    
+    console.log(`📝 Setting Perplexity API Key: ${perplexityApiKey.substring(0, 10)}...`);
+    
     const defaultSettings = [
-      ['api', 'api_key', '', 'string', '', 'Perplexity API ключ', '{}'],
+      ['api', 'api_key', perplexityApiKey, 'string', '', 'Perplexity API ключ', '{}'],
       ['api', 'model_name', 'llama-3.1-sonar-large-128k-online', 'string', 'llama-3.1-sonar-large-128k-online', 'Модель', '{}'],
     ];
     
     for (const setting of defaultSettings) {
-      await pool.query(
-        `INSERT INTO settings (category, setting_key, setting_value, setting_type, default_value, description, validation_rules, is_editable, require_restart)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [...setting, true, false]
-      );
+      // Используем UPSERT (INSERT ... ON CONFLICT UPDATE)
+      try {
+        const { data, error } = await pool.supabase
+          .from('settings')
+          .upsert({
+            category: setting[0],
+            setting_key: setting[1],
+            setting_value: setting[2],
+            setting_type: setting[3],
+            default_value: setting[4],
+            description: setting[5],
+            validation_rules: setting[6],
+            is_editable: true,
+            require_restart: false
+          }, {
+            onConflict: 'category,setting_key'
+          });
+        
+        if (error) {
+          console.warn(`Failed to upsert setting ${setting[0]}.${setting[1]}:`, error.message);
+        } else {
+          console.log(`✅ Setting ${setting[0]}.${setting[1]} updated`);
+        }
+      } catch (err) {
+        console.warn(`Error upserting setting:`, err.message);
+      }
     }
   })();
   

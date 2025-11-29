@@ -68,6 +68,12 @@ class SonarApiClient {
       maxTokens = this.maxTokens
     } = options;
 
+    console.log(`\n🔵 SonarApiClient.query() START`);
+    console.log(`   Stage: ${stage}`);
+    console.log(`   API Key exists: ${!!this.apiKey} (length: ${this.apiKey?.length || 0})`);
+    console.log(`   Use cache: ${useCache}`);
+    console.log(`   Prompt length: ${prompt?.length || 0} chars`);
+
     const startTime = Date.now();
     
     // Проверить кеш
@@ -75,8 +81,11 @@ class SonarApiClient {
       const cached = await this._checkCache(prompt, stage);
       if (cached) {
         this.logger.debug(`Cache HIT for stage: ${stage}`);
+        console.log(`   💾 Using cached response`);
         await this._logApiCall(sessionId, stage, 'success', 0, Date.now() - startTime, 0, true);
         return cached;
+      } else {
+        console.log(`   ⚠️  Cache MISS`);
       }
     }
 
@@ -89,8 +98,12 @@ class SonarApiClient {
     while (attempt < this.maxRetries) {
       attempt++;
       
+      console.log(`   🔄 Attempt ${attempt}/${this.maxRetries}`);
+      
       try {
         this.logger.debug(`Sonar API request (attempt ${attempt}/${this.maxRetries})`, { stage });
+        
+        console.log(`   📤 Sending POST to ${this.baseUrl}/chat/completions`);
         
         const response = await axios.post(
           `${this.baseUrl}/chat/completions`,
@@ -125,6 +138,8 @@ class SonarApiClient {
         const tokensUsed = response.data.usage?.total_tokens || 0;
         const responseTime = Date.now() - startTime;
         
+        console.log(`   ✅ SUCCESS! Got response (${result?.length || 0} chars, ${tokensUsed} tokens)`);
+        
         // Логировать полный ответ для отладки (первые 500 символов)
         this.logger.debug('Sonar API full response preview', {
           content_preview: result.substring(0, 500),
@@ -157,6 +172,9 @@ class SonarApiClient {
       } catch (error) {
         lastError = error;
         const responseTime = Date.now() - startTime;
+        
+        console.log(`   ❌ ERROR: ${error.message}`);
+        console.log(`   HTTP Status: ${error.response?.status || 'N/A'}`);
 
         // Определить тип ошибки
         let status = 'error';
