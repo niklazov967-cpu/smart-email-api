@@ -3,6 +3,62 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 /**
+ * GET /api/sessions/debug-stage3
+ * Диагностика: проверить компании готовые для Stage 3
+ */
+router.get('/debug-stage3', async (req, res) => {
+  try {
+    const db = req.db;
+    
+    // 1. Компании готовые для Stage 3
+    const { data: ready, error: readyError } = await db.supabase
+      .from('pending_companies')
+      .select('company_id, company_name, website, stage2_status, stage3_status, email')
+      .not('website', 'is', null)
+      .or('email.is.null,email.eq.""')
+      .is('stage3_status', null)
+      .in('stage2_status', ['completed', 'skipped']);
+    
+    // 2. Компании с установленным stage3_status
+    const { data: processed, error: processedError } = await db.supabase
+      .from('pending_companies')
+      .select('company_id, company_name, website, stage3_status, email')
+      .not('stage3_status', 'is', null);
+    
+    // 3. Общая статистика
+    const { data: all, error: allError } = await db.supabase
+      .from('pending_companies')
+      .select('stage3_status, email');
+    
+    res.json({
+      success: true,
+      ready_for_stage3: {
+        count: ready?.length || 0,
+        first_3: ready?.slice(0, 3) || []
+      },
+      processed_by_stage3: {
+        count: processed?.length || 0,
+        completed: processed?.filter(c => c.stage3_status === 'completed').length || 0,
+        failed: processed?.filter(c => c.stage3_status === 'failed').length || 0,
+        first_5: processed?.slice(0, 5) || []
+      },
+      total_stats: {
+        total: all?.length || 0,
+        with_email: all?.filter(c => c.email).length || 0,
+        stage3_null: all?.filter(c => c.stage3_status === null).length || 0,
+        stage3_completed: all?.filter(c => c.stage3_status === 'completed').length || 0,
+        stage3_failed: all?.filter(c => c.stage3_status === 'failed').length || 0
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/sessions
  * Создать новую сессию поиска и запустить обработку
  */

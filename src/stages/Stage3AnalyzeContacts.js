@@ -293,7 +293,13 @@ class Stage3AnalyzeContacts {
           source: result.source
         });
 
-        return { success: true, emails: result.emails };
+        return { 
+          success: true, 
+          emails: result.emails,
+          company_name: company.company_name,
+          website: company.website,
+          note: result.note
+        };
       } else {
         // Отметить как обработано без контактов
         const rawDataNoEmail = {
@@ -330,7 +336,13 @@ class Stage3AnalyzeContacts {
           reason: result.note
         });
 
-        return { success: true, emails: [] };
+        return { 
+          success: true, 
+          emails: [],
+          company_name: company.company_name,
+          website: company.website,
+          note: result.note || 'No contacts found'
+        };
       }
 
     } catch (error) {
@@ -338,7 +350,14 @@ class Stage3AnalyzeContacts {
         company: company.company_name,
         error: error.message
       });
-      return { success: false, emails: [], error: error.message };
+      return { 
+        success: false, 
+        emails: [], 
+        error: error.message,
+        company_name: company.company_name,
+        website: company.website,
+        note: `Error: ${error.message}`
+      };
     }
   }
 
