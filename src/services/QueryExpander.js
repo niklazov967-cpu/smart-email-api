@@ -45,13 +45,19 @@ class QueryExpander {
         
         // Создать промпт для генерации под-запросов
         const prompt = attempts === 1 
-          ? this._createExpansionPrompt(mainTopic, generateCount)
-          : this._createRetryPrompt(mainTopic, generateCount);
+          ? this._createExpansionPrompt(mainTopic, generateCount, attempts)
+          : this._createRetryPrompt(mainTopic, generateCount, attempts, allQueries);
+
+        // Для retry попыток - отключить кэш и увеличить температуру для получения разных результатов
+        const useCache = attempts === 1; // Кэш только для первой попытки
+        const temperature = 0.3 + (attempts - 1) * 0.15; // Увеличиваем температуру с каждой попыткой: 0.3, 0.45, 0.6, 0.75...
 
         // Запросить у API генерацию вариаций
         const response = await this.apiClient.query(prompt, {
           stage: attempts === 1 ? 'query_expansion' : 'query_expansion_retry',
-          maxTokens: 2000
+          maxTokens: 2000,
+          useCache: useCache,
+          temperature: temperature
         });
 
         // Парсить результат
@@ -137,7 +143,7 @@ class QueryExpander {
     }
   }
 
-  _createExpansionPrompt(mainTopic, count) {
+  _createExpansionPrompt(mainTopic, count, attempt = 1) {
     return `Ты эксперт по поиску китайских производителей.
 
 ОПИСАНИЕ ЗАДАЧИ (своими словами):
@@ -202,16 +208,55 @@ ${mainTopic}
 Выведи ТОЛЬКО JSON, без дополнительного текста.`;
   }
 
-  _createRetryPrompt(mainTopic, count) {
-    return `Создай ещё ${count} альтернативных поисковых запросов для темы: ${mainTopic}
+  _createRetryPrompt(mainTopic, count, attempt, existingQueries = []) {
+    // Получить примеры уже сгенерированных запросов для избежания повторов
+    const existingExamples = existingQueries.slice(0, 5).map(q => q.query_cn).join(', ');
+    
+    const variations = [
+      `Создай ещё ${count} СОВЕРШЕННО НОВЫХ и РАЗНООБРАЗНЫХ поисковых запросов для темы: ${mainTopic}
 
-Используй:
-- Альтернативные названия процессов
-- Смежные технологии
-- Разные формулировки
-- Специализированные термины
+ВАЖНО: НЕ повторяй эти уже созданные запросы: ${existingExamples}
 
-Формат: JSON с массивом queries (query_cn, query_ru, relevance).`;
+Используй НОВЫЕ подходы:
+- Альтернативные названия процессов и технологий
+- Разные масштабы производства (крупное/мелкосерийное/единичное)
+- Специализацию по материалам (сталь, алюминий, титан, пластик)
+- Географические регионы Китая
+- Специализированные термины и профессиональный жаргон
+- Разные типы компаний (OEM, ODM, аутсорсинг)
+
+Формат: JSON с массивом queries (query_cn, query_ru, relevance).`,
+
+      `Создай ${count} НЕСТАНДАРТНЫХ поисковых запросов для темы: ${mainTopic}
+
+УЖЕ ЕСТЬ: ${existingExamples}
+
+Попробуй другие углы:
+- Специфические отрасли (авиация, медицина, автомобили, электроника)
+- Сертификации и стандарты (ISO, IATF, AS9100)
+- Особые требования (высокая точность, быстрая доставка, прототипирование)
+- Комбинации технологий
+- Нишевые сегменты рынка
+
+JSON формат: queries с полями query_cn, query_ru, relevance.`,
+
+      `Создай ${count} КРЕАТИВНЫХ вариантов запросов для: ${mainTopic}
+
+НЕ ПОВТОРЯЙ: ${existingExamples}
+
+Фокус на:
+- Альтернативные термины и синонимы
+- Разные формулировки одной и той же концепции
+- Специализированные ниши
+- Различные бизнес-модели
+- Конкретные применения и индустрии
+
+Результат: JSON массив queries (query_cn, query_ru, relevance).`
+    ];
+    
+    // Выбрать разные вариации промпта для разных попыток
+    const promptIndex = (attempt - 2) % variations.length;
+    return variations[promptIndex];
   }
 
   _parseQueries(response) {
