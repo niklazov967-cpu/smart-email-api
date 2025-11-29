@@ -377,7 +377,7 @@
         <div id="queriesList" class="queries-list"></div>
         
         <button class="button button-success" id="saveQueriesBtn" onclick="saveSelectedQueries()" style="margin-top: 20px;">
-          💾 Сохранить выбранные запросы и создать сессию
+          💾 Сохранить выбранные запросы и создать тему
         </button>
       </div>
     </div>
@@ -390,14 +390,14 @@
       </div>
 
       <div class="input-group">
-        <label>Выберите сессию для поиска компаний:</label>
+        <label>Выберите тему на которую мы осуществляли поиск:</label>
         <select id="stage1SessionSelect">
-          <option value="">-- Сначала создайте сессию выше --</option>
+          <option value="">-- Сначала создайте тему выше --</option>
         </select>
       </div>
 
       <div id="stage1SessionInfo" style="display: none; padding: 15px; background: #f0f4ff; border-radius: 8px; margin: 15px 0;">
-        <p style="margin-bottom: 8px;"><strong>Запросов в сессии:</strong> <span id="stage1QueriesCount">0</span></p>
+        <p style="margin-bottom: 8px;"><strong>Запросов в теме:</strong> <span id="stage1QueriesCount">0</span></p>
         <p style="margin-bottom: 8px;"><strong>Статус:</strong> <span id="stage1SessionStatus"></span></p>
       </div>
 
@@ -638,7 +638,7 @@
         if (result.success) {
           createdSessionId = result.sessionId;
           statusDiv.innerHTML = `<div class="status-message status-success">
-            ✅ Сохранено ${selectedQueries.length} запросов! Сессия создана: ${result.sessionId}
+            ✅ Сохранено ${selectedQueries.length} запросов! Тема создана: ${result.sessionId}
           </div>`;
           
           // БЛОКИРОВКА: заблокировать все чекбоксы
@@ -678,7 +678,7 @@
         
         // В случае ошибки - разблокировать кнопку
         saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Сохранить выбранные запросы и создать сессию';
+        saveBtn.textContent = '💾 Сохранить выбранные запросы и создать тему';
         saveBtn.style.opacity = '1';
         saveBtn.style.cursor = 'pointer';
         saveBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
@@ -747,11 +747,11 @@
       const sessionId = document.getElementById('stage1SessionSelect').value;
       
       if (!sessionId) {
-        alert('Выберите сессию');
+        alert('Выберите тему');
         return;
       }
 
-      if (!confirm(`Запустить Stage 1 для выбранной сессии?`)) {
+      if (!confirm(`Запустить Stage 1 для выбранной темы?`)) {
         return;
       }
 
