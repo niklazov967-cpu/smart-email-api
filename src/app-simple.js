@@ -251,27 +251,22 @@ try {
     console.log(`📝 Setting Perplexity API Key: ${perplexityApiKey.substring(0, 10)}...`);
     
     const defaultSettings = [
-      ['api', 'api_key', perplexityApiKey, 'string', '', 'Perplexity API ключ', '{}'],
-      ['api', 'model_name', 'llama-3.1-sonar-large-128k-online', 'string', 'llama-3.1-sonar-large-128k-online', 'Модель', '{}'],
+      ['api', 'api_key', perplexityApiKey, 'Perplexity API ключ'],
+      ['api', 'model_name', 'llama-3.1-sonar-large-128k-online', 'Модель'],
     ];
     
     for (const setting of defaultSettings) {
-      // Используем UPSERT (INSERT ... ON CONFLICT UPDATE)
+      // Используем UPSERT с system_settings
       try {
         const { data, error } = await pool.supabase
-          .from('settings')
+          .from('system_settings')
           .upsert({
             category: setting[0],
-            setting_key: setting[1],
-            setting_value: setting[2],
-            setting_type: setting[3],
-            default_value: setting[4],
-            description: setting[5],
-            validation_rules: setting[6],
-            is_editable: true,
-            require_restart: false
+            key: setting[1],
+            value: setting[2],
+            description: setting[3]
           }, {
-            onConflict: 'category,setting_key'
+            onConflict: 'category,key'
           });
         
         if (error) {
