@@ -94,7 +94,7 @@ class Stage2Retry {
 
   async _getCompanies() {
     // Получить компании которые:
-    // 1. Прошли Stage 2 (stage2_status = 'failed')
+    // 1. Прошли Stage 2 (stage2_status = 'completed' или 'failed')
     // 2. НЕ имеют website
     // 3. Имеют хоть какую-то информацию (описание или тема)
     
@@ -104,7 +104,7 @@ class Stage2Retry {
       .from('pending_companies')
       .select('company_id, company_name, description, topic_description, stage2_status, current_stage, website')
       .is('website', null)
-      .eq('stage2_status', 'failed');
+      .in('stage2_status', ['completed', 'failed']);
     
     if (error) {
       this.logger.error('Stage 2 Retry: Failed to get companies', { 
