@@ -473,7 +473,7 @@ class Stage3AnalyzeContacts {
 
       const response = await this.sonar.query(prompt, {
         stage: 'stage3_fallback_search',
-        useCache: true
+        useCache: false  // КЭШ ОТКЛЮЧЕН
       });
 
       const result = this._parseResponse(response);

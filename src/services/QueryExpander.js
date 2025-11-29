@@ -48,15 +48,14 @@ class QueryExpander {
           ? this._createExpansionPrompt(mainTopic, generateCount, attempts)
           : this._createRetryPrompt(mainTopic, generateCount, attempts, allQueries);
 
-        // Для retry попыток - отключить кэш и увеличить температуру для получения разных результатов
-        const useCache = attempts === 1; // Кэш только для первой попытки
+        // Для всех попыток - БЕЗ КЭША! Увеличиваем температуру для получения разных результатов
         const temperature = 0.3 + (attempts - 1) * 0.15; // Увеличиваем температуру с каждой попыткой: 0.3, 0.45, 0.6, 0.75...
 
         // Запросить у API генерацию вариаций
         const response = await this.apiClient.query(prompt, {
           stage: attempts === 1 ? 'query_expansion' : 'query_expansion_retry',
           maxTokens: 2000,
-          useCache: useCache,
+          useCache: false, // КЭШ ОТКЛЮЧЕН ПОЛНОСТЬЮ!
           temperature: temperature
         });
 

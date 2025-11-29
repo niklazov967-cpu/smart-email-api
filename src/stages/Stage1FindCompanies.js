@@ -246,7 +246,7 @@ class Stage1FindCompanies {
       const retryResponse = await this.sonar.query(retryPrompt, {
         stage: 'stage1_find_companies_retry',
         sessionId,
-        useCache: true
+        useCache: false  // КЭШ ОТКЛЮЧЕН
       });
 
       const moreCompanies = this._parseResponse(retryResponse);

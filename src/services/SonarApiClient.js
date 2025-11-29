@@ -63,7 +63,7 @@ class SonarApiClient {
     const {
       stage = 'unknown',
       sessionId = null,
-      useCache = true,
+      useCache = false,  // КЭШ ОТКЛЮЧЕН ПО УМОЛЧАНИЮ
       temperature = this.temperature,
       maxTokens = this.maxTokens
     } = options;
