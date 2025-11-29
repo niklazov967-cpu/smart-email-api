@@ -711,18 +711,23 @@
     async function loadSessions() {
       try {
         const response = await fetch('/api/sessions');
-        const data = await response.json();
+        const result = await response.json();
         
-        if (data.success) {
+        if (result.success) {
           const select = document.getElementById('stage1SessionSelect');
           const currentValue = select.value;
           
           select.innerHTML = '<option value="">-- Выберите тему --</option>';
           
-          (data.sessions || []).forEach(session => {
+          // API возвращает 'data', а не 'sessions'
+          const sessions = result.data || result.sessions || [];
+          
+          sessions.forEach(session => {
             const option = document.createElement('option');
             option.value = session.session_id;
-            option.textContent = `${session.main_topic} (${new Date(session.created_at).toLocaleDateString()})`;
+            // Используем topic_description если есть, иначе search_query
+            const topicName = session.topic_description || session.main_topic || session.search_query;
+            option.textContent = `${topicName} (${new Date(session.created_at).toLocaleDateString()})`;
             select.appendChild(option);
           });
           
@@ -757,11 +762,16 @@
 
       try {
         const response = await fetch(`/api/sessions/${sessionId}`);
-        const data = await response.json();
+        const result = await response.json();
 
-        if (data.success) {
-          document.getElementById('stage1QueriesCount').textContent = data.session.queries_count || 0;
-          document.getElementById('stage1SessionStatus').textContent = data.session.status || 'новая';
+        if (result.success) {
+          const session = result.data || result.session;
+          
+          // Получить количество запросов из target_count или запросить отдельно
+          const queriesCount = session.target_count || 0;
+          
+          document.getElementById('stage1QueriesCount').textContent = queriesCount;
+          document.getElementById('stage1SessionStatus').textContent = session.status || 'новая';
           infoDiv.style.display = 'block';
           btn.disabled = false;
         }
