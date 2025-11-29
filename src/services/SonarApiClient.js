@@ -34,16 +34,16 @@ class SonarApiClient {
     const apiSettings = await this.settingsManager.getCategory('api');
     
     this.apiKey = apiSettings.api_key;
-    this.baseUrl = apiSettings.api_base_url;
+    this.baseUrl = apiSettings.api_base_url || 'https://api.perplexity.ai';
     // Использовать указанную модель или из настроек
     this.model = this.modelType || apiSettings.model_name;
-    this.temperature = apiSettings.temperature;
-    this.topP = apiSettings.top_p;
-    this.maxTokens = apiSettings.max_tokens;
-    this.maxRetries = apiSettings.max_retries;
-    this.timeout = apiSettings.api_timeout_seconds * 1000;
-    this.rateLimit = apiSettings.rate_limit_requests_per_min;
-    this.retryDelay = apiSettings.retry_delay_seconds * 1000;
+    this.temperature = parseFloat(apiSettings.temperature) || 0.3;
+    this.topP = parseFloat(apiSettings.top_p) || 0.9;
+    this.maxTokens = parseInt(apiSettings.max_tokens) || 2000;
+    this.maxRetries = parseInt(apiSettings.max_retries) || 3;
+    this.timeout = (parseInt(apiSettings.api_timeout_seconds) || 60) * 1000;
+    this.rateLimit = parseInt(apiSettings.rate_limit_requests_per_min) || 20;
+    this.retryDelay = (parseInt(apiSettings.retry_delay_seconds) || 10) * 1000;
     
     this.logger.info('SonarApiClient initialized', {
       modelType: this.modelType,
