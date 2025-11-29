@@ -865,15 +865,10 @@ router.post('/:id/stage1', async (req, res) => {
     req.logger.info('Starting Stage 1 for session', { sessionId: id });
     
     const Stage1FindCompanies = require('../stages/Stage1FindCompanies');
-    const SonarApiClient = require('../services/SonarApiClient');
     
-    const sonar = new SonarApiClient(
-      process.env.PERPLEXITY_API_KEY,
-      req.logger
-    );
-    
+    // Используем уже инициализированный sonarProClient из req
     const stage1 = new Stage1FindCompanies(
-      sonar,
+      req.sonarProClient,  // Используем существующий клиент
       req.settingsManager,
       req.db,
       req.logger
