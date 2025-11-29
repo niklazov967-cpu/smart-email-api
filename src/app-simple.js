@@ -262,6 +262,7 @@ try {
   app.use('/api/sessions', require('./api/sessions'));
   app.use('/api/companies', require('./api/companies'));
   app.use('/api/topics', require('./api/topics'));
+  app.use('/api/queries', require('./api/queries')); // НОВЫЙ: Для step-by-step страницы
   app.use('/api/credits', require('./api/credits'));
   app.use('/api/progress', require('./api/progress'));
   app.use('/api/debug', require('./api/debug')); // НОВЫЙ: Показывает ВСЕ данные
