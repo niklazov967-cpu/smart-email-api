@@ -138,7 +138,40 @@ class Stage2Retry {
       hasDescription: !!company.description
     });
 
+    // ПОПЫТКА 1
+    let result = await this._attemptWebsiteSearch(company, 1);
+    if (result.success) {
+      return result;
+    }
+
+    // ПОПЫТКА 2: Если первая не удалась
+    console.log(`      🔄 Attempt 2/2 with alternative prompt...`);
+    this.logger.info('Stage 2 Retry: Second attempt', {
+      company: company.company_name
+    });
+    
+    result = await this._attemptWebsiteSearch(company, 2);
+    return result;
+  }
+
+  async _attemptWebsiteSearch(company, attemptNumber) {
+  async _attemptWebsiteSearch(company, attemptNumber) {
     try {
+      // Разные промпты для разных попыток
+      const searchHint = attemptNumber === 1
+        ? `Проверь через китайские источники:
+   - Baidu поиск: "${company.company_name} 官网"
+   - 企查查 (Qichacha.com) - найди профиль компании
+   - 天眼查 (Tianyancha.com) - проверь там website
+   - Китайские бизнес-каталоги и справочники
+   - Google: "${company.company_name} official website"`
+        : `Используй АЛЬТЕРНАТИВНЫЕ методы поиска:
+   - Поиск по названию + "company website" + "China"
+   - Поиск через английское название компании (если есть)
+   - Проверь вариации названия (с/без "有限公司", "Ltd", "Co")
+   - Ищи через отраслевые каталоги и выставки
+   - Google Images поиск по логотипу компании`;
+
       // Промпт для поиска сайта через DeepSeek
       const prompt = `Найди ОФИЦИАЛЬНЫЙ веб-сайт китайской компании.
 
@@ -146,14 +179,9 @@ class Stage2Retry {
 ОПИСАНИЕ: ${company.description || 'Нет описания'}
 ОТРАСЛЬ: ${company.topic_description || 'Производство'}
 
-ТВОЯ ЗАДАЧА:
+ТВОЯ ЗАДАЧА (попытка ${attemptNumber}/2):
 1. Найди официальный корпоративный сайт этой компании
-2. Проверь через китайские источники:
-   - Baidu поиск: "${company.company_name} 官网"
-   - 企查查 (Qichacha.com) - найди профиль компании
-   - 天眼查 (Tianyancha.com) - проверь там website
-   - Китайские бизнес-каталоги и справочники
-   - Google: "${company.company_name} official website"
+2. ${searchHint}
 3. Ищи именно ГЛАВНУЮ страницу компании, не подразделения
 4. НЕ ищи на маркетплейсах (Alibaba, 1688, Made-in-China)
 
@@ -176,7 +204,7 @@ class Stage2Retry {
       // Использовать DeepSeek Chat для поиска
       const response = await this.deepseek.query(prompt, {
         maxTokens: 500,
-        temperature: 0.3,
+        temperature: attemptNumber === 1 ? 0.3 : 0.5, // Больше креативности во 2-й попытке
         systemPrompt: 'You are an expert at finding Chinese company websites using Chinese search engines and business directories. You have access to web search.',
         stage: 'stage2_retry'
       });
