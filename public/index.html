@@ -376,7 +376,7 @@
         </div>
         <div id="queriesList" class="queries-list"></div>
         
-        <button class="button button-success" onclick="saveSelectedQueries()" style="margin-top: 20px;">
+        <button class="button button-success" id="saveQueriesBtn" onclick="saveSelectedQueries()" style="margin-top: 20px;">
           💾 Сохранить выбранные запросы и создать сессию
         </button>
       </div>
@@ -602,11 +602,18 @@
     async function saveSelectedQueries() {
       const topic = document.getElementById('mainTopic').value.trim();
       const checkboxes = document.querySelectorAll('.query-checkbox:checked');
+      const saveBtn = document.getElementById('saveQueriesBtn'); // Получить кнопку по ID
       
       if (checkboxes.length === 0) {
         alert('Выберите хотя бы один запрос');
         return;
       }
+
+      // БЛОКИРОВКА: отключить кнопку сразу
+      saveBtn.disabled = true;
+      saveBtn.textContent = '⏳ Сохраняем...';
+      saveBtn.style.opacity = '0.6';
+      saveBtn.style.cursor = 'not-allowed';
 
       const selectedQueries = Array.from(checkboxes).map(cb => {
         const idx = parseInt(cb.id.replace('checkbox-', ''));
@@ -634,6 +641,30 @@
             ✅ Сохранено ${selectedQueries.length} запросов! Сессия создана: ${result.sessionId}
           </div>`;
           
+          // БЛОКИРОВКА: заблокировать все чекбоксы
+          document.querySelectorAll('.query-checkbox').forEach(cb => {
+            cb.disabled = true;
+            cb.style.cursor = 'not-allowed';
+          });
+          
+          // Заблокировать кнопки "Выбрать все" и "Снять все"
+          document.querySelectorAll('#queriesSection .button-success, #queriesSection .button-danger').forEach(btn => {
+            if (btn.id !== 'saveQueriesBtn') { // Не трогаем кнопку сохранения
+              btn.disabled = true;
+              btn.style.opacity = '0.5';
+              btn.style.cursor = 'not-allowed';
+            }
+          });
+          
+          // Визуально затемнить весь список
+          document.getElementById('queriesList').style.opacity = '0.6';
+          document.getElementById('queriesList').style.pointerEvents = 'none';
+          
+          // Изменить текст и стиль кнопки на "Сохранено"
+          saveBtn.textContent = '✅ Сохранено';
+          saveBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+          saveBtn.style.opacity = '1';
+          
           // Обновить список сессий и выбрать новую
           await loadSessions();
           document.getElementById('stage1SessionSelect').value = createdSessionId;
@@ -644,6 +675,13 @@
       } catch (error) {
         console.error('Save error:', error);
         statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${error.message}</div>`;
+        
+        // В случае ошибки - разблокировать кнопку
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Сохранить выбранные запросы и создать сессию';
+        saveBtn.style.opacity = '1';
+        saveBtn.style.cursor = 'pointer';
+        saveBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
       }
     }
 
