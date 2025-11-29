@@ -70,19 +70,33 @@ class Stage2FindWebsites {
 
       // Подсчет успешных
       const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+      const skipped = results.filter(r => r.skipped).length;
 
       this.logger.info('Stage 2: Completed', {
         total: companies.length,
         successful,
-        failed: companies.length - successful,
+        failed,
+        skipped,
         sessionId: sessionId || 'ALL'
+      });
+
+      // Сохранить детальный отчет в файл
+      await this._saveDetailedReport({
+        sessionId: sessionId || 'ALL',
+        total: companies.length,
+        successful,
+        failed,
+        skipped,
+        results
       });
 
       return {
         success: true,
         total: companies.length,
         found: successful,
-        notFound: companies.length - successful
+        notFound: failed,
+        skipped
       };
 
     } catch (error) {
@@ -131,6 +145,11 @@ class Stage2FindWebsites {
 
   async _findWebsite(company) {
     // sessionId больше не нужен - компания уже имеет session_id
+    this.logger.info('Stage 2: Starting website search for company', {
+      company: company.company_name,
+      companyId: company.company_id
+    });
+    
     try {
       const prompt = `Найди официальный веб-сайт, email и описание услуг компании из Китая через поиск в интернете.
 
@@ -177,10 +196,26 @@ class Stage2FindWebsites {
 
       const response = await this.sonar.query(prompt, {
         stage: 'stage2_find_websites',
-        useCache: true
+        useCache: false  // Отключаем кэш для свежих результатов
+      });
+
+      this.logger.info('Stage 2: Sonar response received', {
+        company: company.company_name,
+        responseLength: response ? response.length : 0,
+        hasResponse: !!response
       });
 
       const result = this._parseResponse(response);
+
+      this.logger.info('Stage 2: Response parsed', {
+        company: company.company_name,
+        foundWebsite: !!result.website,
+        foundEmail: !!result.website,
+        foundDescription: !!result.description,
+        website: result.website,
+        email: result.email,
+        source: result.source
+      });
 
       // Нормализовать данные (один домен = один email)
       if (result.email && (typeof result.email !== 'string' || result.email.includes(','))) {
@@ -286,7 +321,14 @@ class Stage2FindWebsites {
           source: result.source
         });
 
-        return { success: true, website: result.website, email: result.email };
+        return { 
+          success: true, 
+          company: company.company_name,
+          website: result.website, 
+          email: result.email,
+          description: result.description,
+          source: result.source
+        };
       } else {
         // Подготовить raw data для случая "не найдено"
         const rawDataNotFound = {
@@ -320,7 +362,13 @@ class Stage2FindWebsites {
           company: company.company_name
         });
 
-        return { success: false };
+        return { 
+          success: false,
+          company: company.company_name,
+          website: null,
+          email: null,
+          description: null
+        };
       }
 
     } catch (error) {
@@ -328,7 +376,11 @@ class Stage2FindWebsites {
         company: company.company_name,
         error: error.message
       });
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        company: company.company_name,
+        error: error.message 
+      };
     }
   }
 
@@ -540,6 +592,102 @@ class Stage2FindWebsites {
 
   _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Сохранить детальный отчет о прохождении Stage 2 в файл
+   */
+  async _saveDetailedReport(stats) {
+    const fs = require('fs').promises;
+    const path = require('path');
+    
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    const reportPath = path.join(__dirname, '../../logs', `stage2-report-${timestamp}.txt`);
+    
+    // Группировка результатов
+    const websiteFound = stats.results.filter(r => r.success && r.website).length;
+    const emailFound = stats.results.filter(r => r.success && r.email).length;
+    const bothFound = stats.results.filter(r => r.success && r.website && r.email).length;
+    const descriptionFound = stats.results.filter(r => r.success && r.description).length;
+    
+    const report = `
+╔═══════════════════════════════════════════════════════════════╗
+║           STAGE 2 DETAILED REPORT - ${new Date().toLocaleString('ru-RU')}          ║
+╚═══════════════════════════════════════════════════════════════╝
+
+SESSION ID: ${stats.sessionId}
+COMPANIES PROCESSED: ${stats.total}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 OVERALL STATISTICS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Successful:              ${stats.successful} (${(stats.successful / stats.total * 100).toFixed(1)}%)
+❌ Failed:                  ${stats.failed} (${(stats.failed / stats.total * 100).toFixed(1)}%)
+⏭️  Skipped (already had):  ${stats.skipped} (${(stats.skipped / stats.total * 100).toFixed(1)}%)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 WHAT WAS FOUND:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌐 Website Found:           ${websiteFound} companies
+📧 Email Found:             ${emailFound} companies
+🎯 Both Found:              ${bothFound} companies
+📝 Description Found:       ${descriptionFound} companies
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 DETAILED RESULTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${stats.results.map((r, idx) => {
+  if (r.skipped) {
+    return `${idx + 1}. ⏭️  SKIPPED: ${r.company}
+   Reason: Already had website from Stage 1`;
+  } else if (r.success) {
+    return `${idx + 1}. ✅ SUCCESS: ${r.company}
+   Website: ${r.website || 'NOT FOUND'}
+   Email: ${r.email || 'NOT FOUND'}
+   Description: ${r.description ? r.description.substring(0, 60) + '...' : 'NOT FOUND'}
+   Source: ${r.source || 'N/A'}`;
+  } else {
+    return `${idx + 1}. ❌ FAILED: ${r.company}
+   Error: ${r.error || 'Unknown error'}`;
+  }
+}).join('\n\n')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 ANALYSIS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Success Rate: ${(stats.successful / stats.total * 100).toFixed(1)}% - ${this._analyzeSuccessRate((stats.successful / stats.total * 100).toFixed(1))}
+
+Website Discovery: ${(websiteFound / stats.total * 100).toFixed(1)}% - ${websiteFound >= stats.total * 0.7 ? '✅ Good' : websiteFound >= stats.total * 0.5 ? '⚠️  Moderate' : '❌ Poor'}
+
+Email Discovery: ${(emailFound / stats.total * 100).toFixed(1)}% - ${emailFound >= stats.total * 0.3 ? '🎉 Excellent!' : emailFound >= stats.total * 0.15 ? '✅ Good' : '⚠️  Low - consider retry'}
+
+Stage 3 Workload: ${websiteFound - bothFound} companies need email search
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+    try {
+      await fs.writeFile(reportPath, report, 'utf8');
+      this.logger.info(`Stage 2: Detailed report saved to ${reportPath}`);
+    } catch (error) {
+      this.logger.error(`Stage 2: Failed to save report: ${error.message}`);
+    }
+  }
+
+  _analyzeSuccessRate(rate) {
+    const r = parseFloat(rate);
+    if (r > 90) return '🎉 Excellent!';
+    if (r > 75) return '✅ Good';
+    if (r > 60) return '⚠️  Acceptable';
+    return '❌ Poor - review AI responses';
   }
 }
 
