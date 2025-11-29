@@ -258,10 +258,46 @@
                     </select>
                     <button class="button secondary" onclick="loadSessions()" style="white-space: nowrap;">🔄 Обновить</button>
                 </div>
+                
+                <!-- Расширенная информация о сессии -->
                 <div id="sessionInfo" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; display: none;">
                     <p style="margin-bottom: 8px;"><strong>Запрос:</strong> <span id="sessionQuery" style="color: #667eea;"></span></p>
                     <p style="margin-bottom: 8px;"><strong>Статус:</strong> <span id="sessionStatus"></span></p>
-                    <p style="margin-bottom: 0;"><strong>Создано:</strong> <span id="sessionDate"></span></p>
+                    <p style="margin-bottom: 8px;"><strong>Создано:</strong> <span id="sessionDate"></span></p>
+                    
+                    <!-- Статистика по компаниям -->
+                    <div id="companiesStats" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 2px solid #e0e0e0;">
+                        <h4 style="margin: 0 0 10px 0; color: #667eea;">📊 Найденные компании:</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                            <div style="padding: 10px; background: #f0f9ff; border-radius: 5px;">
+                                <div style="font-size: 24px; font-weight: bold; color: #0284c7;" id="totalCompanies">0</div>
+                                <div style="font-size: 12px; color: #666;">Всего найдено</div>
+                            </div>
+                            <div style="padding: 10px; background: #fef3c7; border-radius: 5px;">
+                                <div style="font-size: 24px; font-weight: bold; color: #d97706;" id="unprocessedCompanies">0</div>
+                                <div style="font-size: 12px; color: #666;">Необработано</div>
+                            </div>
+                            <div style="padding: 10px; background: #dcfce7; border-radius: 5px;">
+                                <div style="font-size: 24px; font-weight: bold; color: #16a34a;" id="completedCompanies">0</div>
+                                <div style="font-size: 12px; color: #666;">Обработано</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Список необработанных компаний -->
+                        <div id="unprocessedList" style="display: none;">
+                            <h5 style="margin: 10px 0; color: #d97706;">⏳ Компании ожидающие обработки:</h5>
+                            <div id="unprocessedCompaniesContainer" style="max-height: 200px; overflow-y: auto; padding: 10px; background: #fffbeb; border-radius: 5px;">
+                                <!-- Список будет заполнен динамически -->
+                            </div>
+                        </div>
+                        
+                        <!-- Кнопка Stage 2 -->
+                        <div id="stage2ButtonContainer" style="display: none; margin-top: 15px;">
+                            <button onclick="runStage2()" class="button" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); width: 100%;">
+                                🌐 Запустить Stage 2: Поиск сайтов
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -418,62 +454,278 @@
             sessionInfo.style.display = 'none';
             
             try {
+                // Загрузить сессии
                 const response = await fetch('/api/sessions?limit=100');
                 const data = await response.json();
                 
-                if (data.success && data.data.length > 0) {
-                    select.innerHTML = '<option value="">-- Выберите сессию --</option>';
-                    
-                    data.data.forEach(session => {
-                        const option = document.createElement('option');
-                        option.value = session.session_id;
-                        
-                        const date = new Date(session.created_at).toLocaleDateString('ru-RU');
-                        const status = session.status === 'pending' ? '⏳' : 
-                                     session.status === 'processing' ? '🔄' :
-                                     session.status === 'completed' ? '✅' : '❌';
-                        
-                        option.textContent = `${status} ${session.search_query} (${date})`;
-                        option.dataset.query = session.search_query;
-                        option.dataset.status = session.status;
-                        option.dataset.date = session.created_at;
-                        
-                        select.appendChild(option);
-                    });
-                    
-                    console.log(`Loaded ${data.data.length} sessions`);
-                } else {
+                if (!data.success || data.data.length === 0) {
                     select.innerHTML = '<option value="">Нет доступных сессий</option>';
                     console.warn('No sessions found');
+                    return;
                 }
+                
+                // Загрузить статистику по компаниям для каждой сессии
+                const sessionsWithStats = await Promise.all(
+                    data.data.map(async (session) => {
+                        try {
+                            const companiesRes = await fetch(`/api/debug/companies`);
+                            const companiesData = await companiesRes.json();
+                            
+                            // Фильтровать компании этой сессии
+                            const sessionCompanies = companiesData.companies?.filter(
+                                c => c.session_id === session.session_id
+                            ) || [];
+                            
+                            // Подсчитать необработанные (без stage 'completed')
+                            const unprocessed = sessionCompanies.filter(
+                                c => !c.stage || c.stage !== 'completed'
+                            ).length;
+                            
+                            return {
+                                ...session,
+                                totalCompanies: sessionCompanies.length,
+                                unprocessedCount: unprocessed,
+                                processedCount: sessionCompanies.length - unprocessed
+                            };
+                        } catch (err) {
+                            console.error('Failed to load stats for session:', session.session_id, err);
+                            return { ...session, totalCompanies: 0, unprocessedCount: 0, processedCount: 0 };
+                        }
+                    })
+                );
+                
+                select.innerHTML = '<option value="">-- Выберите сессию --</option>';
+                
+                sessionsWithStats.forEach(session => {
+                    const option = document.createElement('option');
+                    option.value = session.session_id;
+                    
+                    const date = new Date(session.created_at).toLocaleDateString('ru-RU');
+                    const status = session.status === 'pending' ? '⏳' : 
+                                 session.status === 'processing' ? '🔄' :
+                                 session.status === 'completed' ? '✅' : '❌';
+                    
+                    // Добавить количество необработанных в название
+                    let displayText = `${status} ${session.search_query} (${date})`;
+                    if (session.totalCompanies > 0) {
+                        displayText += ` | ${session.unprocessedCount} необраб.`;
+                    }
+                    
+                    option.textContent = displayText;
+                    option.dataset.query = session.search_query;
+                    option.dataset.status = session.status;
+                    option.dataset.date = session.created_at;
+                    option.dataset.totalCompanies = session.totalCompanies;
+                    option.dataset.unprocessedCount = session.unprocessedCount;
+                    option.dataset.processedCount = session.processedCount;
+                    
+                    select.appendChild(option);
+                });
+                
+                console.log(`Loaded ${sessionsWithStats.length} sessions with stats`);
             } catch (error) {
                 console.error('Failed to load sessions:', error);
                 select.innerHTML = '<option value="">Ошибка загрузки</option>';
             }
         }
 
-        function updateSessionInfo() {
+        async function updateSessionInfo() {
             const select = document.getElementById('processSessionId');
             const sessionInfo = document.getElementById('sessionInfo');
+            const companiesStats = document.getElementById('companiesStats');
             const selectedOption = select.options[select.selectedIndex];
             
-            if (selectedOption && selectedOption.value) {
-                document.getElementById('sessionQuery').textContent = selectedOption.dataset.query || 'N/A';
-                
-                const statusMap = {
-                    'pending': '⏳ Ожидание',
-                    'processing': '🔄 Обработка',
-                    'completed': '✅ Завершена',
-                    'failed': '❌ Ошибка'
-                };
-                document.getElementById('sessionStatus').textContent = statusMap[selectedOption.dataset.status] || selectedOption.dataset.status;
-                
-                const date = new Date(selectedOption.dataset.date);
-                document.getElementById('sessionDate').textContent = date.toLocaleString('ru-RU');
-                
-                sessionInfo.style.display = 'block';
-            } else {
+            if (!selectedOption || !selectedOption.value) {
                 sessionInfo.style.display = 'none';
+                return;
+            }
+            
+            const sessionId = selectedOption.value;
+            
+            // Обновить базовую информацию
+            document.getElementById('sessionQuery').textContent = selectedOption.dataset.query || 'N/A';
+            
+            const statusMap = {
+                'pending': '⏳ Ожидание',
+                'processing': '🔄 Обработка',
+                'completed': '✅ Завершена',
+                'failed': '❌ Ошибка'
+            };
+            document.getElementById('sessionStatus').textContent = statusMap[selectedOption.dataset.status] || selectedOption.dataset.status;
+            
+            const date = new Date(selectedOption.dataset.date);
+            document.getElementById('sessionDate').textContent = date.toLocaleString('ru-RU');
+            
+            sessionInfo.style.display = 'block';
+            
+            // Показать статистику если есть компании
+            const totalCompanies = parseInt(selectedOption.dataset.totalCompanies) || 0;
+            
+            if (totalCompanies > 0) {
+                companiesStats.style.display = 'block';
+                
+                const unprocessed = parseInt(selectedOption.dataset.unprocessedCount) || 0;
+                const processed = parseInt(selectedOption.dataset.processedCount) || 0;
+                
+                document.getElementById('totalCompanies').textContent = totalCompanies;
+                document.getElementById('unprocessedCompanies').textContent = unprocessed;
+                document.getElementById('completedCompanies').textContent = processed;
+                
+                // Проверить есть ли компании только на стадии names_found (ждут Stage 2)
+                const needsStage2 = await checkCompaniesNeedStage2(sessionId);
+                
+                if (unprocessed > 0 && needsStage2.hasCompaniesForStage2) {
+                    // Есть компании ожидающие Stage 2
+                    await loadUnprocessedCompanies(sessionId);
+                    document.getElementById('unprocessedList').style.display = 'block';
+                    document.getElementById('stage2ButtonContainer').style.display = 'block';
+                } else if (unprocessed > 0 && !needsStage2.hasCompaniesForStage2) {
+                    // Все компании уже обработаны Stage 2+
+                    document.getElementById('unprocessedList').style.display = 'block';
+                    document.getElementById('unprocessedList').innerHTML = `
+                        <div style="padding: 15px; background: #fef2f2; border-radius: 5px; border-left: 4px solid #ef4444;">
+                            <h5 style="margin: 0 0 10px 0; color: #dc2626;">
+                                ✅ Все компании уже обработаны Stage 2+
+                            </h5>
+                            <p style="margin: 0; color: #991b1b; font-size: 14px;">
+                                Все ${totalCompanies} компаний в этой сессии уже были обработаны этапами 2, 3 или 4.
+                            </p>
+                            <p style="margin: 10px 0 0 0; color: #991b1b; font-size: 14px; font-weight: 600;">
+                                📝 Для продолжения работы создайте новую сессию через 
+                                <a href="/queries.html" style="color: #dc2626; text-decoration: underline;">Управление запросами</a>
+                            </p>
+                        </div>
+                    `;
+                    document.getElementById('stage2ButtonContainer').style.display = 'none';
+                } else {
+                    // Все обработано
+                    document.getElementById('unprocessedList').style.display = 'none';
+                    document.getElementById('stage2ButtonContainer').style.display = 'none';
+                }
+            } else {
+                companiesStats.style.display = 'none';
+            }
+        }
+
+        async function checkCompaniesNeedStage2(sessionId) {
+            try {
+                const response = await fetch(`/api/debug/companies`);
+                const data = await response.json();
+                
+                // Фильтровать компании этой сессии
+                const sessionCompanies = data.companies?.filter(
+                    c => c.session_id === sessionId
+                ) || [];
+                
+                // Компании на стадии names_found (ждут Stage 2)
+                const needsStage2 = sessionCompanies.filter(
+                    c => c.stage === 'names_found' && !c.website
+                );
+                
+                // Компании уже обработанные Stage 2+ (имеют website_found, contacts_found, completed, etc)
+                const alreadyProcessed = sessionCompanies.filter(
+                    c => c.stage && c.stage !== 'names_found'
+                );
+                
+                return {
+                    hasCompaniesForStage2: needsStage2.length > 0,
+                    needsStage2Count: needsStage2.length,
+                    alreadyProcessedCount: alreadyProcessed.length,
+                    totalCount: sessionCompanies.length
+                };
+            } catch (error) {
+                console.error('Failed to check companies stage:', error);
+                return {
+                    hasCompaniesForStage2: false,
+                    needsStage2Count: 0,
+                    alreadyProcessedCount: 0,
+                    totalCount: 0
+                };
+            }
+        }
+
+        async function loadUnprocessedCompanies(sessionId) {
+            try {
+                const response = await fetch(`/api/debug/companies`);
+                const data = await response.json();
+                
+                // Фильтровать компании этой сессии которые ждут Stage 2
+                const needsStage2 = data.companies?.filter(
+                    c => c.session_id === sessionId && c.stage === 'names_found' && !c.website
+                ) || [];
+                
+                const container = document.getElementById('unprocessedCompaniesContainer');
+                
+                if (needsStage2.length === 0) {
+                    container.innerHTML = '<p style="color: #666;">Нет компаний ожидающих Stage 2</p>';
+                    return;
+                }
+                
+                // Добавить заголовок
+                let html = `
+                    <div style="margin-bottom: 10px; padding: 10px; background: #fff7ed; border-radius: 5px;">
+                        <strong style="color: #ea580c;">
+                            ⏳ ${needsStage2.length} компаний ожидают поиска сайтов (Stage 2)
+                        </strong>
+                    </div>
+                `;
+                
+                html += needsStage2.map((company, index) => {
+                    const hasEmail = company.email ? '📧' : '❌';
+                    
+                    return `
+                        <div style="padding: 8px; margin-bottom: 5px; background: white; border-radius: 5px; border-left: 3px solid #f59e0b;">
+                            <div style="font-weight: 600; color: #333;">${index + 1}. ${company.company_name}</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 3px;">
+                                ❌ Сайт не найден | ${hasEmail} Email | 🎯 Ожидает: Stage 2
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Failed to load unprocessed companies:', error);
+                document.getElementById('unprocessedCompaniesContainer').innerHTML = 
+                    '<p style="color: #ef4444;">Ошибка загрузки компаний</p>';
+            }
+        }
+
+        async function runStage2() {
+            const select = document.getElementById('processSessionId');
+            const sessionId = select.value;
+            
+            if (!sessionId) {
+                alert('Выберите сессию');
+                return;
+            }
+            
+            const confirmed = confirm(
+                '🌐 Запустить Stage 2: Поиск сайтов?\n\n' +
+                'Будут обработаны компании без сайтов.'
+            );
+            
+            if (!confirmed) return;
+            
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/process-stage/2`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: false })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Stage 2 запущен! Перенаправление на прогресс...');
+                    setTimeout(() => {
+                        window.location.href = `/progress.html?session=${sessionId}`;
+                    }, 1000);
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
             }
         }
 
