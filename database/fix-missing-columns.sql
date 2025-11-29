@@ -78,3 +78,17 @@ ORDER BY ordinal_position;
 --  updated_at       | timestamp | NOW()  ← ДОЛЖНА ПОЯВИТЬСЯ!
 -- ═══════════════════════════════════════════════════════════════
 
+-- ═══════════════════════════════════════════════════════════════
+-- ДОБАВИТЬ website_status В pending_companies
+-- ═══════════════════════════════════════════════════════════════
+
+ALTER TABLE public.pending_companies 
+ADD COLUMN IF NOT EXISTS website_status VARCHAR(50);
+
+-- Проверка
+SELECT column_name, data_type, column_default
+FROM information_schema.columns
+WHERE table_name = 'pending_companies' 
+  AND column_name = 'website_status'
+  AND table_schema = 'public';
+
