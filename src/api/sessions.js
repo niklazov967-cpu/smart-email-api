@@ -987,15 +987,10 @@ router.post('/global/stage2', async (req, res) => {
     req.logger.info('Starting global Stage 2');
     
     const Stage2FindWebsites = require('../stages/Stage2FindWebsites');
-    const SonarApiClient = require('../services/SonarApiClient');
     
-    const sonar = new SonarApiClient(
-      process.env.PERPLEXITY_API_KEY,
-      req.logger
-    );
-    
+    // Использовать уже инициализированный Sonar Basic client (с API ключом)
     const stage2 = new Stage2FindWebsites(
-      sonar,
+      req.sonarBasicClient,
       req.settingsManager,
       req.db,
       req.logger
@@ -1027,15 +1022,10 @@ router.post('/global/stage3', async (req, res) => {
     req.logger.info('Starting global Stage 3');
     
     const Stage3AnalyzeContacts = require('../stages/Stage3AnalyzeContacts');
-    const SonarApiClient = require('../services/SonarApiClient');
     
-    const sonar = new SonarApiClient(
-      process.env.PERPLEXITY_API_KEY,
-      req.logger
-    );
-    
+    // Использовать уже инициализированный Sonar Basic client (с API ключом)
     const stage3 = new Stage3AnalyzeContacts(
-      sonar,
+      req.sonarBasicClient,
       req.settingsManager,
       req.db,
       req.logger
@@ -1067,16 +1057,10 @@ router.post('/global/stage4', async (req, res) => {
     req.logger.info('Starting global Stage 4');
     
     const Stage4AnalyzeServices = require('../stages/Stage4AnalyzeServices');
-    const DeepSeekClient = require('../services/DeepSeekClient');
     
-    const deepseek = new DeepSeekClient(
-      process.env.DEEPSEEK_API_KEY,
-      req.logger,
-      'chat'
-    );
-    
+    // Использовать уже инициализированный DeepSeek client
     const stage4 = new Stage4AnalyzeServices(
-      deepseek,
+      req.deepseekClient,
       req.settingsManager,
       req.db,
       req.logger
