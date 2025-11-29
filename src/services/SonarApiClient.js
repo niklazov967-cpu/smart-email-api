@@ -17,6 +17,8 @@ class SonarApiClient {
     this.requestQueue = [];
     this.activeRequests = 0;
     this.lastRequestTime = 0;
+    this.requestInProgress = false; // Глобальная блокировка для последовательных запросов
+    this.requestPromise = null; // Promise текущего запроса
   }
 
   /**
@@ -76,6 +78,15 @@ class SonarApiClient {
     console.log(`   Use cache: ${useCache}`);
     console.log(`   Prompt length: ${prompt?.length || 0} chars`);
 
+    // 🔒 ГЛОБАЛЬНАЯ БЛОКИРОВКА: ждем пока предыдущий запрос завершится
+    while (this.requestInProgress) {
+      console.log(`   ⏸️  Waiting for previous request to complete...`);
+      await this._sleep(100);
+    }
+    
+    this.requestInProgress = true;
+    console.log(`   🔓 Lock acquired, proceeding with request`);
+
     const startTime = Date.now();
     
     // Проверить кеш
@@ -85,6 +96,11 @@ class SonarApiClient {
         this.logger.debug(`Cache HIT for stage: ${stage}`);
         console.log(`   💾 Using cached response`);
         await this._logApiCall(sessionId, stage, 'success', 0, Date.now() - startTime, 0, true);
+        
+        // 🔓 Освобождаем блокировку перед возвратом
+        this.requestInProgress = false;
+        console.log(`   🔓 Lock released (cache hit)`);
+        
         return cached;
       } else {
         console.log(`   ⚠️  Cache MISS`);
@@ -172,6 +188,10 @@ class SonarApiClient {
           attempts: attempt
         });
 
+        // 🔓 Освобождаем блокировку перед возвратом
+        this.requestInProgress = false;
+        console.log(`   🔓 Lock released (success)`);
+
         return result;
 
       } catch (error) {
@@ -222,6 +242,11 @@ class SonarApiClient {
             stage,
             finalError: error.message
           });
+          
+          // 🔓 Освобождаем блокировку перед выбросом ошибки
+          this.requestInProgress = false;
+          console.log(`   🔓 Lock released (all retries failed)`);
+          
           throw new Error(`Sonar API failed after ${this.maxRetries} attempts: ${lastError.message}`);
         }
 
