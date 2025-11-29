@@ -96,12 +96,13 @@ class Stage1FindCompanies {
       await this._saveCompanies(finalCompanies, sessionId);
 
       // Обновить статистику сессии
-      await this.db.query(
-        `UPDATE search_sessions 
-         SET companies_found = $1, updated_at = NOW() 
-         WHERE session_id = $2`,
-        [finalCompanies.length, sessionId]
-      );
+      await this.db.supabase
+        .from('search_sessions')
+        .update({ 
+          companies_found: finalCompanies.length,
+          updated_at: new Date().toISOString()
+        })
+        .eq('session_id', sessionId);
 
       this.logger.info('Stage 1: Completed', {
         found: finalCompanies.length,
@@ -109,19 +110,24 @@ class Stage1FindCompanies {
       });
 
       // Вернуть компании из БД с актуальными данными (включая email)
-      const savedCompanies = await this.db.query(
-        `SELECT company_name, website, email, description, stage
-         FROM pending_companies
-         WHERE session_id = $1
-         ORDER BY created_at DESC
-         LIMIT $2`,
-        [sessionId, finalCompanies.length]
-      );
+      const { data: savedCompanies, error: selectError } = await this.db.supabase
+        .from('pending_companies')
+        .select('company_name, website, email, description, stage')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(finalCompanies.length);
+
+      if (selectError) {
+        this.logger.error('Stage 1: Failed to fetch saved companies', { 
+          error: selectError.message 
+        });
+      }
 
       return {
         success: true,
-        companies: savedCompanies.rows || finalCompanies,
-        count: finalCompanies.length
+        companies: savedCompanies || finalCompanies,
+        count: finalCompanies.length,
+        total: finalCompanies.length
       };
 
     } catch (error) {
