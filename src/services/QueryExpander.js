@@ -63,8 +63,10 @@ class QueryExpander {
         } catch (apiError) {
           this.logger.error('QueryExpander: API request failed', {
             attempt: attempts,
-            error: apiError.message
+            error: apiError.message,
+            stack: apiError.stack
           });
+          console.log(`   ⚠️  QueryExpander: API call failed - ${apiError.message}`);
           // Продолжить со следующей попыткой
           continue;
         }
