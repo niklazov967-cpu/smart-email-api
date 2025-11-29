@@ -56,7 +56,7 @@ class QueryExpander {
           // Запросить у API генерацию вариаций
           response = await this.apiClient.query(prompt, {
             stage: attempts === 1 ? 'query_expansion' : 'query_expansion_retry',
-            maxTokens: 2000,
+            maxTokens: 8000, // Увеличен лимит для генерации большого количества запросов
             useCache: false, // КЭШ ОТКЛЮЧЕН ПОЛНОСТЬЮ!
             temperature: temperature
           });
