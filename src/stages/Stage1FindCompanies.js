@@ -26,9 +26,9 @@ class Stage1FindCompanies {
       
       const topicDescription = sessionData?.topic_description || searchQuery;
       
-      // ОГРАНИЧЕНИЕ ДЛЯ ТЕСТИРОВАНИЯ: максимум 5 компаний
-      const minCompanies = 3;
-      const maxCompanies = 5;
+      // Минимум и максимум компаний для поиска
+      const minCompanies = 5;
+      const maxCompanies = 50;
 
       // Создать промпт для Sonar
       const prompt = this._createPrompt(searchQuery, minCompanies, maxCompanies);
