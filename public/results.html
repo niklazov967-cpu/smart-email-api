@@ -620,13 +620,9 @@
             <div class="filter-group">
                 <label>Статус</label>
                 <select id="statusFilter">
-                    <option value="">Все</option>
+                    <option value="">Все компании</option>
                     <option value="with-email">С email</option>
                     <option value="no-email">Без email</option>
-                    <option value="validated">Проверено AI (любой score)</option>
-                    <option value="valid-companies">✅ Валидные (score ≥ 70)</option>
-                    <option value="rejected">❌ Отклоненные (rejected)</option>
-                    <option value="needs-review">⚠️ Требуют проверки</option>
                 </select>
             </div>
 
@@ -645,17 +641,14 @@
             </div>
         </div>
 
-        <!-- Быстрая статистика по фильтрам -->
+        <!-- Быстрая статистика -->
         <div style="margin-top: 15px; padding: 15px; background: #f7fafc; border-radius: 8px; font-size: 13px;">
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
                 <div>
-                    <strong id="quickStatsValid" style="color: #16a34a;">0</strong> валидных (≥70)
+                    <strong id="quickStatsWithEmail" style="color: #16a34a;">0</strong> компаний с email
                 </div>
                 <div>
-                    <strong id="quickStatsRejected" style="color: #dc2626;">0</strong> отклоненных
-                </div>
-                <div>
-                    <strong id="quickStatsReview" style="color: #ea580c;">0</strong> требуют проверки
+                    Средний рейтинг: <strong id="quickStatsAvgScore" style="color: #667eea;">0</strong>
                 </div>
             </div>
         </div>
@@ -827,14 +820,9 @@
             document.getElementById('validated').textContent = validated;
             document.getElementById('avgScore').textContent = avgScore;
             
-            // Новая быстрая статистика по фильтрам
-            const validCompanies = allCompanies.filter(c => c.validation_score >= 70).length;
-            const rejected = allCompanies.filter(c => c.stage === 'rejected').length;
-            const needsReview = allCompanies.filter(c => c.stage === 'needs_review').length;
-            
-            document.getElementById('quickStatsValid').textContent = validCompanies;
-            document.getElementById('quickStatsRejected').textContent = rejected;
-            document.getElementById('quickStatsReview').textContent = needsReview;
+            // Обновленная быстрая статистика
+            document.getElementById('quickStatsWithEmail').textContent = withEmails;
+            document.getElementById('quickStatsAvgScore').textContent = avgScore;
         }
 
         // Применение фильтров
@@ -843,15 +831,9 @@
             const search = document.getElementById('searchInput').value.toLowerCase();
 
             filteredCompanies = allCompanies.filter(company => {
-                // Фильтр по статусу
+                // Фильтр по статусу (только с/без email)
                 if (status === 'with-email' && (!company.email || company.email === '')) return false;
                 if (status === 'no-email' && company.email && company.email !== '') return false;
-                if (status === 'validated' && !company.validation_score) return false;
-                
-                // Новые фильтры для валидных компаний
-                if (status === 'valid-companies' && (!company.validation_score || company.validation_score < 70)) return false;
-                if (status === 'rejected' && company.stage !== 'rejected') return false;
-                if (status === 'needs-review' && company.stage !== 'needs_review') return false;
 
                 // Поиск
                 if (search) {
@@ -1033,10 +1015,9 @@
         }
 
         function getStatusBadge(stage, email) {
-            if (stage === 'rejected') return '<span class="badge badge-danger">Отклонено</span>';
-            if (stage === 'completed') return '<span class="badge badge-success">Проверено</span>';
-            if (email) return '<span class="badge badge-info">С email</span>';
-            return '<span class="badge badge-warning">В работе</span>';
+            // Убрали категории - теперь показываем только наличие email
+            if (email) return '<span class="badge badge-success">С email</span>';
+            return '<span class="badge badge-warning">Без email</span>';
         }
 
         function getTags(company) {

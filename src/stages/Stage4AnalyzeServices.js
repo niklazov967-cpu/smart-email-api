@@ -401,15 +401,10 @@ Return JSON:
 
       const data = JSON.parse(jsonText);
       
-      // Определить stage
-      let stage = 'needs_review';
+      // Убрали деление на категории - теперь все компании просто 'completed'
+      // Главный параметр - это рейтинг релевантности (score)
+      const stage = 'completed';
       const score = data.relevance || 0;
-      
-      if (score >= 80) {
-        stage = 'completed';
-      } else if (score < 50) {
-        stage = 'rejected';
-      }
       
       // Подготовить теги
       const tags = {};
@@ -442,9 +437,8 @@ Return JSON:
    * Создать fallback результат из частичных данных
    */
   _createFallbackResult(relevance, confidence, company, reason) {
-    let stage = 'needs_review';
-    if (relevance >= 80) stage = 'completed';
-    if (relevance < 50) stage = 'rejected';
+    // Убрали деление на категории - все компании 'completed'
+    const stage = 'completed';
     
     // Сохранить существующие теги
     const tags = {};
@@ -489,9 +483,8 @@ Return JSON:
     if (hasTags) score += 20; else missing.push('tags');
     if (hasEmail || hasWebsite) score += 40; else missing.push('contacts');
     
-    let stage = 'needs_review';
-    if (score >= 80) stage = 'completed';
-    if (score < 40) stage = 'rejected';
+    // Убрали деление на категории - все компании 'completed'
+    const stage = 'completed';
     
     // Сохранить существующие теги
     const tags = this._extractCurrentTags(company);
