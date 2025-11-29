@@ -171,10 +171,24 @@ class Stage3AnalyzeContacts {
 
       const response = await this.sonar.query(prompt, {
         stage: 'stage3_analyze_contacts',
-        useCache: true
+        useCache: false  // Отключаем кэш для свежих результатов
+      });
+
+      this.logger.info('Stage 3: Sonar response received', {
+        company: company.company_name,
+        responseLength: response ? response.length : 0,
+        hasResponse: !!response
       });
 
       const result = this._parseResponse(response);
+
+      this.logger.info('Stage 3: Response parsed', {
+        company: company.company_name,
+        emailsFound: result.emails.length,
+        emails: result.emails,
+        source: result.source,
+        note: result.note
+      });
 
       if (result.emails.length > 0) {
         // Сохранить первый найденный email в колонку email
