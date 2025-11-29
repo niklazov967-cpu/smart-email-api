@@ -411,6 +411,38 @@
       <select id="sessionSelect">
         <option value="">Загрузка сессий...</option>
       </select>
+      
+      <!-- Расширенная информация о сессии -->
+      <div id="sessionInfo" style="display: none; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+        <h3 style="margin: 0 0 15px 0; color: #667eea;">📊 Информация о сессии</h3>
+        <p style="margin-bottom: 8px;"><strong>Запрос:</strong> <span id="sessionQuery" style="color: #667eea;"></span></p>
+        <p style="margin-bottom: 8px;"><strong>Создано:</strong> <span id="sessionDate"></span></p>
+        
+        <!-- Статистика по компаниям -->
+        <div id="companiesStats" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 2px solid #e0e0e0;">
+          <h4 style="margin: 0 0 10px 0; color: #667eea;">📊 Найденные компании:</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">
+            <div style="padding: 10px; background: #f0f9ff; border-radius: 5px;">
+              <div style="font-size: 24px; font-weight: bold; color: #0284c7;" id="totalCompanies">0</div>
+              <div style="font-size: 12px; color: #666;">Всего найдено</div>
+            </div>
+            <div style="padding: 10px; background: #fef3c7; border-radius: 5px;">
+              <div style="font-size: 24px; font-weight: bold; color: #d97706;" id="unprocessedCompanies">0</div>
+              <div style="font-size: 12px; color: #666;">Необработано</div>
+            </div>
+            <div style="padding: 10px; background: #dcfce7; border-radius: 5px;">
+              <div style="font-size: 24px; font-weight: bold; color: #16a34a;" id="completedCompanies">0</div>
+              <div style="font-size: 12px; color: #666;">Обработано</div>
+            </div>
+          </div>
+          
+          <!-- Сообщение о готовности к этапам -->
+          <div id="stageReadiness" style="display: none; padding: 15px; background: #f0f9ff; border-radius: 5px; border-left: 4px solid #0284c7; margin-top: 10px;">
+            <p id="readinessMessage" style="margin: 0; color: #0c4a6e; font-size: 14px;"></p>
+          </div>
+        </div>
+      </div>
+      
       <div class="info-box">
         <p><strong>💡 Совет:</strong> Сначала создайте сессию и сгенерируйте запросы на главной странице, затем вернитесь сюда для пошаговой обработки.</p>
       </div>
@@ -642,17 +674,60 @@
         
         const select = document.getElementById('sessionSelect');
         
-        if (data.data && data.data.length > 0) {
-          select.innerHTML = '<option value="">Выберите сессию...</option>';
-          data.data.forEach(session => {
-            const option = document.createElement('option');
-            option.value = session.session_id;
-            option.textContent = `${session.topic_description} (${new Date(session.created_at).toLocaleDateString()})`;
-            select.appendChild(option);
-          });
-        } else {
+        if (!data.data || data.data.length === 0) {
           select.innerHTML = '<option value="">Нет доступных сессий</option>';
+          return;
         }
+        
+        // Загрузить статистику по компаниям для каждой сессии
+        const sessionsWithStats = await Promise.all(
+          data.data.map(async (session) => {
+            try {
+              const companiesRes = await fetch(`/api/debug/companies`);
+              const companiesData = await companiesRes.json();
+              
+              // Фильтровать компании этой сессии
+              const sessionCompanies = companiesData.companies?.filter(
+                c => c.session_id === session.session_id
+              ) || [];
+              
+              // Подсчитать необработанные (без stage 'completed')
+              const unprocessed = sessionCompanies.filter(
+                c => !c.stage || c.stage !== 'completed'
+              ).length;
+              
+              return {
+                ...session,
+                totalCompanies: sessionCompanies.length,
+                unprocessedCount: unprocessed,
+                processedCount: sessionCompanies.length - unprocessed
+              };
+            } catch (err) {
+              console.error('Failed to load stats for session:', session.session_id, err);
+              return { ...session, totalCompanies: 0, unprocessedCount: 0, processedCount: 0 };
+            }
+          })
+        );
+        
+        select.innerHTML = '<option value="">Выберите сессию...</option>';
+        sessionsWithStats.forEach(session => {
+          const option = document.createElement('option');
+          option.value = session.session_id;
+          
+          let displayText = `${session.topic_description} (${new Date(session.created_at).toLocaleDateString()})`;
+          if (session.totalCompanies > 0) {
+            displayText += ` | ${session.unprocessedCount} необраб.`;
+          }
+          
+          option.textContent = displayText;
+          option.dataset.query = session.search_query || session.topic_description;
+          option.dataset.date = session.created_at;
+          option.dataset.totalCompanies = session.totalCompanies;
+          option.dataset.unprocessedCount = session.unprocessedCount;
+          option.dataset.processedCount = session.processedCount;
+          
+          select.appendChild(option);
+        });
       } catch (error) {
         console.error('Error loading sessions:', error);
         document.getElementById('sessionSelect').innerHTML = '<option value="">Ошибка загрузки</option>';
@@ -660,10 +735,74 @@
     }
 
     // Обработчик выбора сессии
-    document.getElementById('sessionSelect').addEventListener('change', (e) => {
+    document.getElementById('sessionSelect').addEventListener('change', async (e) => {
       currentSessionId = e.target.value;
       document.getElementById('startBtn').disabled = !currentSessionId;
+      
+      if (currentSessionId) {
+        await updateSessionInfo();
+      } else {
+        document.getElementById('sessionInfo').style.display = 'none';
+      }
     });
+    
+    // Функция обновления информации о сессии
+    async function updateSessionInfo() {
+      const select = document.getElementById('sessionSelect');
+      const sessionInfo = document.getElementById('sessionInfo');
+      const companiesStats = document.getElementById('companiesStats');
+      const selectedOption = select.options[select.selectedIndex];
+      
+      if (!selectedOption || !selectedOption.value) {
+        sessionInfo.style.display = 'none';
+        return;
+      }
+      
+      const sessionId = selectedOption.value;
+      
+      // Обновить базовую информацию
+      document.getElementById('sessionQuery').textContent = selectedOption.dataset.query || 'N/A';
+      const date = new Date(selectedOption.dataset.date);
+      document.getElementById('sessionDate').textContent = date.toLocaleString('ru-RU');
+      
+      sessionInfo.style.display = 'block';
+      
+      // Показать статистику если есть компании
+      const totalCompanies = parseInt(selectedOption.dataset.totalCompanies) || 0;
+      
+      if (totalCompanies > 0) {
+        companiesStats.style.display = 'block';
+        
+        const unprocessed = parseInt(selectedOption.dataset.unprocessedCount) || 0;
+        const processed = parseInt(selectedOption.dataset.processedCount) || 0;
+        
+        document.getElementById('totalCompanies').textContent = totalCompanies;
+        document.getElementById('unprocessedCompanies').textContent = unprocessed;
+        document.getElementById('completedCompanies').textContent = processed;
+        
+        // Показать сообщение о готовности
+        const stageReadiness = document.getElementById('stageReadiness');
+        const readinessMessage = document.getElementById('readinessMessage');
+        
+        if (totalCompanies > 0 && unprocessed === 0) {
+          stageReadiness.style.display = 'block';
+          stageReadiness.style.background = '#dcfce7';
+          stageReadiness.style.borderColor = '#16a34a';
+          readinessMessage.style.color = '#166534';
+          readinessMessage.innerHTML = '✅ <strong>Все компании обработаны!</strong> Все ' + totalCompanies + ' компаний прошли все этапы обработки.';
+        } else if (unprocessed > 0) {
+          stageReadiness.style.display = 'block';
+          stageReadiness.style.background = '#fef3c7';
+          stageReadiness.style.borderColor = '#f59e0b';
+          readinessMessage.style.color = '#92400e';
+          readinessMessage.innerHTML = '⏳ <strong>' + unprocessed + ' компаний требуют обработки.</strong> Используйте пошаговую обработку для их обработки.';
+        } else {
+          stageReadiness.style.display = 'none';
+        }
+      } else {
+        companiesStats.style.display = 'none';
+      }
+    }
 
     // Начать обработку
     document.getElementById('startBtn').addEventListener('click', async () => {
