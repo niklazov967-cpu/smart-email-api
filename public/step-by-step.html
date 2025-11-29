@@ -794,23 +794,36 @@
           const progressResponse = await fetch(`/api/sessions/${sessionId}/stage-progress`);
           const progressData = await progressResponse.json();
           
-          // Также проверить реальное состояние компаний
-          const companiesResponse = await fetch(`/api/debug/companies`);
-          const companiesData = await companiesResponse.json();
-          const sessionCompanies = companiesData.companies?.filter(c => c.session_id === sessionId) || [];
-          
-          // Определить какой этап реально нужен
-          const allCompleted = sessionCompanies.every(c => c.stage === 'completed');
-          const needsStage4 = sessionCompanies.some(c => c.website && c.stage !== 'completed');
-          const needsStage3 = sessionCompanies.some(c => c.website && !c.email);
-          const needsStage2 = sessionCompanies.some(c => !c.website && c.stage === 'names_found');
-          
-          let actualNextStage = null;
-          if (!allCompleted) {
-            if (needsStage2) actualNextStage = 2;
-            else if (needsStage3) actualNextStage = 3;
-            else if (needsStage4) actualNextStage = 4;
+        // Также проверить реальное состояние компаний
+        const companiesResponse = await fetch(`/api/debug/companies`);
+        const companiesData = await companiesResponse.json();
+        const sessionCompanies = companiesData.companies?.filter(c => c.session_id === sessionId) || [];
+        
+        // Определить какой этап реально нужен на основе current_stage
+        const stageNeeded = {};
+        sessionCompanies.forEach(c => {
+          const stage = c.current_stage || 1;
+          stageNeeded[stage] = (stageNeeded[stage] || 0) + 1;
+        });
+        
+        // Найти минимальный незавершенный этап
+        let actualNextStage = null;
+        const allOnStage4 = sessionCompanies.every(c => c.current_stage === 4);
+        const allCompleted = allOnStage4 && sessionCompanies.every(c => 
+          c.stage4_status === 'completed' || c.stage4_status === 'rejected'
+        );
+        
+        if (!allCompleted) {
+          if (stageNeeded[1] && stageNeeded[1] > 0) {
+            actualNextStage = 2; // Есть компании на Stage 1, нужен Stage 2
+          } else if (stageNeeded[2] && stageNeeded[2] > 0) {
+            actualNextStage = 3; // Есть компании на Stage 2, нужен Stage 3
+          } else if (stageNeeded[3] && stageNeeded[3] > 0) {
+            actualNextStage = 4; // Есть компании на Stage 3, нужен Stage 4
+          } else if (stageNeeded[4] && stageNeeded[4] > 0) {
+            actualNextStage = 4; // Есть незавершенные на Stage 4
           }
+        }
           
           if (progressData.success && (progressData.lastCompletedStage > 0 || actualNextStage)) {
             // Есть завершенные этапы - показать информацию
@@ -902,34 +915,45 @@
       document.getElementById('sessionSelector').style.display = 'none';
       document.getElementById('stagesContainer').style.display = 'block';
       
-      // Проверить реальное состояние компаний и прогресс сессии
-      try {
-        // Получить компании этой сессии
-        const companiesResponse = await fetch(`/api/debug/companies`);
-        const companiesData = await companiesResponse.json();
-        const sessionCompanies = companiesData.companies?.filter(c => c.session_id === currentSessionId) || [];
-        
-        // Определить какой этап реально нужен
-        const allCompleted = sessionCompanies.every(c => c.stage === 'completed');
-        const needsStage4 = sessionCompanies.some(c => c.website && c.stage !== 'completed');
-        const needsStage3 = sessionCompanies.some(c => c.website && !c.email);
-        const needsStage2 = sessionCompanies.some(c => !c.website && c.stage === 'names_found');
-        
-        let actualNextStage = 1; // По умолчанию с первого
-        if (sessionCompanies.length > 0) {
-          if (allCompleted) {
-            alert('✅ Все компании уже обработаны!\n\nМожете создать новую сессию.');
-            document.getElementById('sessionSelector').style.display = 'block';
-            document.getElementById('stagesContainer').style.display = 'none';
-            return;
-          } else if (needsStage2) {
-            actualNextStage = 2;
-          } else if (needsStage3) {
-            actualNextStage = 3;
-          } else if (needsStage4) {
+        // Проверить реальное состояние компаний и прогресс сессии
+        try {
+          // Получить компании этой сессии
+          const companiesResponse = await fetch(`/api/debug/companies`);
+          const companiesData = await companiesResponse.json();
+          const sessionCompanies = companiesData.companies?.filter(c => c.session_id === currentSessionId) || [];
+          
+          // Определить какой этап реально нужен на основе current_stage
+          const stageNeeded = {};
+          sessionCompanies.forEach(c => {
+            const stage = c.current_stage || 1;
+            stageNeeded[stage] = (stageNeeded[stage] || 0) + 1;
+          });
+          
+          // Найти минимальный незавершенный этап
+          let actualNextStage = 1;
+          if (stageNeeded[1] && stageNeeded[1] > 0) {
+            actualNextStage = 2; // Есть компании на Stage 1, нужен Stage 2
+          } else if (stageNeeded[2] && stageNeeded[2] > 0) {
+            actualNextStage = 3; // Есть компании на Stage 2, нужен Stage 3
+          } else if (stageNeeded[3] && stageNeeded[3] > 0) {
+            actualNextStage = 4; // Есть компании на Stage 3, нужен Stage 4
+          } else if (stageNeeded[4] && stageNeeded[4] > 0) {
+            // Все на Stage 4 - проверить завершенность
+            const allCompleted = sessionCompanies.every(c => c.stage4_status === 'completed' || c.stage4_status === 'rejected');
+            if (allCompleted) {
+              alert('✅ Все компании уже обработаны!\n\nМожете создать новую сессию.');
+              document.getElementById('sessionSelector').style.display = 'block';
+              document.getElementById('stagesContainer').style.display = 'none';
+              return;
+            }
             actualNextStage = 4;
           }
-        }
+          
+          this.logger.info('Calculated next stage', {
+            stageNeeded,
+            actualNextStage,
+            sessionCompanies: sessionCompanies.length
+          });
         
         // Получить историю прогресса
         const progressResponse = await fetch(`/api/sessions/${currentSessionId}/stage-progress`);

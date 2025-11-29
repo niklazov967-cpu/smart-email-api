@@ -84,14 +84,14 @@ class Stage2FindWebsites {
   }
 
   async _getCompanies(sessionId) {
-    // Получить только компании БЕЗ сайта
-    // (Stage 1 уже мог найти сайты для некоторых)
-    // Не фильтруем по stage, т.к. Stage4 может изменить stage
+    // Получить только компании БЕЗ сайта И НЕ пропущенные
+    // stage2_status должен быть NULL (не 'skipped', не 'completed', не 'failed')
     const { data, error } = await this.db.supabase
       .from('pending_companies')
-      .select('company_id, company_name')
+      .select('company_id, company_name, current_stage, stage2_status, website')
       .eq('session_id', sessionId)
-      .or('website.is.null,website.eq.');
+      .or('website.is.null,website.eq.')
+      .is('stage2_status', null); // Только те у кого Stage 2 еще не обработан
     
     if (error) {
       this.logger.error('Stage 2: Failed to fetch companies without website', { 
@@ -101,12 +101,16 @@ class Stage2FindWebsites {
       throw new Error(`Failed to fetch companies: ${error.message}`);
     }
     
-    this.logger.info('Stage 2: Companies without website', {
-      count: data?.length || 0,
+    // Дополнительная проверка: current_stage должен быть >= 1
+    const filtered = (data || []).filter(c => c.current_stage >= 1);
+    
+    this.logger.info('Stage 2: Companies ready for processing', {
+      total: data?.length || 0,
+      readyForStage2: filtered.length,
       sessionId
     });
     
-    return data || [];
+    return filtered;
   }
 
   async _findWebsite(company, sessionId) {
@@ -181,14 +185,28 @@ class Stage2FindWebsites {
       }
 
       if (result.website || result.email || result.description) {
-        // Определяем новый stage
-        let newStage = 'names_found';
+        // НОВАЯ ЛОГИКА: Определяем статусы для каждого этапа
+        let currentStage = 2; // Минимум Stage 2 завершен
+        let stage3Status = null;
+        let legacyStage = 'website_found';
+        
         if (result.website && result.email) {
-          newStage = 'contacts_found';
+          // Оба найдены - Stage 3 пропущен
+          stage3Status = 'skipped';
+          currentStage = 3; // Готов для Stage 4
+          legacyStage = 'contacts_found';
+          
+          this.logger.info('Stage 2: Both website and email found, Stage 3 will be skipped', {
+            company: company.company_name,
+            website: result.website,
+            email: result.email
+          });
         } else if (result.website) {
-          newStage = 'website_found';
+          legacyStage = 'website_found';
         } else if (result.email) {
-          newStage = 'email_found';
+          // Email без сайта
+          legacyStage = 'email_found';
+          currentStage = 2; // Остается на Stage 2 (нет сайта)
         }
 
         // Извлечь теги и сервисы из описания
@@ -217,7 +235,10 @@ class Stage2FindWebsites {
           email: result.email,
           description: result.description || undefined,
           services: services || undefined,
-          stage: newStage,
+          stage: legacyStage,
+          stage2_status: 'completed',
+          stage3_status: stage3Status,
+          current_stage: currentStage,
           stage2_raw_data: rawData,
           updated_at: new Date().toISOString(),
           ...tagData // tag1, tag2, ... tag20
@@ -265,6 +286,8 @@ class Stage2FindWebsites {
           .from('pending_companies')
           .update({
             website_status: 'not_found',
+            stage2_status: 'failed',
+            current_stage: 1, // Остается на Stage 1
             stage2_raw_data: rawDataNotFound,
             updated_at: new Date().toISOString()
           })

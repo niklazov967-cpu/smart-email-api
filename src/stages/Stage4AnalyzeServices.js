@@ -40,20 +40,39 @@ class Stage4AnalyzeServices {
         topic: mainTopic
       });
       
-      // Получить ВСЕ компании со ВСЕМИ данными
+      // Получить ВСЕ компании со ВСЕМИ данными, готовые для Stage 4
+      // current_stage должен быть >= 3 (Stage 3 завершен)
+      // stage4_status должен быть NULL (еще не обработан)
       const { data: companies, error: companiesError } = await this.db.supabase
         .from('pending_companies')
         .select(`
           company_id, company_name, website, email, description, services,
           tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10,
           tag11, tag12, tag13, tag14, tag15, tag16, tag17, tag18, tag19, tag20,
-          stage1_raw_data, stage2_raw_data, stage3_raw_data, stage
+          stage1_raw_data, stage2_raw_data, stage3_raw_data, stage,
+          current_stage, stage4_status
         `)
-        .eq('session_id', sessionId);
+        .eq('session_id', sessionId)
+        .gte('current_stage', 3) // Минимум Stage 3 завершен
+        .is('stage4_status', null); // Только те у кого Stage 4 еще не обработан
 
       if (companiesError) {
         this.logger.error('Stage 4: Failed to get companies', { error: companiesError.message });
         throw companiesError;
+      }
+      
+      if (!companies || companies.length === 0) {
+        this.logger.info('Stage 4: No companies ready for validation', {
+          sessionId,
+          reason: 'Either all processed or none passed Stage 3'
+        });
+        return {
+          success: true,
+          total: 0,
+          validated: 0,
+          rejected: 0,
+          needsReview: 0
+        };
       }
       let validated = 0;
       let rejected = 0;
@@ -93,6 +112,9 @@ class Stage4AnalyzeServices {
           
           const updateData = {
             stage: result.stage,
+            stage4_status: result.stage === 'completed' ? 'completed' : 
+                           result.stage === 'rejected' ? 'rejected' : 'needs_review',
+            current_stage: 4, // Финальный этап
             validation_score: result.score,
             validation_reason: result.reason,
             ai_generated_description: result.aiDescription,

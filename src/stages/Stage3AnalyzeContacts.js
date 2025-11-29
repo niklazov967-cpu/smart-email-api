@@ -77,20 +77,27 @@ class Stage3AnalyzeContacts {
   }
 
   async _getCompanies(sessionId) {
-    // Получить компании с сайтом, но без email
+    // Получить компании с сайтом, но без email И НЕ пропущенные
+    // stage3_status должен быть NULL (не 'skipped', не 'completed', не 'failed')
+    // current_stage должен быть >= 2 (Stage 2 завершен)
     const { data, error } = await this.db.supabase
       .from('pending_companies')
-      .select('company_id, company_name, website')
+      .select('company_id, company_name, website, current_stage, stage3_status')
       .eq('session_id', sessionId)
       .not('website', 'is', null)
-      .or('email.is.null,email.eq.""');
+      .or('email.is.null,email.eq.""')
+      .is('stage3_status', null) // Только те у кого Stage 3 еще не обработан
+      .gte('current_stage', 2); // Минимум Stage 2 завершен
     
     if (error) {
       this.logger.error('Stage 3: Failed to get companies', { error: error.message });
       throw error;
     }
     
-    this.logger.info(`Stage 3: Found ${data?.length || 0} companies for processing`);
+    this.logger.info(`Stage 3: Found ${data?.length || 0} companies ready for processing`, {
+      total: data?.length || 0,
+      sessionId
+    });
     return data || [];
   }
 
@@ -175,6 +182,8 @@ class Stage3AnalyzeContacts {
             email: primaryEmail,
             contacts_json: result,
             stage: 'contacts_found',
+            stage3_status: 'completed',
+            current_stage: 3, // Готов для Stage 4
             stage3_raw_data: rawData,
             updated_at: new Date().toISOString()
           })
@@ -197,11 +206,23 @@ class Stage3AnalyzeContacts {
         return { success: true, emails: result.emails };
       } else {
         // Отметить как обработано без контактов
+        const rawDataNoEmail = {
+          company: company.company_name,
+          full_response: response ? response.substring(0, 10000) : null,
+          timestamp: new Date().toISOString(),
+          source: 'perplexity_sonar_pro',
+          search_type: 'direct',
+          result: 'not_found'
+        };
+        
         const { error: updateError } = await this.db.supabase
           .from('pending_companies')
           .update({
             contacts_json: { emails: [], note: result.note || 'No contacts found' },
             stage: 'site_analyzed',
+            stage3_status: 'failed',
+            current_stage: 2, // Остается на Stage 2 (нет email)
+            stage3_raw_data: rawDataNoEmail,
             updated_at: new Date().toISOString()
           })
           .eq('company_id', company.company_id);

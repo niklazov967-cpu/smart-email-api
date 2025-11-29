@@ -704,10 +704,34 @@ STRICT JSON OUTPUT ONLY.`;
         }
       }
       
-      // Определяем stage в зависимости от наличия данных
-      let stage = 'names_found';
+      // НОВАЯ ЛОГИКА: Определяем статусы для каждого этапа
+      let currentStage = 1;
+      let stage2Status = null;
+      let stage3Status = null;
+      let legacyStage = 'names_found'; // Для обратной совместимости
+      
+      // Если сайт найден сразу - Stage 2 пропущен
       if (normalizedWebsite) {
-        stage = company.email ? 'contacts_found' : 'website_found';
+        stage2Status = 'skipped';
+        currentStage = 2; // Готов для Stage 3
+        legacyStage = 'website_found';
+        
+        this.logger.info('Stage 1: Website found, Stage 2 will be skipped', {
+          company: company.name,
+          website: normalizedWebsite
+        });
+        
+        // Если email тоже найден - Stage 3 тоже пропущен
+        if (company.email) {
+          stage3Status = 'skipped';
+          currentStage = 3; // Готов для Stage 4
+          legacyStage = 'contacts_found';
+          
+          this.logger.info('Stage 1: Email found, Stage 3 will be skipped', {
+            company: company.name,
+            email: company.email
+          });
+        }
       }
       
       // Извлечь теги и сервисы из описания
@@ -753,7 +777,13 @@ STRICT JSON OUTPUT ONLY.`;
         tag18: tagData.tag18,
         tag19: tagData.tag19,
         tag20: tagData.tag20,
-        stage: stage
+        stage: legacyStage,
+        // НОВЫЕ ПОЛЯ для отслеживания прогресса
+        stage1_status: 'completed',
+        stage2_status: stage2Status,
+        stage3_status: stage3Status,
+        stage4_status: null,
+        current_stage: currentStage
       });
     }
     
