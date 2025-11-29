@@ -567,7 +567,12 @@
 
     function displayQueries(queries) {
       const container = document.getElementById('queriesList');
-      container.innerHTML = queries.map((q, idx) => `
+      container.innerHTML = queries.map((q, idx) => {
+        const relevance = q.relevance || q.relevance_score || 0;
+        const relevanceColor = relevance >= 80 ? '#10b981' : relevance >= 60 ? '#f59e0b' : '#ef4444';
+        const relevanceLabel = relevance >= 80 ? 'Высокая' : relevance >= 60 ? 'Средняя' : 'Низкая';
+        
+        return `
         <div class="query-item" id="query-${idx}">
           <input type="checkbox" class="query-checkbox" id="checkbox-${idx}" 
                  onchange="updateSelectedCount()" checked>
@@ -575,8 +580,13 @@
             <div class="query-cn">${q.query_cn || q.chinese_query || q.query}</div>
             <div class="query-ru">${q.query_ru || q.russian_query || q.translation || ''}</div>
           </div>
+          <div style="margin-left: 15px; text-align: right; min-width: 100px;">
+            <div style="font-size: 20px; font-weight: bold; color: ${relevanceColor};">${relevance}</div>
+            <div style="font-size: 11px; color: ${relevanceColor}; font-weight: 600;">${relevanceLabel}</div>
+          </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
       updateSelectedCount();
     }
 
