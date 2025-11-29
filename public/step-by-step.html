@@ -19,7 +19,7 @@
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
     }
 
@@ -34,9 +34,6 @@
     .header h1 {
       color: #333;
       margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
     }
 
     .header p {
@@ -44,20 +41,16 @@
       font-size: 14px;
     }
 
-    .progress-bar {
-      width: 100%;
-      height: 8px;
-      background: #e0e0e0;
-      border-radius: 4px;
-      overflow: hidden;
-      margin-top: 20px;
+    .back-link {
+      display: inline-block;
+      margin-bottom: 15px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
     }
 
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-      transition: width 0.3s ease;
-      width: 0%;
+    .back-link:hover {
+      text-decoration: underline;
     }
 
     .stage-card {
@@ -66,18 +59,6 @@
       padding: 30px;
       margin-bottom: 20px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      opacity: 0.5;
-      transition: all 0.3s ease;
-    }
-
-    .stage-card.active {
-      opacity: 1;
-      border: 2px solid #667eea;
-    }
-
-    .stage-card.completed {
-      opacity: 1;
-      background: #f0f7ff;
     }
 
     .stage-header {
@@ -85,1185 +66,920 @@
       align-items: center;
       justify-content: space-between;
       margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #f0f0f0;
     }
 
     .stage-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
       font-size: 24px;
       font-weight: 600;
       color: #333;
     }
 
-    .stage-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      background: #e0e0e0;
-    }
-
-    .stage-card.active .stage-icon {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      animation: pulse 2s infinite;
-    }
-
-    .stage-card.completed .stage-icon {
-      background: #10b981;
-      color: white;
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-    }
-
-    .stage-status {
-      padding: 6px 16px;
+    .stage-badge {
+      padding: 8px 16px;
       border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
-    .status-pending {
-      background: #e0e0e0;
-      color: #666;
-    }
-
-    .status-active {
-      background: #667eea;
-      color: white;
-      animation: blink 2s infinite;
-    }
-
-    .status-completed {
-      background: #10b981;
-      color: white;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .stage-content {
-      display: none;
-    }
-
-    .stage-card.active .stage-content,
-    .stage-card.completed .stage-content {
-      display: block;
-    }
-
-    .results-list {
-      background: #f8f9fa;
-      border-radius: 8px;
-      padding: 20px;
-      margin: 20px 0;
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .result-item {
-      background: white;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 10px;
-      border-left: 4px solid #667eea;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    }
-
-    .result-item:last-child {
-      margin-bottom: 0;
-    }
-
-    .result-title {
-      font-weight: 600;
-      color: #333;
-      margin-bottom: 5px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .result-detail {
       font-size: 14px;
-      color: #666;
-      margin-top: 5px;
-    }
-
-    .result-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
       font-weight: 600;
-      background: #e0e0e0;
-      color: #666;
     }
 
-    .result-badge.high { background: #10b981; color: white; }
-    .result-badge.medium { background: #f59e0b; color: white; }
-    .result-badge.low { background: #6b7280; color: white; }
-
-    .badge-new {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      margin-left: 8px;
-      animation: pulse 2s ease-in-out infinite;
+    .badge-ready {
+      background: #d4edda;
+      color: #155724;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
+    .badge-empty {
+      background: #f8f9fa;
+      color: #6c757d;
     }
 
-    .loading {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 20px;
-      background: #f0f7ff;
-      border-radius: 8px;
-      margin: 20px 0;
+    .badge-running {
+      background: #fff3cd;
+      color: #856404;
     }
 
-    .spinner {
-      width: 24px;
-      height: 24px;
-      border: 3px solid #e0e0e0;
-      border-top-color: #667eea;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .loading-text {
-      color: #667eea;
-      font-weight: 500;
-    }
-
-    .action-buttons {
-      display: flex;
-      gap: 12px;
-      margin-top: 20px;
-    }
-
-    .btn {
-      padding: 12px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
-
-    .btn-secondary {
-      background: white;
-      color: #667eea;
-      border: 2px solid #667eea;
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-      background: #f0f7ff;
-    }
-
-    .btn-success {
-      background: #10b981;
-      color: white;
-    }
-
-    .btn-success:hover:not(:disabled) {
-      background: #059669;
-    }
-
-    .stats {
+    .companies-stats {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 15px;
       margin: 20px 0;
     }
 
-    .stat-card {
-      background: white;
-      border-radius: 8px;
+    .stat-box {
       padding: 15px;
-      text-align: center;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      border-radius: 8px;
+      background: #f8f9fa;
     }
 
     .stat-value {
       font-size: 32px;
-      font-weight: 700;
-      color: #667eea;
+      font-weight: bold;
+      margin-bottom: 5px;
     }
 
     .stat-label {
       font-size: 14px;
       color: #666;
-      margin-top: 5px;
     }
 
-    .empty-state {
+    .companies-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+
+    .company-item {
+      padding: 10px;
+      margin-bottom: 8px;
+      background: white;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .company-name {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .company-info {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      color: white;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .button-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .button-success {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+
+    .button-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+
+    .loading {
       text-align: center;
       padding: 40px;
       color: #666;
     }
 
-    .empty-state-icon {
-      font-size: 48px;
-      margin-bottom: 15px;
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #999;
     }
 
-    .session-selector {
+    .status-message {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+
+    .status-success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status-error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .status-info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+
+    .logout-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 2px solid white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .logout-btn:hover {
       background: white;
-      border-radius: 12px;
-      padding: 30px;
-      margin-bottom: 20px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      color: #667eea;
     }
 
-    select {
+    .input-group {
+      margin: 15px 0;
+    }
+
+    .input-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .input-group input, .input-group textarea, .input-group select {
       width: 100%;
       padding: 12px;
       border: 2px solid #e0e0e0;
       border-radius: 8px;
-      font-size: 16px;
-      margin: 10px 0;
-      cursor: pointer;
+      font-size: 14px;
     }
 
-    select:focus {
+    .input-group input:focus, .input-group textarea:focus {
       outline: none;
       border-color: #667eea;
     }
 
-    .info-box {
-      background: #f0f7ff;
-      border-left: 4px solid #667eea;
-      padding: 15px;
+    .queries-list {
+      margin-top: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .query-item {
+      background: #f8f9fa;
+      border: 2px solid #e0e0e0;
       border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    .query-item:hover {
+      border-color: #667eea;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+
+    .query-item.selected {
+      border-color: #667eea;
+      background: #f0f4ff;
+    }
+
+    .query-checkbox {
+      width: 20px;
+      height: 20px;
+      margin-right: 15px;
+      cursor: pointer;
+    }
+
+    .query-content {
+      flex: 1;
+    }
+
+    .query-cn {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .query-ru {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #e0e0e0;
+      border-radius: 3px;
+      overflow: hidden;
       margin: 20px 0;
     }
 
-    .info-box p {
-      color: #666;
-      font-size: 14px;
-      line-height: 1.6;
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s ease;
+      width: 0%;
     }
   </style>
 </head>
 <body>
+  <button onclick="logout()" class="logout-btn">🚪 Выйти</button>
+
   <div class="container">
-    <!-- Заголовок -->
     <div class="header">
-      <h1>
-        <span>👣</span>
-        Пошаговая обработка
-      </h1>
-      <p>Контроль каждого этапа. Вы подтверждаете переход к следующему шагу после просмотра результатов.</p>
-      <div style="margin-top: 10px; margin-bottom: 10px;">
-        <button onclick="clearDatabase()" style="background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
-          🗑️ Очистить базу данных
-        </button>
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill" id="overallProgress"></div>
-      </div>
+      <a href="/" class="back-link">← Назад на главную</a>
+      <h1>📋 Пошаговая обработка компаний</h1>
+      <p>Пройдите все этапы от генерации запросов до получения готовых контактов</p>
     </div>
 
-    <!-- Выбор сессии -->
-    <div class="session-selector" id="sessionSelector">
-      <h2 style="margin-bottom: 15px;">📋 Выберите сессию</h2>
-      <select id="sessionSelect">
-        <option value="">Загрузка сессий...</option>
-      </select>
-      
-      <!-- Расширенная информация о сессии -->
-      <div id="sessionInfo" style="display: none; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-        <h3 style="margin: 0 0 15px 0; color: #667eea;">📊 Информация о сессии</h3>
-        <p style="margin-bottom: 8px;"><strong>Запрос:</strong> <span id="sessionQuery" style="color: #667eea;"></span></p>
-        <p style="margin-bottom: 8px;"><strong>Создано:</strong> <span id="sessionDate"></span></p>
+    <!-- Этап 0: Генерация запросов -->
+    <div class="stage-card">
+      <div class="stage-header">
+        <div class="stage-title">🔍 Шаг 0: Генерация поисковых запросов</div>
+      </div>
+
+      <div class="input-group">
+        <label>Введите основную тему для генерации под-запросов:</label>
+        <textarea id="mainTopic" rows="3" placeholder="Например: Производители деталей для обработки металла в Китае"></textarea>
+      </div>
+
+      <div class="input-group">
+        <label>Количество под-запросов (10-50):</label>
+        <input type="number" id="numQueries" value="10" min="10" max="50">
+      </div>
+
+      <button class="button button-primary" onclick="generateQueries()">
+        ✨ Сгенерировать запросы
+      </button>
+
+      <div id="generationStatus" style="display: none;"></div>
+
+      <!-- Список сгенерированных запросов -->
+      <div id="queriesSection" style="display: none;">
+        <h3 style="margin: 20px 0 10px; color: #667eea;">📝 Выберите запросы для обработки:</h3>
+        <div style="margin-bottom: 15px;">
+          <button class="button button-success" onclick="selectAllQueries(true)">✅ Выбрать все</button>
+          <button class="button button-danger" onclick="selectAllQueries(false)">❌ Снять все</button>
+          <span style="margin-left: 15px; color: #666;">
+            Выбрано: <strong id="selectedCount">0</strong> запросов
+          </span>
+        </div>
+        <div id="queriesList" class="queries-list"></div>
         
-        <!-- Статистика по компаниям -->
-        <div id="companiesStats" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 8px; border: 2px solid #e0e0e0;">
-          <h4 style="margin: 0 0 10px 0; color: #667eea;">📊 Найденные компании:</h4>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">
-            <div style="padding: 10px; background: #f0f9ff; border-radius: 5px;">
-              <div style="font-size: 24px; font-weight: bold; color: #0284c7;" id="totalCompanies">0</div>
-              <div style="font-size: 12px; color: #666;">Всего найдено</div>
-            </div>
-            <div style="padding: 10px; background: #fef3c7; border-radius: 5px;">
-              <div style="font-size: 24px; font-weight: bold; color: #d97706;" id="unprocessedCompanies">0</div>
-              <div style="font-size: 12px; color: #666;">Необработано</div>
-            </div>
-            <div style="padding: 10px; background: #dcfce7; border-radius: 5px;">
-              <div style="font-size: 24px; font-weight: bold; color: #16a34a;" id="completedCompanies">0</div>
-              <div style="font-size: 12px; color: #666;">Обработано</div>
-            </div>
-          </div>
-          
-          <!-- Сообщение о готовности к этапам -->
-          <div id="stageReadiness" style="display: none; padding: 15px; background: #f0f9ff; border-radius: 5px; border-left: 4px solid #0284c7; margin-top: 10px;">
-            <p id="readinessMessage" style="margin: 0; color: #0c4a6e; font-size: 14px;"></p>
-          </div>
-          
-          <!-- Информация о прогрессе этапов -->
-          <div id="stageProgress" style="display: none; padding: 15px; background: #fef3c7; border-radius: 5px; border-left: 4px solid #f59e0b; margin-top: 10px;">
-            <h5 style="margin: 0 0 8px 0; color: #92400e;">⚠️ Прогресс обработки</h5>
-            <p id="progressMessage" style="margin: 0; color: #92400e; font-size: 14px;"></p>
-            <button id="clearProgressBtn" style="margin-top: 10px; padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 13px;">
-              🗑️ Очистить прогресс и начать заново
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      <div class="info-box">
-        <p><strong>💡 Совет:</strong> Сначала создайте сессию и сгенерируйте запросы на главной странице, затем вернитесь сюда для пошаговой обработки.</p>
-      </div>
-      <div class="action-buttons">
-        <button class="btn btn-primary" id="startBtn" disabled>
-          <span>▶️</span>
-          Начать пошаговую обработку
-        </button>
-        <button class="btn btn-secondary" onclick="window.location.href='/'">
-          <span>🏠</span>
-          На главную
+        <button class="button button-success" onclick="saveSelectedQueries()" style="margin-top: 20px;">
+          💾 Сохранить выбранные запросы и создать сессию
         </button>
       </div>
     </div>
 
-    <!-- Этапы обработки -->
-    <div id="stagesContainer" style="display: none;">
-      <!-- Stage 1: Поиск компаний -->
-      <div class="stage-card" id="stage1" data-stage="1">
-        <div class="stage-header">
-          <div class="stage-title">
-            <div class="stage-icon">🏢</div>
-            <span>Этап 1: Поиск компаний</span>
-          </div>
-          <div class="stage-status status-pending" id="status1">Ожидание</div>
-        </div>
-        <div class="stage-content">
-          <div id="loading1" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <div class="loading-text">Ищу компании по запросам...</div>
-          </div>
-          <div id="results1" style="display: none;">
-            <div class="stats">
-              <div class="stat-card">
-                <div class="stat-value" id="stat1-queries">0</div>
-                <div class="stat-label">Запросов обработано</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value" id="stat1-companies">0</div>
-                <div class="stat-label">Компаний найдено</div>
-              </div>
-            </div>
-            <div class="results-list" id="resultsList1"></div>
-            <div class="action-buttons">
-              <button class="btn btn-success" id="continue1">
-                <span>✅</span>
-                Продолжить к следующему этапу
-              </button>
-            </div>
-          </div>
+    <!-- Stage 1: Поиск компаний -->
+    <div class="stage-card" id="stage1Card">
+      <div class="stage-header">
+        <div class="stage-title">🏢 Stage 1: Поиск компаний</div>
+        <div class="stage-badge badge-ready" id="stage1Badge">Готово к запуску</div>
+      </div>
+
+      <div class="input-group">
+        <label>Выберите сессию для поиска компаний:</label>
+        <select id="stage1SessionSelect">
+          <option value="">-- Сначала создайте сессию выше --</option>
+        </select>
+      </div>
+
+      <div id="stage1SessionInfo" style="display: none; padding: 15px; background: #f0f4ff; border-radius: 8px; margin: 15px 0;">
+        <p style="margin-bottom: 8px;"><strong>Запросов в сессии:</strong> <span id="stage1QueriesCount">0</span></p>
+        <p style="margin-bottom: 8px;"><strong>Статус:</strong> <span id="stage1SessionStatus"></span></p>
+      </div>
+
+      <button class="button button-primary" id="stage1Btn" onclick="runStage1()" disabled>
+        🚀 Запустить Stage 1
+      </button>
+
+      <div id="stage1Status" style="display: none;"></div>
+    </div>
+
+    <!-- Stage 2: Поиск сайтов -->
+    <div class="stage-card" id="stage2Card">
+      <div class="stage-header">
+        <div class="stage-title">🌐 Stage 2: Поиск сайтов</div>
+        <div class="stage-badge badge-ready" id="stage2Badge">Готово к обработке</div>
+      </div>
+
+      <div class="companies-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="stage2Count">-</div>
+          <div class="stat-label">Компаний без сайта</div>
         </div>
       </div>
 
-      <!-- Stage 2: Поиск сайтов -->
-      <div class="stage-card" id="stage2" data-stage="2">
-        <div class="stage-header">
-          <div class="stage-title">
-            <div class="stage-icon">🌐</div>
-            <span>Этап 2: Поиск сайтов</span>
-          </div>
-          <div class="stage-status status-pending" id="status2">Ожидание</div>
-        </div>
-        <div class="stage-content">
-          <div id="loading2" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <div class="loading-text">Ищу веб-сайты компаний...</div>
-          </div>
-          <div id="results2" style="display: none;">
-            <div class="stats">
-              <div class="stat-card">
-                <div class="stat-value" id="stat2-companies">0</div>
-                <div class="stat-label">Компаний обработано</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value" id="stat2-websites">0</div>
-                <div class="stat-label">Сайтов найдено</div>
-              </div>
-            </div>
-            <div class="results-list" id="resultsList2"></div>
-            <div class="action-buttons">
-              <button class="btn btn-success" id="continue2">
-                <span>✅</span>
-                Продолжить к следующему этапу
-              </button>
-            </div>
-          </div>
+      <div id="stage2Companies" class="companies-list" style="display: none;"></div>
+
+      <button class="button button-primary" id="stage2Btn" onclick="runStage(2)">
+        🚀 Запустить Stage 2
+      </button>
+
+      <div id="stage2Status" style="display: none;"></div>
+    </div>
+
+    <!-- Stage 3: Поиск email -->
+    <div class="stage-card" id="stage3Card">
+      <div class="stage-header">
+        <div class="stage-title">📧 Stage 3: Поиск email</div>
+        <div class="stage-badge badge-ready" id="stage3Badge">Готово к обработке</div>
+      </div>
+
+      <div class="companies-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="stage3Count">-</div>
+          <div class="stat-label">Компаний без email</div>
         </div>
       </div>
 
-      <!-- Stage 3: Поиск контактов -->
-      <div class="stage-card" id="stage3" data-stage="3">
-        <div class="stage-header">
-          <div class="stage-title">
-            <div class="stage-icon">📧</div>
-            <span>Этап 3: Поиск контактов</span>
-          </div>
-          <div class="stage-status status-pending" id="status3">Ожидание</div>
-        </div>
-        <div class="stage-content">
-          <div id="loading3" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <div class="loading-text">Анализирую веб-сайты и ищу контакты...</div>
-          </div>
-          <div id="results3" style="display: none;">
-            <div class="stats">
-              <div class="stat-card">
-                <div class="stat-value" id="stat3-websites">0</div>
-                <div class="stat-label">Сайтов обработано</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value" id="stat3-contacts">0</div>
-                <div class="stat-label">Контактов найдено</div>
-              </div>
-            </div>
-            <div class="results-list" id="resultsList3"></div>
-            <div class="action-buttons">
-              <button class="btn btn-success" id="continue3">
-                <span>✅</span>
-                Продолжить к следующему этапу
-              </button>
-            </div>
-          </div>
+      <div id="stage3Companies" class="companies-list" style="display: none;"></div>
+
+      <button class="button button-primary" id="stage3Btn" onclick="runStage(3)">
+        🚀 Запустить Stage 3
+      </button>
+
+      <div id="stage3Status" style="display: none;"></div>
+    </div>
+
+    <!-- Stage 4: AI Валидация -->
+    <div class="stage-card" id="stage4Card">
+      <div class="stage-header">
+        <div class="stage-title">🤖 Stage 4: AI Валидация</div>
+        <div class="stage-badge badge-ready" id="stage4Badge">Готово к обработке</div>
+      </div>
+
+      <div class="companies-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="stage4Count">-</div>
+          <div class="stat-label">Компаний для валидации</div>
         </div>
       </div>
 
-      <!-- Stage 4: AI Валидация -->
-      <div class="stage-card" id="stage4" data-stage="4">
-        <div class="stage-header">
-          <div class="stage-title">
-            <div class="stage-icon">🤖</div>
-            <span>Этап 4: AI Валидация</span>
-          </div>
-          <div class="stage-status status-pending" id="status4">Ожидание</div>
+      <div id="stage4Companies" class="companies-list" style="display: none;"></div>
+
+      <button class="button button-primary" id="stage4Btn" onclick="runStage(4)">
+        🚀 Запустить Stage 4
+      </button>
+
+      <div id="stage4Status" style="display: none;"></div>
+    </div>
+
+    <!-- Итоговая статистика -->
+    <div class="stage-card">
+      <div class="stage-header">
+        <div class="stage-title">✅ Готовые компании</div>
+      </div>
+
+      <div class="companies-stats">
+        <div class="stat-box">
+          <div class="stat-value" id="completedCount">-</div>
+          <div class="stat-label">Прошли все этапы</div>
         </div>
-        <div class="stage-content">
-          <div id="loading4" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <div class="loading-text">AI проверяет соответствие компаний теме поиска...</div>
-          </div>
-          <div id="results4" style="display: none;">
-            <div class="stats">
-              <div class="stat-card">
-                <div class="stat-value" id="stat4-total">0</div>
-                <div class="stat-label">Всего компаний</div>
-              </div>
-              <div class="stat-card" style="background: linear-gradient(135deg, #00C851 0%, #007E33 100%);">
-                <div class="stat-value" id="stat4-validated">0</div>
-                <div class="stat-label">✅ Прошли валидацию</div>
-              </div>
-              <div class="stat-card" style="background: linear-gradient(135deg, #ffbb33 0%, #ff8800 100%);">
-                <div class="stat-value" id="stat4-review">0</div>
-                <div class="stat-label">⚠️ Требуют проверки</div>
-              </div>
-              <div class="stat-card" style="background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);">
-                <div class="stat-value" id="stat4-rejected">0</div>
-                <div class="stat-label">❌ Отклонены</div>
-              </div>
-            </div>
-            <div class="results-list" id="resultsList4"></div>
-            <div class="action-buttons">
-              <button class="btn btn-primary" onclick="window.location.href='/companies.html'">
-                <span>📊</span>
-                Посмотреть все компании
-              </button>
-              <button class="btn btn-secondary" onclick="window.location.href='/'">
-                <span>🏠</span>
-                На главную
-              </button>
-            </div>
-          </div>
+        <div class="stat-box">
+          <div class="stat-value" id="totalInDb">-</div>
+          <div class="stat-label">Всего в базе</div>
         </div>
       </div>
+
+      <p style="color: #666; margin-top: 15px;">
+        Компании прошедшие все этапы доступны на 
+        <a href="/results.html" style="color: #667eea; font-weight: 600;">странице результатов</a>.
+      </p>
     </div>
   </div>
 
   <script>
-    let currentSessionId = null;
-    let currentStage = 0;
+    let isProcessing = false;
+    let generatedQueries = [];
+    let createdSessionId = null;
 
-    // Clear Database
-    async function clearDatabase() {
-      const confirmed = confirm(
-        '⚠️ ВНИМАНИЕ!\n\n' +
-        'Это действие удалит ВСЕ данные:\n' +
-        '• Все сессии\n' +
-        '• Все запросы\n' +
-        '• Все найденные компании\n' +
-        '• Весь прогресс обработки\n' +
-        '• Весь кеш API\n\n' +
-        'Это действие НЕОБРАТИМО!\n\n' +
-        'Вы уверены?'
-      );
+    // Загрузить статистику при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStatistics();
+      loadSessions();
+      
+      // Обновлять каждые 10 секунд
+      setInterval(() => {
+        if (!isProcessing) {
+          loadStatistics();
+        }
+      }, 10000);
+    });
 
-      if (!confirmed) return;
+    async function generateQueries() {
+      const topic = document.getElementById('mainTopic').value.trim();
+      const numQueries = parseInt(document.getElementById('numQueries').value);
+      const statusDiv = document.getElementById('generationStatus');
 
-      const doubleConfirmed = confirm(
-        '🔴 ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!\n\n' +
-        'Все данные будут безвозвратно удалены.\n\n' +
-        'Продолжить?'
-      );
+      if (!topic) {
+        alert('Пожалуйста, введите тему для генерации запросов');
+        return;
+      }
 
-      if (!doubleConfirmed) return;
+      if (numQueries < 10 || numQueries > 50) {
+        alert('Количество запросов должно быть от 10 до 50');
+        return;
+      }
+
+      statusDiv.style.display = 'block';
+      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Генерируем запросы...</div>';
 
       try {
-        const response = await fetch('/api/sessions/clear-all', {
-          method: 'DELETE'
+        const response = await fetch('/api/queries/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, numQueries })
         });
 
-        const data = await response.json();
+        const result = await response.json();
 
-        if (data.success) {
-          alert('✅ База данных успешно очищена!\n\nСтраница будет перезагружена.');
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
+        if (result.success) {
+          generatedQueries = result.queries || [];
+          displayQueries(generatedQueries);
+          statusDiv.innerHTML = '<div class="status-message status-success">✅ Запросы успешно сгенерированы!</div>';
+          document.getElementById('queriesSection').style.display = 'block';
         } else {
-          alert('❌ Ошибка при очистке: ' + data.error);
+          throw new Error(result.error || 'Unknown error');
         }
       } catch (error) {
-        alert('❌ Ошибка: ' + error.message);
+        console.error('Generation error:', error);
+        statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${error.message}</div>`;
       }
     }
 
-    // Загрузить сессии
+    function displayQueries(queries) {
+      const container = document.getElementById('queriesList');
+      container.innerHTML = queries.map((q, idx) => `
+        <div class="query-item" id="query-${idx}">
+          <input type="checkbox" class="query-checkbox" id="checkbox-${idx}" 
+                 onchange="updateSelectedCount()" checked>
+          <div class="query-content">
+            <div class="query-cn">${q.chinese_query || q.query}</div>
+            <div class="query-ru">${q.russian_query || q.translation || ''}</div>
+          </div>
+        </div>
+      `).join('');
+      updateSelectedCount();
+    }
+
+    function selectAllQueries(checked) {
+      const checkboxes = document.querySelectorAll('.query-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = checked;
+        const item = cb.closest('.query-item');
+        if (checked) {
+          item.classList.add('selected');
+        } else {
+          item.classList.remove('selected');
+        }
+      });
+      updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+      const checked = document.querySelectorAll('.query-checkbox:checked').length;
+      document.getElementById('selectedCount').textContent = checked;
+    }
+
+    async function saveSelectedQueries() {
+      const topic = document.getElementById('mainTopic').value.trim();
+      const checkboxes = document.querySelectorAll('.query-checkbox:checked');
+      
+      if (checkboxes.length === 0) {
+        alert('Выберите хотя бы один запрос');
+        return;
+      }
+
+      const selectedQueries = Array.from(checkboxes).map(cb => {
+        const idx = parseInt(cb.id.replace('checkbox-', ''));
+        return generatedQueries[idx];
+      });
+
+      const statusDiv = document.getElementById('generationStatus');
+      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Сохраняем запросы...</div>';
+
+      try {
+        const response = await fetch('/api/queries/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            mainTopic: topic,
+            queries: selectedQueries 
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          createdSessionId = result.sessionId;
+          statusDiv.innerHTML = `<div class="status-message status-success">
+            ✅ Сохранено ${selectedQueries.length} запросов! Сессия создана: ${result.sessionId}
+          </div>`;
+          
+          // Обновить список сессий и выбрать новую
+          await loadSessions();
+          document.getElementById('stage1SessionSelect').value = createdSessionId;
+          await updateStage1SessionInfo();
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Save error:', error);
+        statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${error.message}</div>`;
+      }
+    }
+
     async function loadSessions() {
       try {
         const response = await fetch('/api/sessions');
         const data = await response.json();
         
-        const select = document.getElementById('sessionSelect');
-        
-        if (!data.data || data.data.length === 0) {
-          select.innerHTML = '<option value="">Нет доступных сессий</option>';
-          return;
-        }
-        
-        // Загрузить статистику по компаниям для каждой сессии
-        const sessionsWithStats = await Promise.all(
-          data.data.map(async (session) => {
-            try {
-              const companiesRes = await fetch(`/api/debug/companies`);
-              const companiesData = await companiesRes.json();
-              
-              // Фильтровать компании этой сессии
-              const sessionCompanies = companiesData.companies?.filter(
-                c => c.session_id === session.session_id
-              ) || [];
-              
-              // Подсчитать необработанные (current_stage < 4 ИЛИ stage4_status = NULL)
-              const unprocessed = sessionCompanies.filter(
-                c => (c.current_stage || 0) < 4 || c.stage4_status === null
-              ).length;
-              
-              return {
-                ...session,
-                totalCompanies: sessionCompanies.length,
-                unprocessedCount: unprocessed,
-                processedCount: sessionCompanies.length - unprocessed
-              };
-            } catch (err) {
-              console.error('Failed to load stats for session:', session.session_id, err);
-              return { ...session, totalCompanies: 0, unprocessedCount: 0, processedCount: 0 };
-            }
-          })
-        );
-        
-        select.innerHTML = '<option value="">Выберите сессию...</option>';
-        sessionsWithStats.forEach(session => {
-          const option = document.createElement('option');
-          option.value = session.session_id;
+        if (data.success) {
+          const select = document.getElementById('stage1SessionSelect');
+          const currentValue = select.value;
           
-          let displayText = `${session.topic_description} (${new Date(session.created_at).toLocaleDateString()})`;
-          if (session.totalCompanies > 0) {
-            displayText += ` | ${session.unprocessedCount} необраб.`;
+          select.innerHTML = '<option value="">-- Выберите сессию --</option>';
+          
+          (data.sessions || []).forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.session_id;
+            option.textContent = `${session.main_topic} (${new Date(session.created_at).toLocaleDateString()})`;
+            select.appendChild(option);
+          });
+          
+          // Восстановить выбранное значение если было
+          if (currentValue && createdSessionId) {
+            select.value = createdSessionId;
+            updateStage1SessionInfo();
           }
-          
-          option.textContent = displayText;
-          option.dataset.query = session.search_query || session.topic_description;
-          option.dataset.date = session.created_at;
-          option.dataset.totalCompanies = session.totalCompanies;
-          option.dataset.unprocessedCount = session.unprocessedCount;
-          option.dataset.processedCount = session.processedCount;
-          
-          select.appendChild(option);
-        });
+        }
       } catch (error) {
         console.error('Error loading sessions:', error);
-        document.getElementById('sessionSelect').innerHTML = '<option value="">Ошибка загрузки</option>';
       }
     }
 
-    // Обработчик выбора сессии
-    document.getElementById('sessionSelect').addEventListener('change', async (e) => {
-      currentSessionId = e.target.value;
-      document.getElementById('startBtn').disabled = !currentSessionId;
-      
-      if (currentSessionId) {
-        await updateSessionInfo();
-      } else {
-        document.getElementById('sessionInfo').style.display = 'none';
-      }
-    });
-    
-    // Функция обновления информации о сессии
-    async function updateSessionInfo() {
-      const select = document.getElementById('sessionSelect');
-      const sessionInfo = document.getElementById('sessionInfo');
-      const companiesStats = document.getElementById('companiesStats');
-      const selectedOption = select.options[select.selectedIndex];
-      
-      if (!selectedOption || !selectedOption.value) {
-        sessionInfo.style.display = 'none';
+    async function updateStage1SessionInfo() {
+      const sessionId = document.getElementById('stage1SessionSelect').value;
+      const infoDiv = document.getElementById('stage1SessionInfo');
+      const btn = document.getElementById('stage1Btn');
+
+      if (!sessionId) {
+        infoDiv.style.display = 'none';
+        btn.disabled = true;
         return;
       }
+
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}`);
+        const data = await response.json();
+
+        if (data.success) {
+          document.getElementById('stage1QueriesCount').textContent = data.session.queries_count || 0;
+          document.getElementById('stage1SessionStatus').textContent = data.session.status || 'новая';
+          infoDiv.style.display = 'block';
+          btn.disabled = false;
+        }
+      } catch (error) {
+        console.error('Error loading session info:', error);
+      }
+    }
+
+    // Обработчик изменения сессии
+    document.getElementById('stage1SessionSelect')?.addEventListener('change', updateStage1SessionInfo);
+
+    async function runStage1() {
+      const sessionId = document.getElementById('stage1SessionSelect').value;
       
-      const sessionId = selectedOption.value;
-      
-      // Обновить базовую информацию
-      document.getElementById('sessionQuery').textContent = selectedOption.dataset.query || 'N/A';
-      const date = new Date(selectedOption.dataset.date);
-      document.getElementById('sessionDate').textContent = date.toLocaleString('ru-RU');
-      
-      sessionInfo.style.display = 'block';
-      
-      // Показать статистику если есть компании
-      const totalCompanies = parseInt(selectedOption.dataset.totalCompanies) || 0;
-      
-      if (totalCompanies > 0) {
-        companiesStats.style.display = 'block';
-        
-        const unprocessed = parseInt(selectedOption.dataset.unprocessedCount) || 0;
-        const processed = parseInt(selectedOption.dataset.processedCount) || 0;
-        
-        document.getElementById('totalCompanies').textContent = totalCompanies;
-        document.getElementById('unprocessedCompanies').textContent = unprocessed;
-        document.getElementById('completedCompanies').textContent = processed;
-        
-        // Проверить прогресс этапов
-        try {
-          const progressResponse = await fetch(`/api/sessions/${sessionId}/stage-progress`);
-          const progressData = await progressResponse.json();
-          
-        // Также проверить реальное состояние компаний
-        const companiesResponse = await fetch(`/api/debug/companies`);
-        const companiesData = await companiesResponse.json();
-        const sessionCompanies = companiesData.companies?.filter(c => c.session_id === sessionId) || [];
-        
-        // Определить какой этап реально нужен на основе current_stage
-        const stageNeeded = {};
-        sessionCompanies.forEach(c => {
-          const stage = c.current_stage || 1;
-          stageNeeded[stage] = (stageNeeded[stage] || 0) + 1;
+      if (!sessionId) {
+        alert('Выберите сессию');
+        return;
+      }
+
+      if (!confirm(`Запустить Stage 1 для выбранной сессии?`)) {
+        return;
+      }
+
+      const btn = document.getElementById('stage1Btn');
+      const statusDiv = document.getElementById('stage1Status');
+      const badge = document.getElementById('stage1Badge');
+
+      isProcessing = true;
+      btn.disabled = true;
+      btn.textContent = '⏳ Обработка...';
+      badge.textContent = 'Обработка...';
+      badge.className = 'stage-badge badge-running';
+      statusDiv.style.display = 'block';
+      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Ищем компании...</div>';
+
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}/stage1`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
         });
+
+        const result = await response.json();
+
+        if (result.success) {
+          statusDiv.innerHTML = `
+            <div class="status-message status-success">
+              ✅ <strong>Stage 1 завершен!</strong><br>
+              Найдено компаний: ${result.total || 0}
+            </div>
+          `;
+          
+          // Обновить статистику
+          setTimeout(() => loadStatistics(), 1000);
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+
+      } catch (error) {
+        console.error('Stage 1 error:', error);
+        statusDiv.innerHTML = `
+          <div class="status-message status-error">
+            ❌ <strong>Ошибка:</strong> ${error.message}
+          </div>
+        `;
+      } finally {
+        isProcessing = false;
+        btn.textContent = '🚀 Запустить Stage 1';
+        btn.disabled = false;
+        setTimeout(() => {
+          loadStatistics();
+          badge.className = 'stage-badge badge-ready';
+          badge.textContent = 'Готово к запуску';
+        }, 2000);
+      }
+    }
+
+    async function loadStatistics() {
+      try {
+        const response = await fetch('/api/debug/data');
+        const data = await response.json();
         
-        // Найти минимальный незавершенный этап
-        let actualNextStage = null;
-        const allOnStage4 = sessionCompanies.every(c => c.current_stage === 4);
-        const allCompleted = allOnStage4 && sessionCompanies.every(c => 
-          c.stage4_status === 'completed' || c.stage4_status === 'rejected'
+        if (!data.success) {
+          throw new Error('Failed to load data');
+        }
+
+        const companies = data.data.pending_companies?.items || [];
+        
+        // Stage 2: компании без сайта, current_stage >= 1, stage2_status = NULL
+        const stage2Ready = companies.filter(c => 
+          (!c.website || c.website === '') &&
+          c.stage2_status === null &&
+          c.current_stage >= 1
         );
-        
-        if (!allCompleted) {
-          if (stageNeeded[1] && stageNeeded[1] > 0) {
-            actualNextStage = 2; // Есть компании на Stage 1, нужен Stage 2
-          } else if (stageNeeded[2] && stageNeeded[2] > 0) {
-            actualNextStage = 3; // Есть компании на Stage 2, нужен Stage 3
-          } else if (stageNeeded[3] && stageNeeded[3] > 0) {
-            actualNextStage = 4; // Есть компании на Stage 3, нужен Stage 4
-          } else if (stageNeeded[4] && stageNeeded[4] > 0) {
-            actualNextStage = 4; // Есть незавершенные на Stage 4
-          }
-        }
-          
-          if (progressData.success && (progressData.lastCompletedStage > 0 || actualNextStage)) {
-            // Есть завершенные этапы - показать информацию
-            const lastCompleted = progressData.lastCompletedStage;
-            const nextStage = actualNextStage || progressData.nextStage;
-            
-            const stageProgress = document.getElementById('stageProgress');
-            const progressMessage = document.getElementById('progressMessage');
-            
-            stageProgress.style.display = 'block';
-            
-            if (allCompleted) {
-              stageProgress.style.background = '#dcfce7';
-              stageProgress.style.borderColor = '#16a34a';
-              progressMessage.style.color = '#166534';
-              progressMessage.innerHTML = `
-                <strong>✅ Все этапы завершены!</strong><br>
-                Все ${totalCompanies} компаний обработаны. Можете начать новую сессию.
-              `;
-              // Скрыть кнопку очистки для завершенных
-              document.getElementById('clearProgressBtn').style.display = 'none';
-            } else if (nextStage) {
-              progressMessage.innerHTML = `
-                <strong>Обработка в процессе.</strong><br>
-                ${lastCompleted > 0 ? `Этапы 1-${lastCompleted} выполнены. ` : ''}
-                Рекомендуется продолжить с этапа ${nextStage}.<br>
-                <small style="color: #666;">Компаний: всего ${totalCompanies}, обработано ${processed}, осталось ${unprocessed}</small>
-              `;
-              
-              // Обработчик кнопки очистки прогресса
-              document.getElementById('clearProgressBtn').style.display = 'inline-block';
-              document.getElementById('clearProgressBtn').onclick = async () => {
-                if (confirm('⚠️ Очистить прогресс обработки для этой сессии?\n\nЭто позволит начать обработку с этапа 1.')) {
-                  try {
-                    const response = await fetch(`/api/sessions/${sessionId}/clear-progress`, {
-                      method: 'DELETE'
-                    });
-                    
-                    if (response.ok) {
-                      alert('✅ Прогресс очищен! Теперь можете начать заново.');
-                      await updateSessionInfo();
-                    } else {
-                      alert('❌ Не удалось очистить прогресс. Попробуйте очистить всю базу.');
-                    }
-                  } catch (error) {
-                    alert('❌ Ошибка: ' + error.message);
-                  }
-                }
-              };
-            } else {
-              stageProgress.style.display = 'none';
-            }
-          } else {
-            document.getElementById('stageProgress').style.display = 'none';
-          }
-        } catch (error) {
-          console.error('Error checking progress:', error);
-          document.getElementById('stageProgress').style.display = 'none';
-        }
-        
-        // Показать сообщение о готовности
-        const stageReadiness = document.getElementById('stageReadiness');
-        const readinessMessage = document.getElementById('readinessMessage');
-        
-        if (totalCompanies > 0 && unprocessed === 0) {
-          stageReadiness.style.display = 'block';
-          stageReadiness.style.background = '#dcfce7';
-          stageReadiness.style.borderColor = '#16a34a';
-          readinessMessage.style.color = '#166534';
-          readinessMessage.innerHTML = '✅ <strong>Все компании обработаны!</strong> Все ' + totalCompanies + ' компаний прошли все этапы обработки.';
-        } else if (unprocessed > 0) {
-          stageReadiness.style.display = 'block';
-          stageReadiness.style.background = '#fef3c7';
-          stageReadiness.style.borderColor = '#f59e0b';
-          readinessMessage.style.color = '#92400e';
-          readinessMessage.innerHTML = '⏳ <strong>' + unprocessed + ' компаний требуют обработки.</strong> Используйте пошаговую обработку для их обработки.';
-        } else {
-          stageReadiness.style.display = 'none';
-        }
+
+        // Stage 3: компании с сайтом, без email, current_stage >= 2, stage3_status = NULL
+        const stage3Ready = companies.filter(c =>
+          c.website &&
+          (!c.email || c.email === '') &&
+          c.stage3_status === null &&
+          c.current_stage >= 2
+        );
+
+        // Stage 4: компании с email, current_stage >= 3, stage4_status = NULL
+        const stage4Ready = companies.filter(c =>
+          c.current_stage >= 3 &&
+          c.stage4_status === null
+        );
+
+        // Готовые компании: current_stage = 4 и stage4_status != NULL
+        const completed = companies.filter(c =>
+          c.current_stage === 4 &&
+          c.stage4_status !== null
+        );
+
+        // Обновить счетчики
+        document.getElementById('stage2Count').textContent = stage2Ready.length;
+        document.getElementById('stage3Count').textContent = stage3Ready.length;
+        document.getElementById('stage4Count').textContent = stage4Ready.length;
+        document.getElementById('completedCount').textContent = completed.length;
+        document.getElementById('totalInDb').textContent = companies.length;
+
+        // Обновить бейджи и кнопки
+        updateStageBadge(2, stage2Ready.length);
+        updateStageBadge(3, stage3Ready.length);
+        updateStageBadge(4, stage4Ready.length);
+
+        // Показать списки компаний
+        displayCompanies(2, stage2Ready);
+        displayCompanies(3, stage3Ready);
+        displayCompanies(4, stage4Ready);
+
+      } catch (error) {
+        console.error('Error loading statistics:', error);
+      }
+    }
+
+    function updateStageBadge(stage, count) {
+      const badge = document.getElementById(`stage${stage}Badge`);
+      const btn = document.getElementById(`stage${stage}Btn`);
+      
+      if (count === 0) {
+        badge.textContent = 'Нет компаний';
+        badge.className = 'stage-badge badge-empty';
+        btn.disabled = true;
       } else {
-        companiesStats.style.display = 'none';
+        badge.textContent = `${count} ${getCompanyWord(count)}`;
+        badge.className = 'stage-badge badge-ready';
+        btn.disabled = false;
       }
     }
 
-    // Начать обработку
-    document.getElementById('startBtn').addEventListener('click', async () => {
-      if (!currentSessionId) return;
+    function displayCompanies(stage, companies) {
+      const container = document.getElementById(`stage${stage}Companies`);
       
-      document.getElementById('sessionSelector').style.display = 'none';
-      document.getElementById('stagesContainer').style.display = 'block';
-      
-        // Проверить реальное состояние компаний и прогресс сессии
-        try {
-          // Получить компании этой сессии
-          const companiesResponse = await fetch(`/api/debug/companies`);
-          const companiesData = await companiesResponse.json();
-          const sessionCompanies = companiesData.companies?.filter(c => c.session_id === currentSessionId) || [];
-          
-          // Определить какой этап реально нужен на основе current_stage
-          const stageNeeded = {};
-          sessionCompanies.forEach(c => {
-            const stage = c.current_stage || 1;
-            stageNeeded[stage] = (stageNeeded[stage] || 0) + 1;
-          });
-          
-          // Найти минимальный незавершенный этап
-          let actualNextStage = 1;
-          if (stageNeeded[1] && stageNeeded[1] > 0) {
-            actualNextStage = 2; // Есть компании на Stage 1, нужен Stage 2
-          } else if (stageNeeded[2] && stageNeeded[2] > 0) {
-            actualNextStage = 3; // Есть компании на Stage 2, нужен Stage 3
-          } else if (stageNeeded[3] && stageNeeded[3] > 0) {
-            actualNextStage = 4; // Есть компании на Stage 3, нужен Stage 4
-          } else if (stageNeeded[4] && stageNeeded[4] > 0) {
-            // Все на Stage 4 - проверить завершенность
-            const allCompleted = sessionCompanies.every(c => c.stage4_status === 'completed' || c.stage4_status === 'rejected');
-            if (allCompleted) {
-              alert('✅ Все компании уже обработаны!\n\nМожете создать новую сессию.');
-              document.getElementById('sessionSelector').style.display = 'block';
-              document.getElementById('stagesContainer').style.display = 'none';
-              return;
-            }
-            actualNextStage = 4;
-          }
-          
-          this.logger.info('Calculated next stage', {
-            stageNeeded,
-            actualNextStage,
-            sessionCompanies: sessionCompanies.length
-          });
-        
-        // Получить историю прогресса
-        const progressResponse = await fetch(`/api/sessions/${currentSessionId}/stage-progress`);
-        const progressData = await progressResponse.json();
-        
-        if (progressData.success && progressData.lastCompletedStage > 0) {
-          const lastCompleted = progressData.lastCompletedStage;
-          
-          // Показать завершенные этапы
-          for (let i = 1; i <= lastCompleted; i++) {
-            const stageCard = document.getElementById(`stage${i}`);
-            const statusEl = document.getElementById(`status${i}`);
-            if (stageCard && statusEl) {
-              stageCard.classList.add('completed');
-              statusEl.textContent = 'Завершено';
-              statusEl.className = 'stage-status status-completed';
-              
-              // Загрузить сохраненные результаты
-              await loadCachedStageResults(i, currentSessionId);
-            }
-          }
-          
-          // Если есть прогресс, но нужен следующий этап
-          if (actualNextStage > 1 && actualNextStage <= lastCompleted + 1) {
-            if (confirm(`✅ Этапы 1-${lastCompleted} выполнены.\n\n📊 Рекомендуется продолжить с этапа ${actualNextStage}.\n\nПродолжить?`)) {
-              runStage(actualNextStage);
-            } else {
-              // Вернуться назад
-              document.getElementById('sessionSelector').style.display = 'block';
-              document.getElementById('stagesContainer').style.display = 'none';
-            }
-          } else {
-            // Начать с рекомендуемого этапа
-            runStage(actualNextStage);
-          }
-        } else {
-          // Нет прогресса - начать с рекомендуемого этапа
-          if (actualNextStage > 1) {
-            alert(`ℹ️ Обнаружены компании, требующие обработки.\n\nНачинаем с этапа ${actualNextStage}.`);
-          }
-          runStage(actualNextStage);
-        }
-      } catch (error) {
-        console.error('Error checking progress:', error);
-        // В случае ошибки начать с первого
-        runStage(1);
+      if (companies.length === 0) {
+        container.style.display = 'none';
+        return;
       }
-    });
-    
-    // Загрузить сохраненные результаты этапа
-    async function loadCachedStageResults(stageNum, sessionId) {
-      try {
-        const response = await fetch(`/api/sessions/${sessionId}/process-stage/${stageNum}`, {
-          method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.cached) {
-          await displayStageResults(stageNum, data.data);
-          
-          const resultsEl = document.getElementById(`results${stageNum}`);
-          resultsEl.style.display = 'block';
-          
-          // Добавить бейдж "Кэшировано"
-          const cachedBadge = document.createElement('div');
-          cachedBadge.className = 'info-box';
-          cachedBadge.style.marginTop = '10px';
-          cachedBadge.innerHTML = `
-            <p>✅ Результаты загружены из кэша (выполнено ${new Date(data.completedAt).toLocaleString('ru-RU')})</p>
-          `;
-          resultsEl.insertBefore(cachedBadge, resultsEl.firstChild);
-        }
-      } catch (error) {
-        console.error(`Error loading cached results for stage ${stageNum}:`, error);
-      }
-    }
 
-    // Запуск этапа
-    async function runStage(stageNum) {
-      currentStage = stageNum;
-      updateProgress();
-      
-      const stageCard = document.getElementById(`stage${stageNum}`);
-      const statusEl = document.getElementById(`status${stageNum}`);
-      const loadingEl = document.getElementById(`loading${stageNum}`);
-      const resultsEl = document.getElementById(`results${stageNum}`);
-      
-      // Активировать карточку
-      stageCard.classList.add('active');
-      statusEl.textContent = 'Выполняется...';
-      statusEl.className = 'stage-status status-active';
-      loadingEl.style.display = 'flex';
-      resultsEl.style.display = 'none';
-      
-      try {
-        // Запустить обработку этапа
-        const response = await fetch(`/api/sessions/${currentSessionId}/process-stage/${stageNum}`, {
-          method: 'POST'
-        });
-        
-        if (!response.ok) throw new Error('Stage processing failed');
-        
-        const data = await response.json();
-        
-        // Показать результаты
-        await displayStageResults(stageNum, data.data);
-        
-        // Обновить статус
-        loadingEl.style.display = 'none';
-        resultsEl.style.display = 'block';
-        
-        // Показать информацию о кэше если этап был выполнен ранее
-        if (data.cached) {
-          const cachedInfo = document.createElement('div');
-          cachedInfo.className = 'info-box';
-          cachedInfo.style.marginBottom = '15px';
-          cachedInfo.innerHTML = `
-            <p><strong>⚡ Результаты загружены из кэша</strong></p>
-            <p style="font-size: 12px; margin-top: 5px;">
-              Этап был выполнен ранее: ${new Date(data.completedAt).toLocaleString('ru-RU')}<br>
-              Время выполнения: ${data.duration?.toFixed(2) || 'N/A'} сек
-            </p>
-          `;
-          resultsEl.insertBefore(cachedInfo, resultsEl.firstChild);
-        }
-        
-        statusEl.textContent = data.cached ? 'Загружено из кэша' : 'Завершено';
-        statusEl.className = 'stage-status status-completed';
-        stageCard.classList.remove('active');
-        stageCard.classList.add('completed');
-        
-        // Настроить кнопку продолжения
-        const continueBtn = document.getElementById(`continue${stageNum}`);
-        if (continueBtn && stageNum < 4) {
-          continueBtn.onclick = () => runStage(stageNum + 1);
-        }
-        
-      } catch (error) {
-        console.error(`Error in stage ${stageNum}:`, error);
-        loadingEl.style.display = 'none';
-        resultsEl.innerHTML = `<div class="empty-state">
-          <div class="empty-state-icon">❌</div>
-          <p>Ошибка обработки этапа</p>
+      container.style.display = 'block';
+      container.innerHTML = companies.slice(0, 10).map(c => `
+        <div class="company-item">
+          <div class="company-name">${c.company_name}</div>
+          <div class="company-info">
+            ${c.website ? `🌐 ${c.website}` : '❌ Нет сайта'} | 
+            ${c.email ? `📧 ${c.email}` : '❌ Нет email'}
+          </div>
+        </div>
+      `).join('');
+
+      if (companies.length > 10) {
+        container.innerHTML += `<div class="company-item" style="text-align: center; color: #999;">
+          И еще ${companies.length - 10} компаний...
         </div>`;
-        resultsEl.style.display = 'block';
       }
     }
 
-    // Отобразить результаты этапа
-    async function displayStageResults(stageNum, data) {
-      const listEl = document.getElementById(`resultsList${stageNum}`);
-      
-      if (stageNum === 1) {
-        // Stage 1: Найденные компании
-        const companies = data.companies || [];
-        document.getElementById('stat1-queries').textContent = data.queriesProcessed || 0;
-        document.getElementById('stat1-companies').textContent = companies.length;
-        
-        if (companies.length === 0) {
-          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Компании не найдены</p></div>';
-        } else {
-          listEl.innerHTML = companies.map(company => `
-            <div class="result-item">
-              <div class="result-title">
-                <span>🏢</span>
-                <span>${company.name || company.company_name}</span>
-                ${company.relevance ? `<span class="result-badge ${getRelevanceClass(company.relevance)}">${company.relevance}%</span>` : ''}
-              </div>
-              ${company.website ? `<div class="result-detail">🌐 <a href="${company.website}" target="_blank">${company.website}</a> <span class="badge-new">✨ Найден сразу!</span></div>` : ''}
-              ${company.email ? `<div class="result-detail">✉️ Email: ${company.email} <span class="badge-new">✨ Найден сразу!</span></div>` : ''}
-              ${company.phone ? `<div class="result-detail">📱 Телефон: ${company.phone} <span class="badge-new">✨ Найден сразу!</span></div>` : ''}
-              ${company.description ? `<div class="result-detail">📝 ${company.description}</div>` : ''}
-              ${company.query_text ? `<div class="result-detail" style="opacity:0.7">🔍 Запрос: ${company.query_text}</div>` : ''}
-              ${company.domain_extension ? `<div class="result-detail" style="opacity:0.7">🌐 Домен: ${company.domain_extension}</div>` : ''}
+    async function runStage(stageNum) {
+      if (isProcessing) {
+        alert('Обработка уже выполняется. Дождитесь завершения.');
+        return;
+      }
+
+      const btn = document.getElementById(`stage${stageNum}Btn`);
+      const statusDiv = document.getElementById(`stage${stageNum}Status`);
+      const badge = document.getElementById(`stage${stageNum}Badge`);
+
+      if (!confirm(`Запустить Stage ${stageNum} для всех готовых компаний?`)) {
+        return;
+      }
+
+      isProcessing = true;
+      btn.disabled = true;
+      btn.textContent = '⏳ Обработка...';
+      badge.textContent = 'Обработка...';
+      badge.className = 'stage-badge badge-running';
+      statusDiv.style.display = 'block';
+      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Начинаем обработку...</div>';
+
+      try {
+        let endpoint;
+        if (stageNum === 2) endpoint = '/api/sessions/global/stage2';
+        else if (stageNum === 3) endpoint = '/api/sessions/global/stage3';
+        else if (stageNum === 4) endpoint = '/api/sessions/global/stage4';
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          statusDiv.innerHTML = `
+            <div class="status-message status-success">
+              ✅ <strong>Stage ${stageNum} завершен!</strong><br>
+              ${getStageResultMessage(stageNum, result)}
             </div>
-          `).join('');
-        }
-        
-      } else if (stageNum === 2) {
-        // Stage 2: Найденные сайты
-        const websites = data.websites || [];
-        document.getElementById('stat2-companies').textContent = data.companiesProcessed || 0;
-        document.getElementById('stat2-websites').textContent = websites.length;
-        
-        // Проверить если Stage 2 был пропущен
-        if (data.skipped) {
-          listEl.innerHTML = `
-            <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 10px 0;">
-              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                <span style="font-size: 24px;">✨</span>
-                <strong style="color: #1976d2;">Stage 2 пропущен</strong>
-              </div>
-              <p style="margin: 0 0 15px 0; color: #555;">${data.reason} - Stage 2 не требуется!</p>
-            </div>
-            ${websites.map(site => `
-              <div class="result-item">
-                <div class="result-title">
-                  <span>🌐</span>
-                  <span>${site.company_name}</span>
-                  <span class="result-badge found-immediately">✨ Stage 1</span>
-                </div>
-                <div class="result-detail">🔗 <a href="${site.website}" target="_blank">${site.website}</a></div>
-                ${site.email ? `<div class="result-detail">✉️ Email: ${site.email}</div>` : ''}
-                ${site.confidence ? `<div class="result-detail">✅ Уверенность: ${site.confidence}%</div>` : ''}
-              </div>
-            `).join('')}
           `;
-        } else if (websites.length === 0) {
-          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Сайты не найдены</p></div>';
+          
+          // Обновить статистику
+          setTimeout(() => loadStatistics(), 1000);
         } else {
-          listEl.innerHTML = websites.map(site => `
-            <div class="result-item">
-              <div class="result-title">
-                <span>🌐</span>
-                <span>${site.company_name}</span>
-              </div>
-              <div class="result-detail">🔗 <a href="${site.website}" target="_blank">${site.website}</a></div>
-              ${site.confidence ? `<div class="result-detail">✅ Уверенность: ${site.confidence}%</div>` : ''}
-            </div>
-          `).join('');
+          throw new Error(result.error || 'Unknown error');
         }
-        
-      } else if (stageNum === 3) {
-        // Stage 3: Найденные контакты
-        const contacts = data.contacts || [];
-        document.getElementById('stat3-websites').textContent = data.websitesProcessed || 0;
-        document.getElementById('stat3-contacts').textContent = contacts.length;
-        
-        if (contacts.length === 0) {
-          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Контакты не найдены</p></div>';
-        } else {
-          listEl.innerHTML = contacts.map(contact => `
-            <div class="result-item">
-              <div class="result-title">
-                <span>📧</span>
-                <span>${contact.company_name}</span>
-              </div>
-              ${contact.email ? `<div class="result-detail">✉️ Email: ${contact.email}</div>` : ''}
-              ${contact.phone ? `<div class="result-detail">📱 Телефон: ${contact.phone}</div>` : ''}
-              ${contact.contact_page ? `<div class="result-detail">📄 Страница: <a href="${contact.contact_page}" target="_blank">${contact.contact_page}</a></div>` : ''}
-            </div>
-          `).join('');
-        }
-        
-      } else if (stageNum === 4) {
-        // Stage 4: AI Валидация
-        const companies = data.companies || [];
-        document.getElementById('stat4-total').textContent = data.total || 0;
-        document.getElementById('stat4-validated').textContent = data.validated || 0;
-        document.getElementById('stat4-review').textContent = data.needsReview || 0;
-        document.getElementById('stat4-rejected').textContent = data.rejected || 0;
-        
-        if (companies.length === 0) {
-          listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>Нет данных для отображения</p></div>';
-        } else {
-          listEl.innerHTML = companies.map(company => {
-            let icon = '⚠️';
-            let statusText = 'Требует проверки';
-            let statusColor = '#ffbb33';
-            
-            if (company.stage === 'completed') {
-              icon = '✅';
-              statusText = 'Прошла валидацию';
-              statusColor = '#00C851';
-            } else if (company.stage === 'rejected') {
-              icon = '❌';
-              statusText = 'Отклонена';
-              statusColor = '#ff4444';
-            }
-            
-            return `
-              <div class="result-item">
-                <div class="result-title">
-                  <span>${icon}</span>
-                  <span>${company.company_name}</span>
-                  <span class="result-badge" style="background: ${statusColor}">
-                    ${company.validation_score || 0}%
-                  </span>
-                </div>
-                <div class="result-detail">
-                  <strong style="color: ${statusColor}">${statusText}</strong>
-                </div>
-                ${company.validation_reason ? `
-                  <div class="result-detail" style="opacity: 0.8">
-                    💬 ${company.validation_reason}
-                  </div>
-                ` : ''}
-              </div>
-            `;
-          }).join('');
-        }
+
+      } catch (error) {
+        console.error(`Stage ${stageNum} error:`, error);
+        statusDiv.innerHTML = `
+          <div class="status-message status-error">
+            ❌ <strong>Ошибка:</strong> ${error.message}
+          </div>
+        `;
+      } finally {
+        isProcessing = false;
+        btn.textContent = `🚀 Запустить Stage ${stageNum}`;
+        setTimeout(() => loadStatistics(), 2000);
       }
     }
 
-    function getRelevanceClass(relevance) {
-      if (relevance >= 80) return 'high';
-      if (relevance >= 50) return 'medium';
-      return 'low';
+    function getStageResultMessage(stage, result) {
+      if (stage === 2) {
+        return `Обработано: ${result.total || 0} | Найдено сайтов: ${result.found || 0}`;
+      } else if (stage === 3) {
+        return `Обработано: ${result.processed || 0} | Найдено email: ${result.found || 0}`;
+      } else if (stage === 4) {
+        return `Обработано: ${result.total || 0} | Валидировано: ${result.validated || 0} | Отклонено: ${result.rejected || 0}`;
+      }
+      return 'Завершено';
     }
 
-    // Обновить общий прогресс
-    function updateProgress() {
-      const progress = (currentStage / 4) * 100;
-      document.getElementById('overallProgress').style.width = `${progress}%`;
+    function getCompanyWord(count) {
+      const lastDigit = count % 10;
+      const lastTwoDigits = count % 100;
+      
+      if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+        return 'компаний';
+      }
+      if (lastDigit === 1) {
+        return 'компания';
+      }
+      if (lastDigit >= 2 && lastDigit <= 4) {
+        return 'компании';
+      }
+      return 'компаний';
     }
 
-    // Загрузить сессии при загрузке страницы
-    loadSessions();
+    async function logout() {
+      if (!confirm('Вы уверены, что хотите выйти?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/auth/logout', {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          window.location.href = '/login.html';
+        } else {
+          alert('Ошибка при выходе');
+        }
+      } catch (error) {
+        console.error('Logout error:', error);
+        alert('Ошибка при выходе');
+      }
+    }
   </script>
 </body>
 </html>
-

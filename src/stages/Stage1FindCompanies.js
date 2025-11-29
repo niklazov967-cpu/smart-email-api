@@ -17,6 +17,15 @@ class Stage1FindCompanies {
     this.logger.info('Stage 1: Starting company search', { searchQuery, sessionId });
 
     try {
+      // Получить topic_description из сессии
+      const { data: sessionData } = await this.db.supabase
+        .from('search_sessions')
+        .select('topic_description')
+        .eq('session_id', sessionId)
+        .single();
+      
+      const topicDescription = sessionData?.topic_description || searchQuery;
+      
       // ОГРАНИЧЕНИЕ ДЛЯ ТЕСТИРОВАНИЯ: максимум 5 компаний
       const minCompanies = 3;
       const maxCompanies = 5;
@@ -38,6 +47,7 @@ class Stage1FindCompanies {
       companies.forEach(company => {
         company.rawResponse = response;
         company.rawQuery = searchQuery;
+        company.topicDescription = topicDescription; // НОВОЕ: сохраняем тему
       });
 
       // Валидация
@@ -61,6 +71,7 @@ class Stage1FindCompanies {
         moreCompanies.forEach(company => {
           company.rawResponse = retryResponse;
           company.rawQuery = searchQuery;
+          company.topicDescription = topicDescription; // НОВОЕ
         });
         
         companies.push(...moreCompanies);
@@ -81,7 +92,7 @@ class Stage1FindCompanies {
       // Ограничить до максимума
       const finalCompanies = normalizedCompanies.slice(0, maxCompanies);
 
-      // Сохранить в БД (с сырыми данными)
+      // Сохранить в БД (с сырыми данными и темой)
       await this._saveCompanies(finalCompanies, sessionId);
 
       // Обновить статистику сессии
@@ -755,8 +766,9 @@ STRICT JSON OUTPUT ONLY.`;
         email: company.email,
         description: company.description,
         services: services,
-        search_query_text: company.rawQuery || null, // НОВОЕ: сохраняем поисковый запрос
-        stage1_raw_data: rawData, // НОВОЕ: сохраняем сырые данные
+        search_query_text: company.rawQuery || null, // Поисковый запрос
+        topic_description: company.topicDescription || null, // НОВОЕ: Главная тема
+        stage1_raw_data: rawData, // Сырые данные
         tag1: tagData.tag1,
         tag2: tagData.tag2,
         tag3: tagData.tag3,

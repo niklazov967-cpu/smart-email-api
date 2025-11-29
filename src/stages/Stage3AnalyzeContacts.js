@@ -13,15 +13,19 @@ class Stage3AnalyzeContacts {
     this.tagExtractor = new TagExtractor();
   }
 
-  async execute(sessionId) {
-    this.logger.info('Stage 3: Starting contact analysis', { sessionId });
+  async execute(sessionId = null) {
+    // sessionId теперь опциональный - если не указан, обрабатываем ВСЕ компании
+    this.logger.info('Stage 3: Starting contact analysis', { 
+      sessionId: sessionId || 'ALL',
+      mode: sessionId ? 'session' : 'global'
+    });
 
     try {
       // Получить компании с найденными сайтами
       const companies = await this._getCompanies(sessionId);
       
       if (companies.length === 0) {
-        this.logger.warn('Stage 3: No companies with websites found');
+        this.logger.info('Stage 3: No companies need email search');
         return { success: true, processed: 0, found: 0 };
       }
 
@@ -32,7 +36,8 @@ class Stage3AnalyzeContacts {
 
       this.logger.info('Stage 3: Processing companies', {
         count: companies.length,
-        concurrent: concurrentRequests
+        concurrent: concurrentRequests,
+        mode: sessionId ? 'session-based' : 'all-companies'
       });
 
       // Обработать батчами
@@ -42,8 +47,9 @@ class Stage3AnalyzeContacts {
         
         this.logger.debug(`Stage 3: Processing batch ${Math.floor(i / concurrentRequests) + 1}`);
 
+        // sessionId больше не нужен в _analyzeContacts
         const batchResults = await Promise.all(
-          batch.map(company => this._analyzeContacts(company, sessionId))
+          batch.map(company => this._analyzeContacts(company))
         );
 
         results.push(...batchResults);
@@ -58,7 +64,7 @@ class Stage3AnalyzeContacts {
       this.logger.info('Stage 3: Completed', {
         total: companies.length,
         foundContacts: successful,
-        sessionId
+        sessionId: sessionId || 'ALL'
       });
 
       return {
@@ -70,24 +76,31 @@ class Stage3AnalyzeContacts {
     } catch (error) {
       this.logger.error('Stage 3: Failed', {
         error: error.message,
-        sessionId
+        sessionId: sessionId || 'ALL'
       });
       throw error;
     }
   }
 
-  async _getCompanies(sessionId) {
-    // Получить компании с сайтом, но без email И НЕ пропущенные
+  async _getCompanies(sessionId = null) {
+    // НОВОЕ: Получить ВСЕ компании готовые для Stage 3 (независимо от сессии)
     // stage3_status должен быть NULL (не 'skipped', не 'completed', не 'failed')
     // current_stage должен быть >= 2 (Stage 2 завершен)
-    const { data, error } = await this.db.supabase
+    
+    let query = this.db.supabase
       .from('pending_companies')
       .select('company_id, company_name, website, current_stage, stage3_status')
-      .eq('session_id', sessionId)
       .not('website', 'is', null)
       .or('email.is.null,email.eq.""')
       .is('stage3_status', null) // Только те у кого Stage 3 еще не обработан
       .gte('current_stage', 2); // Минимум Stage 2 завершен
+    
+    // Если указан sessionId, фильтруем только эту сессию (для обратной совместимости)
+    if (sessionId) {
+      query = query.eq('session_id', sessionId);
+    }
+    
+    const { data, error } = await query;
     
     if (error) {
       this.logger.error('Stage 3: Failed to get companies', { error: error.message });
@@ -96,12 +109,13 @@ class Stage3AnalyzeContacts {
     
     this.logger.info(`Stage 3: Found ${data?.length || 0} companies ready for processing`, {
       total: data?.length || 0,
-      sessionId
+      sessionId: sessionId || 'ALL'
     });
     return data || [];
   }
 
-  async _analyzeContacts(company, sessionId) {
+  async _analyzeContacts(company) {
+    // sessionId больше не нужен - компания уже имеет session_id
     try {
       // Извлекаем главный домен из URL
       const mainDomain = this._extractMainDomain(company.website);
@@ -157,7 +171,6 @@ class Stage3AnalyzeContacts {
 
       const response = await this.sonar.query(prompt, {
         stage: 'stage3_analyze_contacts',
-        sessionId,
         useCache: true
       });
 
@@ -252,7 +265,8 @@ class Stage3AnalyzeContacts {
     }
   }
 
-  async _fallbackEmailSearch(company, sessionId) {
+  async _fallbackEmailSearch(company) {
+    // sessionId больше не нужен
     try {
       const prompt = `Найди email-адрес для этой компании через поиск в интернете:
 
@@ -285,7 +299,6 @@ class Stage3AnalyzeContacts {
 
       const response = await this.sonar.query(prompt, {
         stage: 'stage3_fallback_search',
-        sessionId,
         useCache: true
       });
 

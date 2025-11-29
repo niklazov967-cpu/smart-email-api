@@ -14,47 +14,34 @@ class Stage4AnalyzeServices {
     this.logger = logger;
   }
 
-  async execute(sessionId) {
-    this.logger.info('Stage 4: Starting AI enrichment and validation', { sessionId });
+  async execute(sessionId = null) {
+    // sessionId теперь опциональный - если не указан, обрабатываем ВСЕ компании
+    this.logger.info('Stage 4: Starting AI enrichment and validation', { 
+      sessionId: sessionId || 'ALL',
+      mode: sessionId ? 'session' : 'global'
+    });
 
     try {
-      // Получить тему сессии
-      const { data: sessionData, error: sessionError } = await this.db.supabase
-        .from('search_sessions')
-        .select('topic_description')
-        .eq('session_id', sessionId)
-        .single();
-      
-      if (sessionError || !sessionData) {
-        this.logger.error('Stage 4: Session not found', {
-          sessionId,
-          error: sessionError?.message
-        });
-        throw new Error('Session not found');
-      }
-      
-      const mainTopic = sessionData.topic_description || 'Unknown topic';
-      
-      this.logger.info('Stage 4: Session topic loaded', {
-        sessionId,
-        topic: mainTopic
-      });
-      
-      // Получить ВСЕ компании со ВСЕМИ данными, готовые для Stage 4
-      // current_stage должен быть >= 3 (Stage 3 завершен)
-      // stage4_status должен быть NULL (еще не обработан)
-      const { data: companies, error: companiesError } = await this.db.supabase
+      // Получить компании готовые для Stage 4
+      let query = this.db.supabase
         .from('pending_companies')
         .select(`
-          company_id, company_name, website, email, description, services,
+          company_id, company_name, website, email, description, services, 
+          session_id, search_query_text, topic_description,
           tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10,
           tag11, tag12, tag13, tag14, tag15, tag16, tag17, tag18, tag19, tag20,
           stage1_raw_data, stage2_raw_data, stage3_raw_data, stage,
           current_stage, stage4_status
         `)
-        .eq('session_id', sessionId)
         .gte('current_stage', 3) // Минимум Stage 3 завершен
         .is('stage4_status', null); // Только те у кого Stage 4 еще не обработан
+      
+      // Если указан sessionId, фильтруем только эту сессию
+      if (sessionId) {
+        query = query.eq('session_id', sessionId);
+      }
+
+      const { data: companies, error: companiesError } = await query;
 
       if (companiesError) {
         this.logger.error('Stage 4: Failed to get companies', { error: companiesError.message });
@@ -63,7 +50,7 @@ class Stage4AnalyzeServices {
       
       if (!companies || companies.length === 0) {
         this.logger.info('Stage 4: No companies ready for validation', {
-          sessionId,
+          sessionId: sessionId || 'ALL',
           reason: 'Either all processed or none passed Stage 3'
         });
         return {
@@ -74,22 +61,27 @@ class Stage4AnalyzeServices {
           needsReview: 0
         };
       }
+      
+      this.logger.info('Stage 4: Loaded companies with topics', {
+        companies: companies.length,
+        mode: sessionId ? 'session-based' : 'all-companies'
+      });
+      
       let validated = 0;
       let rejected = 0;
       let needsReview = 0;
 
-      this.logger.info('Stage 4: Processing companies with DeepSeek Reasoner', {
+      this.logger.info('Stage 4: Processing companies with DeepSeek Chat', {
         total: companies.length,
-        sessionId
+        sessionId: sessionId || 'ALL'
       });
 
-      // Использовать DeepSeek Chat (не reasoner!) для структурированных JSON ответов
-      // Reasoner дает рассуждения, а не чистый JSON
+      // Использовать DeepSeek Chat для структурированных JSON ответов
       this.deepseek.setModel('deepseek-chat');
 
-      // Обрабатывать компании батчами для скорости
-      const BATCH_SIZE = 3; // Меньше батч для reasoner (он медленнее, но умнее)
-      const DELAY_BETWEEN_BATCHES = 1000; // 1 секунда между батчами
+      // Обрабатывать компании батчами
+      const BATCH_SIZE = 3;
+      const DELAY_BETWEEN_BATCHES = 1000;
       
       for (let i = 0; i < companies.length; i += BATCH_SIZE) {
         const batch = companies.slice(i, i + BATCH_SIZE);
@@ -100,9 +92,13 @@ class Stage4AnalyzeServices {
           companies: batch.length
         });
         
-        // Обработать батч параллельно
+        // Обработать батч параллельно, каждая компания использует свою topic_description
         const batchResults = await Promise.all(
-          batch.map(company => this._enrichAndValidateCompany(company, mainTopic))
+          batch.map(company => {
+            // Использовать topic_description из самой компании (уже в БД)
+            const mainTopic = company.topic_description || company.search_query_text || 'Unknown topic';
+            return this._enrichAndValidateCompany(company, mainTopic);
+          })
         );
         
         // Сохранить результаты батча
@@ -167,7 +163,7 @@ class Stage4AnalyzeServices {
         validated,
         rejected,
         needsReview,
-        sessionId
+        sessionId: sessionId || 'ALL'
       });
 
       return {
@@ -181,7 +177,7 @@ class Stage4AnalyzeServices {
     } catch (error) {
       this.logger.error('Stage 4: AI enrichment failed', {
         error: error.message,
-        sessionId
+        sessionId: sessionId || 'ALL'
       });
       throw error;
     }

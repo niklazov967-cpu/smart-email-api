@@ -13,15 +13,25 @@ class Stage2FindWebsites {
     this.tagExtractor = new TagExtractor();
   }
 
-  async execute(sessionId) {
-    this.logger.info('Stage 2: Starting website search', { sessionId });
+  async execute(sessionId = null) {
+    // sessionId теперь опциональный - если не указан, обрабатываем ВСЕ компании
+    this.logger.info('Stage 2: Starting website search', { 
+      sessionId: sessionId || 'ALL',
+      mode: sessionId ? 'session' : 'global'
+    });
 
     try {
       // Получить компании для обработки
       const companies = await this._getCompanies(sessionId);
       
       if (companies.length === 0) {
-        throw new Error('No companies found for Stage 2');
+        this.logger.info('Stage 2: No companies need processing');
+        return {
+          success: true,
+          total: 0,
+          found: 0,
+          notFound: 0
+        };
       }
 
       // Получить настройки
@@ -32,7 +42,8 @@ class Stage2FindWebsites {
       this.logger.info('Stage 2: Processing companies', {
         count: companies.length,
         concurrent: concurrentRequests,
-        delay: batchDelay
+        delay: batchDelay,
+        mode: sessionId ? 'session-based' : 'all-companies'
       });
 
       // Обработать батчами
@@ -44,9 +55,9 @@ class Stage2FindWebsites {
           batchSize: batch.length
         });
 
-        // Параллельная обработка батча
+        // Параллельная обработка батча (sessionId НЕ нужен)
         const batchResults = await Promise.all(
-          batch.map(company => this._findWebsite(company, sessionId))
+          batch.map(company => this._findWebsite(company))
         );
 
         results.push(...batchResults);
@@ -64,7 +75,7 @@ class Stage2FindWebsites {
         total: companies.length,
         successful,
         failed: companies.length - successful,
-        sessionId
+        sessionId: sessionId || 'ALL'
       });
 
       return {
@@ -77,43 +88,49 @@ class Stage2FindWebsites {
     } catch (error) {
       this.logger.error('Stage 2: Failed', {
         error: error.message,
-        sessionId
+        sessionId: sessionId || 'ALL'
       });
       throw error;
     }
   }
 
-  async _getCompanies(sessionId) {
-    // Получить только компании БЕЗ сайта И НЕ пропущенные
+  async _getCompanies(sessionId = null) {
+    // НОВОЕ: Получить ВСЕ компании готовые для Stage 2 (независимо от сессии)
     // stage2_status должен быть NULL (не 'skipped', не 'completed', не 'failed')
-    const { data, error } = await this.db.supabase
+    // current_stage должен быть >= 1
+    
+    let query = this.db.supabase
       .from('pending_companies')
       .select('company_id, company_name, current_stage, stage2_status, website')
-      .eq('session_id', sessionId)
       .or('website.is.null,website.eq.')
-      .is('stage2_status', null); // Только те у кого Stage 2 еще не обработан
+      .is('stage2_status', null) // Только те у кого Stage 2 еще не обработан
+      .gte('current_stage', 1); // Минимум Stage 1 завершен
+    
+    // Если указан sessionId, фильтруем только эту сессию (для обратной совместимости)
+    if (sessionId) {
+      query = query.eq('session_id', sessionId);
+    }
+    
+    const { data, error } = await query;
     
     if (error) {
-      this.logger.error('Stage 2: Failed to fetch companies without website', { 
+      this.logger.error('Stage 2: Failed to fetch companies', { 
         error: error.message,
-        sessionId 
+        sessionId: sessionId || 'ALL'
       });
       throw new Error(`Failed to fetch companies: ${error.message}`);
     }
     
-    // Дополнительная проверка: current_stage должен быть >= 1
-    const filtered = (data || []).filter(c => c.current_stage >= 1);
-    
     this.logger.info('Stage 2: Companies ready for processing', {
       total: data?.length || 0,
-      readyForStage2: filtered.length,
-      sessionId
+      sessionId: sessionId || 'ALL'
     });
     
-    return filtered;
+    return data || [];
   }
 
-  async _findWebsite(company, sessionId) {
+  async _findWebsite(company) {
+    // sessionId больше не нужен - компания уже имеет session_id
     try {
       const prompt = `Найди официальный веб-сайт, email и описание услуг компании из Китая через поиск в интернете.
 
@@ -160,7 +177,6 @@ class Stage2FindWebsites {
 
       const response = await this.sonar.query(prompt, {
         stage: 'stage2_find_websites',
-        sessionId,
         useCache: true
       });
 

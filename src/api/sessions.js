@@ -228,6 +228,7 @@ router.delete('/clear-all', async (req, res) => {
 /**
  * DELETE /api/sessions/:id/clear-progress
  * Очистить прогресс обработки для конкретной сессии
+ * НОВОЕ: Также сбрасывает статусы компаний (current_stage, stage_statuses)
  */
 router.delete('/:id/clear-progress', async (req, res) => {
   try {
@@ -235,21 +236,45 @@ router.delete('/:id/clear-progress', async (req, res) => {
     
     req.logger.info('Clearing progress for session', { sessionId: id });
     
-    // Удалить записи прогресса для этой сессии
-    const { error } = await req.db.supabase
+    // 1. Удалить записи прогресса для этой сессии
+    const { error: progressError } = await req.db.supabase
       .from('processing_progress')
       .delete()
       .eq('session_id', id);
     
-    if (error) {
-      throw new Error(`Failed to clear progress: ${error.message}`);
+    if (progressError) {
+      throw new Error(`Failed to clear progress: ${progressError.message}`);
     }
     
-    req.logger.info('Session progress cleared successfully', { sessionId: id });
+    // 2. НОВОЕ: Сбросить статусы компаний этой сессии
+    const { error: companiesError } = await req.db.supabase
+      .from('pending_companies')
+      .update({
+        current_stage: 1,
+        stage1_status: 'completed', // Stage 1 всегда completed (компании уже найдены)
+        stage2_status: null,
+        stage3_status: null,
+        stage4_status: null,
+        validation_score: null,
+        validation_reason: null,
+        ai_generated_description: null,
+        ai_confidence_score: null
+        // НЕ очищаем: website, email, description, tags (найденные данные)
+      })
+      .eq('session_id', id);
+    
+    if (companiesError) {
+      req.logger.warn('Failed to reset company statuses', { 
+        error: companiesError.message,
+        sessionId: id
+      });
+    }
+    
+    req.logger.info('Session progress and statuses cleared successfully', { sessionId: id });
     
     res.json({
       success: true,
-      message: 'Прогресс очищен',
+      message: 'Прогресс и статусы компаний сброшены',
       sessionId: id
     });
     
@@ -780,6 +805,210 @@ router.post('/:id/process', async (req, res) => {
     });
   } catch (error) {
     req.logger.error('Failed to start processing', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/sessions/retry-email-search
+ * Повторный поиск email для компаний без email (используя DeepSeek)
+ */
+router.post('/retry-email-search', async (req, res) => {
+  try {
+    req.logger.info('Starting retry email search with DeepSeek');
+    
+    const Stage3Retry = require('../stages/Stage3Retry');
+    const DeepSeekClient = require('../services/DeepSeekClient');
+    
+    // Создать клиент DeepSeek
+    const deepseek = new DeepSeekClient(
+      process.env.DEEPSEEK_API_KEY,
+      req.logger,
+      'chat' // Используем chat модель
+    );
+    
+    const stage3Retry = new Stage3Retry(
+      req.db,
+      req.logger,
+      req.settingsManager,
+      deepseek
+    );
+    
+    const result = await stage3Retry.execute();
+    
+    res.json({
+      success: true,
+      ...result
+    });
+    
+  } catch (error) {
+    req.logger.error('Retry email search failed', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/sessions/:id/stage1
+ * Запуск Stage 1 для конкретной сессии
+ */
+router.post('/:id/stage1', async (req, res) => {
+  try {
+    const { id } = req.params;
+    req.logger.info('Starting Stage 1 for session', { sessionId: id });
+    
+    const Stage1FindCompanies = require('../stages/Stage1FindCompanies');
+    const SonarApiClient = require('../services/SonarApiClient');
+    
+    const sonar = new SonarApiClient(
+      process.env.PERPLEXITY_API_KEY,
+      req.logger
+    );
+    
+    const stage1 = new Stage1FindCompanies(
+      sonar,
+      req.settingsManager,
+      req.db,
+      req.logger
+    );
+    
+    const result = await stage1.execute(id);
+    
+    res.json({
+      success: true,
+      ...result
+    });
+    
+  } catch (error) {
+    req.logger.error('Stage 1 failed', { error: error.message, sessionId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/sessions/global/stage2
+ * Глобальный запуск Stage 2 для всех готовых компаний
+ */
+router.post('/global/stage2', async (req, res) => {
+  try {
+    req.logger.info('Starting global Stage 2');
+    
+    const Stage2FindWebsites = require('../stages/Stage2FindWebsites');
+    const SonarApiClient = require('../services/SonarApiClient');
+    
+    const sonar = new SonarApiClient(
+      process.env.PERPLEXITY_API_KEY,
+      req.logger
+    );
+    
+    const stage2 = new Stage2FindWebsites(
+      sonar,
+      req.settingsManager,
+      req.db,
+      req.logger
+    );
+    
+    // Запустить без sessionId = обработать ВСЕ компании
+    const result = await stage2.execute();
+    
+    res.json({
+      success: true,
+      ...result
+    });
+    
+  } catch (error) {
+    req.logger.error('Global Stage 2 failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/sessions/global/stage3
+ * Глобальный запуск Stage 3 для всех готовых компаний
+ */
+router.post('/global/stage3', async (req, res) => {
+  try {
+    req.logger.info('Starting global Stage 3');
+    
+    const Stage3AnalyzeContacts = require('../stages/Stage3AnalyzeContacts');
+    const SonarApiClient = require('../services/SonarApiClient');
+    
+    const sonar = new SonarApiClient(
+      process.env.PERPLEXITY_API_KEY,
+      req.logger
+    );
+    
+    const stage3 = new Stage3AnalyzeContacts(
+      sonar,
+      req.settingsManager,
+      req.db,
+      req.logger
+    );
+    
+    // Запустить без sessionId = обработать ВСЕ компании
+    const result = await stage3.execute();
+    
+    res.json({
+      success: true,
+      ...result
+    });
+    
+  } catch (error) {
+    req.logger.error('Global Stage 3 failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/sessions/global/stage4
+ * Глобальный запуск Stage 4 для всех готовых компаний
+ */
+router.post('/global/stage4', async (req, res) => {
+  try {
+    req.logger.info('Starting global Stage 4');
+    
+    const Stage4AnalyzeServices = require('../stages/Stage4AnalyzeServices');
+    const DeepSeekClient = require('../services/DeepSeekClient');
+    
+    const deepseek = new DeepSeekClient(
+      process.env.DEEPSEEK_API_KEY,
+      req.logger,
+      'chat'
+    );
+    
+    const stage4 = new Stage4AnalyzeServices(
+      deepseek,
+      req.settingsManager,
+      req.db,
+      req.logger
+    );
+    
+    // Запустить без sessionId = обработать ВСЕ компании
+    const result = await stage4.execute();
+    
+    res.json({
+      success: true,
+      ...result
+    });
+    
+  } catch (error) {
+    req.logger.error('Global Stage 4 failed', { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
