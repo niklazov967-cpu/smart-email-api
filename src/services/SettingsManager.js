@@ -125,11 +125,11 @@ class SettingsManager {
    * Установить новое значение параметра
    */
   async setSetting(category, settingKey, newValue, changedBy, reason = '') {
-    // Получить старое значение и метаданные
+    // Получить старое значение
     const settingInfo = await this.db.query(
-      `SELECT setting_id, setting_value, setting_type, validation_rules, require_restart 
+      `SELECT setting_id, value 
        FROM system_settings 
-       WHERE category = $1 AND setting_key = $2`,
+       WHERE category = $1 AND key = $2`,
       [category, settingKey]
     );
 
@@ -137,26 +137,27 @@ class SettingsManager {
       throw new Error(`Setting not found: ${category}.${settingKey}`);
     }
 
-    const { setting_id, setting_value: oldValue, setting_type, validation_rules, require_restart } = settingInfo.rows[0];
+    const { setting_id, value: oldValue } = settingInfo.rows[0];
 
-    // Валидировать новое значение
-    await this._validateSetting(settingKey, newValue, setting_type, JSON.parse(validation_rules));
-
-    // Обновить в БД
+    // Обновить в БД (используем system_settings с полями key и value)
     await this.db.query(
-      `UPDATE settings 
-       SET setting_value = $1, changed_by = $2, changed_at = NOW() 
-       WHERE category = $3 AND setting_key = $4`,
-      [String(newValue), changedBy, category, settingKey]
+      `UPDATE system_settings 
+       SET value = $1, updated_at = NOW() 
+       WHERE category = $2 AND key = $3`,
+      [String(newValue), category, settingKey]
     );
 
-    // Сохранить в историю
-    await this.db.query(
-      `INSERT INTO settings_history 
-       (setting_id, setting_key, category, old_value, new_value, changed_by, reason)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [setting_id, settingKey, category, oldValue, String(newValue), changedBy, reason]
-    );
+    // settings_history может не существовать - обернем в try/catch
+    try {
+      await this.db.query(
+        `INSERT INTO settings_history 
+         (setting_id, setting_key, category, old_value, new_value, changed_by, reason)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [setting_id, settingKey, category, oldValue, String(newValue), changedBy, reason]
+      );
+    } catch (historyError) {
+      this.logger.warn('Failed to save settings history (table may not exist)', { error: historyError.message });
+    }
 
     // Очистить кеш
     this.cachedSettings = null;
@@ -169,7 +170,7 @@ class SettingsManager {
 
     return {
       success: true,
-      requireRestart: require_restart,
+      requireRestart: false, // У system_settings нет этого поля
       oldValue,
       newValue
     };
@@ -180,7 +181,7 @@ class SettingsManager {
    */
   async resetSetting(category, settingKey, changedBy) {
     const setting = await this.db.query(
-      'SELECT default_value, setting_type FROM system_settings WHERE category = $1 AND setting_key = $2',
+      'SELECT value FROM system_settings WHERE category = $1 AND key = $2',
       [category, settingKey]
     );
 
@@ -188,8 +189,9 @@ class SettingsManager {
       throw new Error(`Setting not found: ${category}.${settingKey}`);
     }
 
-    const { default_value, setting_type } = setting.rows[0];
-    const defaultValue = this._parseValue(default_value, setting_type);
+    // У system_settings нет default_value, используем из кода
+    const defaults = this._getDefaultSettings(category);
+    const defaultValue = defaults[settingKey];
     
     return this.setSetting(category, settingKey, defaultValue, changedBy, 'Reset to default');
   }
@@ -199,17 +201,17 @@ class SettingsManager {
    */
   async resetCategory(category, changedBy) {
     const settings = await this.db.query(
-      'SELECT setting_key FROM system_settings WHERE category = $1',
+      'SELECT key FROM system_settings WHERE category = $1',
       [category]
     );
 
     const results = [];
     for (const row of settings.rows) {
       try {
-        const result = await this.resetSetting(category, row.setting_key, changedBy);
-        results.push({ key: row.setting_key, ...result });
+        const result = await this.resetSetting(category, row.key, changedBy);
+        results.push({ key: row.key, ...result });
       } catch (error) {
-        results.push({ key: row.setting_key, success: false, error: error.message });
+        results.push({ key: row.key, success: false, error: error.message });
       }
     }
 
@@ -220,15 +222,20 @@ class SettingsManager {
    * Получить историю изменений параметра
    */
   async getHistory(category, settingKey, limit = 50) {
-    const result = await this.db.query(
-      `SELECT * FROM settings_history 
-       WHERE category = $1 AND setting_key = $2 
-       ORDER BY changed_at DESC 
-       LIMIT $3`,
-      [category, settingKey, limit]
-    );
+    try {
+      const result = await this.db.query(
+        `SELECT * FROM settings_history 
+         WHERE category = $1 AND setting_key = $2 
+         ORDER BY changed_at DESC 
+         LIMIT $3`,
+        [category, settingKey, limit]
+      );
 
-    return result.rows;
+      return result.rows;
+    } catch (error) {
+      this.logger.warn('Settings history table does not exist', { error: error.message });
+      return [];
+    }
   }
 
   /**
