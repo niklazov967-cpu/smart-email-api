@@ -152,24 +152,25 @@ async function initializeServices() {
 // Загрузить базовые настройки для Mock DB
 async function loadDefaultSettings(db) {
   const defaultSettings = [
-    ['api', 'api_key', '', 'string', '', 'Perplexity API ключ', '{}'],
-    ['api', 'model_name', 'llama-3.1-sonar-large-128k-online', 'string', 'llama-3.1-sonar-large-128k-online', 'Модель', '{}'],
-    ['api', 'temperature', '0.3', 'float', '0.3', 'Температура', '{}'],
-    ['api', 'top_p', '0.9', 'float', '0.9', 'Top P', '{}'],
-    ['api', 'max_tokens', '2000', 'integer', '2000', 'Max tokens', '{}'],
-    ['api', 'max_retries', '3', 'integer', '3', 'Max retries', '{}'],
-    ['api', 'api_timeout_seconds', '60', 'integer', '60', 'Timeout', '{}'],
-    ['api', 'rate_limit_requests_per_min', '20', 'integer', '20', 'Rate limit', '{}'],
-    ['api', 'retry_delay_seconds', '10', 'integer', '10', 'Retry delay', '{}'],
-    ['api', 'fallback_model', 'llama-3.1-sonar-small-128k-online', 'string', 'llama-3.1-sonar-small-128k-online', 'Fallback model', '{}'],
-    ['api', 'api_base_url', 'https://api.perplexity.ai', 'string', 'https://api.perplexity.ai', 'API URL', '{}'],
+    ['api', 'api_key', '', 'Perplexity API ключ'],
+    ['api', 'model_name', 'llama-3.1-sonar-large-128k-online', 'Модель'],
+    ['api', 'temperature', '0.3', 'Температура'],
+    ['api', 'top_p', '0.9', 'Top P'],
+    ['api', 'max_tokens', '2000', 'Max tokens'],
+    ['api', 'max_retries', '3', 'Max retries'],
+    ['api', 'api_timeout_seconds', '60', 'Timeout'],
+    ['api', 'rate_limit_requests_per_min', '20', 'Rate limit'],
+    ['api', 'retry_delay_seconds', '10', 'Retry delay'],
+    ['api', 'fallback_model', 'llama-3.1-sonar-small-128k-online', 'Fallback model'],
+    ['api', 'api_base_url', 'https://api.perplexity.ai', 'API URL'],
   ];
   
   for (const setting of defaultSettings) {
     await db.query(
-      `INSERT INTO settings (category, setting_key, setting_value, setting_type, default_value, description, validation_rules, is_editable, require_restart)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [...setting, true, false]
+      `INSERT INTO system_settings (category, key, value, description)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (category, key) DO NOTHING`,
+      setting
     );
   }
 }
