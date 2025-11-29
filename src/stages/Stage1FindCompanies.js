@@ -114,6 +114,22 @@ class Stage1FindCompanies {
         efficiencyRate: `${(finalCompanies.length / allCompanies.length * 100).toFixed(1)}%`
       });
 
+      // Сохранить детальный отчет в файл
+      await this._saveDetailedReport({
+        sessionId,
+        queries: queries.length,
+        initial: allCompanies.length,
+        afterDedup: uniqueCompanies.length,
+        afterExisting: newCompanies.length,
+        afterMarketplace: filteredCompanies.length,
+        afterNormalization: normalizedCompanies.length,
+        final: finalCompanies.length,
+        dedupRate: `${((allCompanies.length - uniqueCompanies.length) / allCompanies.length * 100).toFixed(1)}%`,
+        existingRate: `${((uniqueCompanies.length - newCompanies.length) / uniqueCompanies.length * 100).toFixed(1)}%`,
+        marketplaceRate: `${((newCompanies.length - filteredCompanies.length) / newCompanies.length * 100).toFixed(1)}%`,
+        efficiencyRate: `${(finalCompanies.length / allCompanies.length * 100).toFixed(1)}%`
+      });
+
       // Сохранить в БД (с сырыми данными и темой)
       await this._saveCompanies(finalCompanies, sessionId);
 
@@ -272,7 +288,7 @@ ${searchQuery}
 - 提供CNC加工服务（对外接单）
 - 小批量定制加工
 - 可以加工客户提供的图纸
-- 中小型制造企业
+- 员工50-500人的中小企业
 
 对于每家公司，查找：
 1. **公司名称** - 完整的中文公司名称（必须是中文！例如：深圳市精密制造有限公司）
@@ -929,6 +945,96 @@ STRICT JSON OUTPUT ONLY.`;
       withTags: tagsCount,
       withRawData: companies.filter(c => c.rawResponse).length
     });
+  }
+
+  /**
+   * Сохранить детальный отчет о прохождении Stage 1 в файл
+   */
+  async _saveDetailedReport(stats) {
+    const fs = require('fs').promises;
+    const path = require('path');
+    
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    const reportPath = path.join(__dirname, '../../logs', `stage1-report-${timestamp}.txt`);
+    
+    const report = `
+╔═══════════════════════════════════════════════════════════════╗
+║           STAGE 1 DETAILED REPORT - ${new Date().toLocaleString('ru-RU')}          ║
+╚═══════════════════════════════════════════════════════════════╝
+
+SESSION ID: ${stats.sessionId}
+QUERIES PROCESSED: ${stats.queries}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 FILTERING PIPELINE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣  INITIAL (from AI):           ${stats.initial} companies
+    ↓
+2️⃣  After Deduplication:          ${stats.afterDedup} companies
+    Removed: ${stats.initial - stats.afterDedup} (${stats.dedupRate})
+    ↓
+3️⃣  After Existing Check:         ${stats.afterExisting} companies
+    Removed: ${stats.afterDedup - stats.afterExisting} (${stats.existingRate})
+    ↓
+4️⃣  After Marketplace Filter:     ${stats.afterMarketplace} companies
+    Removed: ${stats.afterExisting - stats.afterMarketplace} (${stats.marketplaceRate})
+    ↓
+5️⃣  After Normalization:          ${stats.afterNormalization} companies
+    Removed: ${stats.afterMarketplace - stats.afterNormalization}
+    ↓
+6️⃣  FINAL SAVED:                  ${stats.final} companies
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📈 SUMMARY:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Total Companies Found:    ${stats.initial}
+Total Companies Saved:    ${stats.final}
+Total Loss:               ${stats.initial - stats.final} companies
+Efficiency Rate:          ${stats.efficiencyRate}
+
+Average per Query:        ${(stats.initial / stats.queries).toFixed(1)} companies
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 ANALYSIS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Main Loss Factors:
+1. Deduplication: ${stats.dedupRate} - ${this._analyzeLoss(stats.dedupRate)}
+2. Existing in DB: ${stats.existingRate} - ${this._analyzeLoss(stats.existingRate)}
+3. Marketplaces: ${stats.marketplaceRate} - ${this._analyzeLoss(stats.marketplaceRate)}
+
+Overall Efficiency: ${stats.efficiencyRate} - ${this._analyzeEfficiency(stats.efficiencyRate)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+    try {
+      await fs.writeFile(reportPath, report, 'utf8');
+      this.logger.info(`Stage 1: Detailed report saved to ${reportPath}`);
+    } catch (error) {
+      this.logger.error(`Stage 1: Failed to save report: ${error.message}`);
+    }
+  }
+
+  _analyzeLoss(rateStr) {
+    const rate = parseFloat(rateStr);
+    if (rate < 10) return '✅ Minimal loss';
+    if (rate < 25) return '⚠️  Moderate loss';
+    if (rate < 40) return '❌ High loss';
+    return '🚨 Critical loss';
+  }
+
+  _analyzeEfficiency(rateStr) {
+    const rate = parseFloat(rateStr);
+    if (rate > 80) return '🎉 Excellent!';
+    if (rate > 60) return '✅ Good';
+    if (rate > 40) return '⚠️  Needs improvement';
+    return '❌ Poor - review filters';
   }
 }
 
