@@ -223,10 +223,20 @@ class Stage3AnalyzeContacts {
 
 ВЕРНИ ТОЛЬКО JSON, без дополнительного текста.`;
 
+      console.log(`   🤖 Sending query to Perplexity AI...`);
+      
       const response = await this.sonar.query(prompt, {
         stage: 'stage3_analyze_contacts',
         useCache: false  // Отключаем кэш для свежих результатов
       });
+      
+      if (!response) {
+        console.log(`   ⚠️  WARNING: Got empty response from Perplexity!`);
+        this.logger.warn('Stage 3: Empty response from Perplexity', {
+          company: company.company_name,
+          website: company.website
+        });
+      }
       
       console.log(`   ✅ Got AI response (${response ? response.length : 0} chars)`);
 
@@ -260,7 +270,7 @@ class Stage3AnalyzeContacts {
         // Подготовить raw data для Stage 3
         const rawData = {
           company: company.company_name,
-          full_response: response ? response.substring(0, 10000) : null,
+          full_response: response ? response.substring(0, 10000) : 'No response from AI',
           timestamp: new Date().toISOString(),
           source: 'perplexity_sonar_pro',
           search_type: 'direct'
@@ -304,7 +314,7 @@ class Stage3AnalyzeContacts {
         // Отметить как обработано без контактов
         const rawDataNoEmail = {
           company: company.company_name,
-          full_response: response ? response.substring(0, 10000) : null,
+          full_response: response ? response.substring(0, 10000) : 'No response from AI',
           timestamp: new Date().toISOString(),
           source: 'perplexity_sonar_pro',
           search_type: 'direct',

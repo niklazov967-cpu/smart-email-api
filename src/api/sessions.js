@@ -59,6 +59,38 @@ router.get('/debug-stage3', async (req, res) => {
 });
 
 /**
+ * POST /api/sessions/reset-stage3
+ * Сбросить stage3_status для всех компаний (для тестирования)
+ */
+router.post('/reset-stage3', async (req, res) => {
+  try {
+    const db = req.db;
+    
+    const { error } = await db.supabase
+      .from('pending_companies')
+      .update({
+        stage3_status: null,
+        email: null,
+        contacts_json: null,
+        stage3_raw_data: null
+      })
+      .not('stage3_status', 'is', null);
+    
+    if (error) throw error;
+    
+    res.json({
+      success: true,
+      message: 'All companies reset for Stage 3'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/sessions
  * Создать новую сессию поиска и запустить обработку
  */
