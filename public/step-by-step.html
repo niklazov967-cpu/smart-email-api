@@ -903,10 +903,16 @@
               if (confirm(`Этапы 1-${lastCompleted} уже выполнены.\n\nПродолжить с этапа ${nextStage}?`)) {
                 runStage(nextStage);
               } else {
-                runStage(1);
+                // Пользователь отказался - вернуться к выбору сессии
+                document.getElementById('sessionSelector').style.display = 'block';
+                document.getElementById('stagesContainer').style.display = 'none';
+                alert('ℹ️ Обработка отменена.\n\nЧтобы начать заново, очистите прогресс в информации о сессии.');
               }
             } else {
               alert('Все этапы уже выполнены! ✅');
+              // Вернуться к выбору сессии
+              document.getElementById('sessionSelector').style.display = 'block';
+              document.getElementById('stagesContainer').style.display = 'none';
             }
           } else {
             // Начать с первого этапа
