@@ -794,49 +794,75 @@
           const progressResponse = await fetch(`/api/sessions/${sessionId}/stage-progress`);
           const progressData = await progressResponse.json();
           
-          if (progressData.success && progressData.lastCompletedStage > 0) {
+          // Также проверить реальное состояние компаний
+          const companiesResponse = await fetch(`/api/debug/companies`);
+          const companiesData = await companiesResponse.json();
+          const sessionCompanies = companiesData.companies?.filter(c => c.session_id === sessionId) || [];
+          
+          // Определить какой этап реально нужен
+          const allCompleted = sessionCompanies.every(c => c.stage === 'completed');
+          const needsStage4 = sessionCompanies.some(c => c.website && c.stage !== 'completed');
+          const needsStage3 = sessionCompanies.some(c => c.website && !c.email);
+          const needsStage2 = sessionCompanies.some(c => !c.website && c.stage === 'names_found');
+          
+          let actualNextStage = null;
+          if (!allCompleted) {
+            if (needsStage2) actualNextStage = 2;
+            else if (needsStage3) actualNextStage = 3;
+            else if (needsStage4) actualNextStage = 4;
+          }
+          
+          if (progressData.success && (progressData.lastCompletedStage > 0 || actualNextStage)) {
             // Есть завершенные этапы - показать информацию
             const lastCompleted = progressData.lastCompletedStage;
-            const nextStage = progressData.nextStage;
+            const nextStage = actualNextStage || progressData.nextStage;
             
             const stageProgress = document.getElementById('stageProgress');
             const progressMessage = document.getElementById('progressMessage');
             
             stageProgress.style.display = 'block';
             
-            if (nextStage) {
+            if (allCompleted) {
+              stageProgress.style.background = '#dcfce7';
+              stageProgress.style.borderColor = '#16a34a';
+              progressMessage.style.color = '#166534';
               progressMessage.innerHTML = `
-                <strong>Этапы 1-${lastCompleted} уже выполнены.</strong><br>
-                При запуске будет предложено продолжить с этапа ${nextStage}.
+                <strong>✅ Все этапы завершены!</strong><br>
+                Все ${totalCompanies} компаний обработаны. Можете начать новую сессию.
               `;
-            } else {
+              // Скрыть кнопку очистки для завершенных
+              document.getElementById('clearProgressBtn').style.display = 'none';
+            } else if (nextStage) {
               progressMessage.innerHTML = `
-                <strong>Все этапы уже выполнены!</strong><br>
-                Можете начать заново, очистив прогресс.
+                <strong>Обработка в процессе.</strong><br>
+                ${lastCompleted > 0 ? `Этапы 1-${lastCompleted} выполнены. ` : ''}
+                Рекомендуется продолжить с этапа ${nextStage}.<br>
+                <small style="color: #666;">Компаний: всего ${totalCompanies}, обработано ${processed}, осталось ${unprocessed}</small>
               `;
-            }
-            
-            // Обработчик кнопки очистки прогресса
-            document.getElementById('clearProgressBtn').onclick = async () => {
-              if (confirm('⚠️ Очистить прогресс обработки для этой сессии?\n\nЭто позволит начать обработку с этапа 1.')) {
-                try {
-                  // Удалить записи прогресса для этой сессии
-                  const response = await fetch(`/api/sessions/${sessionId}/clear-progress`, {
-                    method: 'DELETE'
-                  });
-                  
-                  if (response.ok) {
-                    alert('✅ Прогресс очищен! Теперь можете начать заново.');
-                    // Обновить информацию
-                    await updateSessionInfo();
-                  } else {
-                    alert('❌ Не удалось очистить прогресс. Попробуйте очистить всю базу.');
+              
+              // Обработчик кнопки очистки прогресса
+              document.getElementById('clearProgressBtn').style.display = 'inline-block';
+              document.getElementById('clearProgressBtn').onclick = async () => {
+                if (confirm('⚠️ Очистить прогресс обработки для этой сессии?\n\nЭто позволит начать обработку с этапа 1.')) {
+                  try {
+                    const response = await fetch(`/api/sessions/${sessionId}/clear-progress`, {
+                      method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                      alert('✅ Прогресс очищен! Теперь можете начать заново.');
+                      await updateSessionInfo();
+                    } else {
+                      alert('❌ Не удалось очистить прогресс. Попробуйте очистить всю базу.');
+                    }
+                  } catch (error) {
+                    alert('❌ Ошибка: ' + error.message);
                   }
-                } catch (error) {
-                  alert('❌ Ошибка: ' + error.message);
                 }
-              }
-            };
+              };
+            } else {
+              stageProgress.style.display = 'none';
+            }
           } else {
             document.getElementById('stageProgress').style.display = 'none';
           }
@@ -876,20 +902,47 @@
       document.getElementById('sessionSelector').style.display = 'none';
       document.getElementById('stagesContainer').style.display = 'block';
       
-      // Проверить прогресс сессии
+      // Проверить реальное состояние компаний и прогресс сессии
       try {
+        // Получить компании этой сессии
+        const companiesResponse = await fetch(`/api/debug/companies`);
+        const companiesData = await companiesResponse.json();
+        const sessionCompanies = companiesData.companies?.filter(c => c.session_id === currentSessionId) || [];
+        
+        // Определить какой этап реально нужен
+        const allCompleted = sessionCompanies.every(c => c.stage === 'completed');
+        const needsStage4 = sessionCompanies.some(c => c.website && c.stage !== 'completed');
+        const needsStage3 = sessionCompanies.some(c => c.website && !c.email);
+        const needsStage2 = sessionCompanies.some(c => !c.website && c.stage === 'names_found');
+        
+        let actualNextStage = 1; // По умолчанию с первого
+        if (sessionCompanies.length > 0) {
+          if (allCompleted) {
+            alert('✅ Все компании уже обработаны!\n\nМожете создать новую сессию.');
+            document.getElementById('sessionSelector').style.display = 'block';
+            document.getElementById('stagesContainer').style.display = 'none';
+            return;
+          } else if (needsStage2) {
+            actualNextStage = 2;
+          } else if (needsStage3) {
+            actualNextStage = 3;
+          } else if (needsStage4) {
+            actualNextStage = 4;
+          }
+        }
+        
+        // Получить историю прогресса
         const progressResponse = await fetch(`/api/sessions/${currentSessionId}/stage-progress`);
         const progressData = await progressResponse.json();
         
-        if (progressData.success) {
+        if (progressData.success && progressData.lastCompletedStage > 0) {
           const lastCompleted = progressData.lastCompletedStage;
-          const nextStage = progressData.nextStage;
           
-          if (lastCompleted > 0) {
-            // Есть завершенные этапы - показать их как completed
-            for (let i = 1; i <= lastCompleted; i++) {
-              const stageCard = document.getElementById(`stage${i}`);
-              const statusEl = document.getElementById(`status${i}`);
+          // Показать завершенные этапы
+          for (let i = 1; i <= lastCompleted; i++) {
+            const stageCard = document.getElementById(`stage${i}`);
+            const statusEl = document.getElementById(`status${i}`);
+            if (stageCard && statusEl) {
               stageCard.classList.add('completed');
               statusEl.textContent = 'Завершено';
               statusEl.className = 'stage-status status-completed';
@@ -897,33 +950,31 @@
               // Загрузить сохраненные результаты
               await loadCachedStageResults(i, currentSessionId);
             }
-            
-            // Показать сообщение о продолжении
-            if (nextStage) {
-              if (confirm(`Этапы 1-${lastCompleted} уже выполнены.\n\nПродолжить с этапа ${nextStage}?`)) {
-                runStage(nextStage);
-              } else {
-                // Пользователь отказался - вернуться к выбору сессии
-                document.getElementById('sessionSelector').style.display = 'block';
-                document.getElementById('stagesContainer').style.display = 'none';
-                alert('ℹ️ Обработка отменена.\n\nЧтобы начать заново, очистите прогресс в информации о сессии.');
-              }
+          }
+          
+          // Если есть прогресс, но нужен следующий этап
+          if (actualNextStage > 1 && actualNextStage <= lastCompleted + 1) {
+            if (confirm(`✅ Этапы 1-${lastCompleted} выполнены.\n\n📊 Рекомендуется продолжить с этапа ${actualNextStage}.\n\nПродолжить?`)) {
+              runStage(actualNextStage);
             } else {
-              alert('Все этапы уже выполнены! ✅');
-              // Вернуться к выбору сессии
+              // Вернуться назад
               document.getElementById('sessionSelector').style.display = 'block';
               document.getElementById('stagesContainer').style.display = 'none';
             }
           } else {
-            // Начать с первого этапа
-            runStage(1);
+            // Начать с рекомендуемого этапа
+            runStage(actualNextStage);
           }
         } else {
-          // Если не удалось получить прогресс, начать с первого
-          runStage(1);
+          // Нет прогресса - начать с рекомендуемого этапа
+          if (actualNextStage > 1) {
+            alert(`ℹ️ Обнаружены компании, требующие обработки.\n\nНачинаем с этапа ${actualNextStage}.`);
+          }
+          runStage(actualNextStage);
         }
       } catch (error) {
         console.error('Error checking progress:', error);
+        // В случае ошибки начать с первого
         runStage(1);
       }
     });
