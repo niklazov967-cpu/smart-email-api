@@ -34,12 +34,18 @@ class Stage1FindCompanies {
         .order('relevance', { ascending: false });
       
       if (queriesError || !queries || queries.length === 0) {
-        this.logger.error('Stage 1: No queries found for session', { sessionId, error: queriesError?.message });
-        return {
-          success: false,
-          error: 'No queries found for this session',
-          total: 0
-        };
+        const errorMsg = queriesError 
+          ? `Ошибка при загрузке запросов: ${queriesError.message}`
+          : 'Для этой темы не найдено ни одного подзапроса. Пожалуйста, сгенерируйте и сохраните подзапросы в шаге 0.';
+        
+        this.logger.error('Stage 1: No queries found for session', { 
+          sessionId, 
+          error: queriesError?.message,
+          queriesCount: queries?.length || 0
+        });
+        
+        // Выбросить ошибку вместо return, чтобы API правильно обработал
+        throw new Error(errorMsg);
       }
       
       this.logger.info('Stage 1: Processing queries', { 
