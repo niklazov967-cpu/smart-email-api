@@ -214,7 +214,7 @@ class Stage1FindCompanies {
     const response = await this.sonar.query(prompt, {
       stage: 'stage1_find_companies',
       sessionId,
-      useCache: true
+      useCache: false  // ← ОТКЛЮЧАЕМ КЭШ ВРЕМЕННО!
     });
 
     // Парсить результат
