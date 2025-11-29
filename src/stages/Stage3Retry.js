@@ -16,6 +16,9 @@ class Stage3Retry {
 
   async execute() {
     this.logger.info('Stage 3 Retry: Starting retry for companies without email');
+    console.log('\n════════════════════════════════════════════');
+    console.log('🔄 STAGE 3 RETRY: DeepSeek Email Search');
+    console.log('════════════════════════════════════════════\n');
 
     try {
       // Получить компании готовые для повторного поиска
@@ -23,6 +26,8 @@ class Stage3Retry {
       
       if (companies.length === 0) {
         this.logger.info('Stage 3 Retry: No companies need retry');
+        console.log('ℹ️  No companies found for retry');
+        console.log('   All companies either have email or lack sufficient data\n');
         return {
           success: true,
           total: 0,
@@ -34,13 +39,22 @@ class Stage3Retry {
         count: companies.length
       });
 
+      console.log(`\n✅ Found ${companies.length} companies to retry`);
+      console.log('   Starting email search with DeepSeek...\n');
+
       let found = 0;
 
       // Обрабатывать последовательно (DeepSeek медленнее)
-      for (const company of companies) {
+      for (let i = 0; i < companies.length; i++) {
+        const company = companies[i];
+        console.log(`   [${i + 1}/${companies.length}] ${company.company_name}...`);
+        
         const result = await this._retryEmailSearch(company);
         if (result.success && result.email) {
           found++;
+          console.log(`      ✅ Email found: ${result.email}`);
+        } else {
+          console.log(`      ❌ No email found`);
         }
         
         // Пауза между запросами
@@ -53,6 +67,14 @@ class Stage3Retry {
         notFound: companies.length - found
       });
 
+      console.log('\n════════════════════════════════════════════');
+      console.log('📊 STAGE 3 RETRY SUMMARY');
+      console.log('════════════════════════════════════════════');
+      console.log(`Total Retried: ${companies.length}`);
+      console.log(`Emails Found: ${found} (${(found/companies.length*100).toFixed(1)}%)`);
+      console.log(`Still Missing: ${companies.length - found}`);
+      console.log('════════════════════════════════════════════\n');
+
       return {
         success: true,
         total: companies.length,
@@ -61,8 +83,11 @@ class Stage3Retry {
 
     } catch (error) {
       this.logger.error('Stage 3 Retry: Failed', {
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
+      console.error('❌ Stage 3 Retry ERROR:', error.message);
+      console.error('   Stack:', error.stack);
       throw error;
     }
   }
@@ -73,9 +98,11 @@ class Stage3Retry {
     // 2. НЕ имеют email
     // 3. Имеют хоть какую-то информацию (описание или тема)
     
+    console.log('\n🔍 Stage 3 Retry: Searching for companies...');
+    
     const { data, error } = await this.db.supabase
       .from('pending_companies')
-      .select('company_id, company_name, website, description, topic_description, stage3_status, current_stage')
+      .select('company_id, company_name, website, description, topic_description, stage3_status, current_stage, email')
       .or('email.is.null,email.eq.""')
       .or(
         // Компании после Stage 3 без email
@@ -90,8 +117,11 @@ class Stage3Retry {
       this.logger.error('Stage 3 Retry: Failed to get companies', { 
         error: error.message 
       });
+      console.error('❌ Stage 3 Retry: Database error:', error.message);
       throw error;
     }
+    
+    console.log(`   Found ${data?.length || 0} companies matching criteria`);
     
     // Фильтровать компании с минимальной информацией
     const filtered = (data || []).filter(company => {
@@ -99,7 +129,12 @@ class Stage3Retry {
       return company.website || company.description || company.topic_description;
     });
     
+    console.log(`   After filtering: ${filtered.length} companies`);
+    console.log(`   - With website: ${filtered.filter(c => c.website).length}`);
+    console.log(`   - Without website: ${filtered.filter(c => !c.website).length}`);
+    
     this.logger.info(`Stage 3 Retry: Found ${filtered.length} companies for retry`, {
+      totalMatched: data?.length || 0,
       withWebsite: filtered.filter(c => c.website).length,
       withoutWebsite: filtered.filter(c => !c.website).length
     });

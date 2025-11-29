@@ -115,18 +115,26 @@ class Stage3AnalyzeContacts {
 
       // 🔄 АВТОМАТИЧЕСКИЙ ЗАПУСК STAGE 3 RETRY
       // Если есть компании без email - запустить Stage 3 Retry автоматически
+      console.log(`\n🔍 DEBUG: Checking if Stage 3 Retry should run...`);
+      console.log(`   Failed count: ${failed}`);
+      console.log(`   Condition (failed > 0): ${failed > 0}`);
+      
       if (failed > 0) {
         console.log('\n🔄 Starting Stage 3 Retry automatically...');
         console.log(`   Companies without email: ${failed}`);
         
         try {
+          console.log('   Loading Stage3Retry class...');
           const Stage3Retry = require('./Stage3Retry');
           const DeepSeekClient = require('../services/DeepSeekClient');
           
+          console.log('   Creating DeepSeek client...');
           // Создать DeepSeek клиент
           const deepseekApiKey = process.env.DEEPSEEK_API_KEY || 'sk-85323bc753cb4b25b02a2664e9367f8a';
+          console.log(`   DeepSeek API key exists: ${!!deepseekApiKey} (length: ${deepseekApiKey?.length || 0})`);
           const deepseekClient = new DeepSeekClient(deepseekApiKey, this.logger, 'chat');
           
+          console.log('   Creating Stage3Retry instance...');
           // Создать Stage3Retry
           const stage3Retry = new Stage3Retry(
             this.db,
@@ -135,6 +143,7 @@ class Stage3AnalyzeContacts {
             deepseekClient
           );
           
+          console.log('   Executing Stage 3 Retry...');
           // Запустить retry
           const retryResult = await stage3Retry.execute();
           
@@ -161,11 +170,15 @@ class Stage3AnalyzeContacts {
           
         } catch (retryError) {
           this.logger.error('Stage 3 Retry: Failed to execute automatically', {
-            error: retryError.message
+            error: retryError.message,
+            stack: retryError.stack
           });
           console.error('❌ Stage 3 Retry failed:', retryError.message);
+          console.error('   Stack trace:', retryError.stack);
           // Продолжаем даже если retry упал
         }
+      } else {
+        console.log('   ℹ️ Skipping Stage 3 Retry - all companies have email');
       }
 
       return {
