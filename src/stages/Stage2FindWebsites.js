@@ -91,6 +91,75 @@ class Stage2FindWebsites {
         results
       });
 
+      // 🔄 АВТОМАТИЧЕСКИЙ ЗАПУСК STAGE 2 RETRY
+      // Если есть компании без website - запустить Stage 2 Retry автоматически
+      console.log(`\n🔍 DEBUG: Checking if Stage 2 Retry should run...`);
+      console.log(`   Failed count: ${failed}`);
+      console.log(`   Condition (failed > 0): ${failed > 0}`);
+      
+      if (failed > 0) {
+        console.log('\n🔄 Starting Stage 2 Retry automatically...');
+        console.log(`   Companies without website: ${failed}`);
+        
+        try {
+          console.log('   Loading Stage2Retry class...');
+          const Stage2Retry = require('./Stage2Retry');
+          const DeepSeekClient = require('../services/DeepSeekClient');
+          
+          console.log('   Creating DeepSeek client...');
+          // Создать DeepSeek клиент
+          const deepseekApiKey = process.env.DEEPSEEK_API_KEY || 'sk-85323bc753cb4b25b02a2664e9367f8a';
+          console.log(`   DeepSeek API key exists: ${!!deepseekApiKey} (length: ${deepseekApiKey?.length || 0})`);
+          const deepseekClient = new DeepSeekClient(deepseekApiKey, this.logger, 'chat');
+          
+          console.log('   Creating Stage2Retry instance...');
+          // Создать Stage2Retry
+          const stage2Retry = new Stage2Retry(
+            this.db,
+            this.logger,
+            this.settings,
+            deepseekClient
+          );
+          
+          console.log('   Executing Stage 2 Retry...');
+          // Запустить retry
+          const retryResult = await stage2Retry.execute();
+          
+          console.log('\n========== STAGE 2 RETRY RESULTS ==========');
+          console.log(`Total Companies Retried: ${retryResult.total}`);
+          console.log(`Additional Websites Found: ${retryResult.found}`);
+          console.log(`Still No Website: ${retryResult.total - retryResult.found}`);
+          console.log('===========================================\n');
+          
+          this.logger.info('Stage 2 Retry: Completed automatically', {
+            retriedCompanies: retryResult.total,
+            additionalWebsitesFound: retryResult.found
+          });
+          
+          // Обновить статистику
+          return {
+            success: true,
+            total: companies.length,
+            found: successful + retryResult.found,
+            stage2Found: successful,
+            retryFound: retryResult.found,
+            totalFailed: failed - retryResult.found,
+            skipped
+          };
+          
+        } catch (retryError) {
+          this.logger.error('Stage 2 Retry: Failed to execute automatically', {
+            error: retryError.message,
+            stack: retryError.stack
+          });
+          console.error('❌ Stage 2 Retry failed:', retryError.message);
+          console.error('   Stack trace:', retryError.stack);
+          // Продолжаем даже если retry упал
+        }
+      } else {
+        console.log('   ℹ️ Skipping Stage 2 Retry - all companies have website');
+      }
+
       return {
         success: true,
         total: companies.length,

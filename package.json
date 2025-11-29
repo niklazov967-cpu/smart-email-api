@@ -1,6 +1,6 @@
 {
   "name": "smart-email-api",
-  "version": "1.9.5",
+  "version": "1.10.0",
   "description": "Портал сбора и обработки контактов китайских производителей с оптимизацией через DeepSeek + Perplexity Sonar API",
   "repository": {
     "type": "git",
