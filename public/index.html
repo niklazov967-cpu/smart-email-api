@@ -826,14 +826,24 @@
           // Обновить статистику
           setTimeout(() => loadStatistics(), 1000);
         } else {
-          throw new Error(result.error || 'Unknown error');
+          // Создать объект ошибки с деталями
+          const error = new Error(result.error || 'Unknown error');
+          error.details = result.details;
+          throw error;
         }
 
       } catch (error) {
         console.error('Stage 1 error:', error);
+        
+        // Попытаться извлечь детали из result если есть
+        let errorDetails = '';
+        if (error.details) {
+          errorDetails = `<br><small style="color: #666;">${error.details}</small>`;
+        }
+        
         statusDiv.innerHTML = `
           <div class="status-message status-error">
-            ❌ <strong>Ошибка:</strong> ${error.message}
+            ❌ <strong>Ошибка:</strong> ${error.message}${errorDetails}
           </div>
         `;
       } finally {
