@@ -336,8 +336,10 @@
 
         .tags-container {
             display: flex;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 5px;
+            overflow: hidden;
+            max-width: 100%;
         }
 
         .actions-cell {
@@ -1032,7 +1034,7 @@
                 
                 if (tag) tags.push(tag);
             }
-            return tags.slice(0, 5); // Показываем только первые 5
+            return tags.slice(0, 3); // Показываем только первые 3 тега на одной строке
         }
 
         // Выбор элементов
