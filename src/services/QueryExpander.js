@@ -278,19 +278,38 @@ ${mainTopic}
    */
   async _filterExistingQueries(queries) {
     try {
-      // Получить все существующие подзапросы из БД
-      const result = await this.db.query(
-        `SELECT DISTINCT LOWER(query_cn) as query_cn_lower FROM session_queries`
-      );
+      // Получить все существующие подзапросы из БД через Supabase
+      const { data, error } = await this.db.supabase
+        .from('session_queries')
+        .select('query_cn');
+      
+      if (error) {
+        this.logger.error('QueryExpander: Failed to fetch existing queries', {
+          error: error.message
+        });
+        // В случае ошибки возвращаем все запросы
+        return queries;
+      }
       
       const existingQueries = new Set(
-        result.rows.map(row => row.query_cn_lower)
+        (data || []).map(row => row.query_cn.toLowerCase().trim())
       );
+      
+      this.logger.debug('QueryExpander: Checking against existing queries', {
+        existingCount: existingQueries.size,
+        newQueriesCount: queries.length
+      });
       
       // Фильтровать новые запросы
       const filtered = queries.filter(query => {
         const key = query.query_cn.toLowerCase().trim();
-        return !existingQueries.has(key);
+        const isDuplicate = existingQueries.has(key);
+        if (isDuplicate) {
+          this.logger.debug('QueryExpander: Duplicate found', {
+            query: query.query_cn
+          });
+        }
+        return !isDuplicate;
       });
       
       const duplicatesCount = queries.length - filtered.length;
@@ -299,7 +318,11 @@ ${mainTopic}
         this.logger.info('QueryExpander: Filtered existing queries from DB', {
           total: queries.length,
           duplicates: duplicatesCount,
-          unique: filtered.length
+          unique: filtered.length,
+          exampleDuplicates: queries
+            .filter(q => !filtered.includes(q))
+            .slice(0, 3)
+            .map(q => q.query_cn)
         });
       }
       
@@ -307,7 +330,8 @@ ${mainTopic}
       
     } catch (error) {
       this.logger.error('QueryExpander: Failed to check existing queries', {
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
       // В случае ошибки возвращаем все запросы
       return queries;
@@ -319,21 +343,24 @@ ${mainTopic}
    */
   async saveQueries(sessionId, mainTopic, queries) {
     try {
-      for (const query of queries) {
-        await this.db.query(
-          `INSERT INTO session_queries 
-           (session_id, main_topic, query_cn, query_ru, relevance, is_main, is_selected, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-          [
-            sessionId,
-            mainTopic,
-            query.query_cn,
-            query.query_ru,
-            query.relevance || 50,
-            false,  // Больше нет "основного" запроса
-            false   // Все запросы не выбраны по умолчанию
-          ]
-        );
+      // Сохранить запросы через Supabase
+      const queriesToInsert = queries.map(query => ({
+        session_id: sessionId,
+        main_topic: mainTopic,
+        query_cn: query.query_cn,
+        query_ru: query.query_ru,
+        relevance: query.relevance || 50,
+        is_main: false,
+        is_selected: false,
+        created_at: new Date().toISOString()
+      }));
+
+      const { error } = await this.db.supabase
+        .from('session_queries')
+        .insert(queriesToInsert);
+
+      if (error) {
+        throw new Error(`Supabase insert error: ${error.message}`);
       }
 
       this.logger.info('QueryExpander: Queries saved to DB', {
