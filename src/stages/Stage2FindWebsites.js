@@ -773,6 +773,58 @@ Stage 3 Workload: ${websiteFound - bothFound} companies need email search
     if (r > 60) return '⚠️  Acceptable';
     return '❌ Poor - review AI responses';
   }
+
+  /**
+   * Автоматический запуск Stage 2 Retry с DeepSeek
+   */
+  async _runStage2Retry(failed) {
+    console.log('\n🔄 Starting Stage 2 Retry automatically...');
+    console.log(`   Companies without website: ${failed}`);
+    
+    try {
+      const Stage2Retry = require('./Stage2Retry');
+      const DeepSeekClient = require('../services/DeepSeekClient');
+      
+      const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
+      if (!deepseekApiKey) {
+        this.logger.warn('Stage 2 Retry: DEEPSEEK_API_KEY not found in environment');
+        console.log('⚠️  DEEPSEEK_API_KEY not found - skipping Stage 2 Retry');
+        return null;
+      }
+      
+      const deepseekClient = new DeepSeekClient(deepseekApiKey, this.logger, 'chat');
+      
+      const stage2Retry = new Stage2Retry(
+        this.db,
+        this.logger,
+        this.settings,
+        deepseekClient
+      );
+      
+      const retryResult = await stage2Retry.execute();
+      
+      console.log('\n========== STAGE 2 RETRY RESULTS ==========');
+      console.log(`Total Companies Retried: ${retryResult.total}`);
+      console.log(`Additional Websites Found: ${retryResult.found}`);
+      console.log(`Still No Website: ${retryResult.total - retryResult.found}`);
+      console.log('===========================================\n');
+      
+      this.logger.info('Stage 2 Retry: Completed automatically', {
+        retriedCompanies: retryResult.total,
+        additionalWebsitesFound: retryResult.found
+      });
+      
+      return retryResult;
+      
+    } catch (retryError) {
+      this.logger.error('Stage 2 Retry: Failed to execute', {
+        error: retryError.message,
+        stack: retryError.stack
+      });
+      console.error('❌ Stage 2 Retry failed:', retryError.message);
+      return null;
+    }
+  }
 }
 
 module.exports = Stage2FindWebsites;
