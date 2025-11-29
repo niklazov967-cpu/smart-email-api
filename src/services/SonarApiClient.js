@@ -49,7 +49,9 @@ class SonarApiClient {
       modelType: this.modelType,
       model: this.model,
       maxTokens: this.maxTokens,
+      maxRetries: this.maxRetries,
       rateLimit: this.rateLimit,
+      timeout: this.timeout,
       hasApiKey: !!this.apiKey,
       apiKeyLength: this.apiKey ? this.apiKey.length : 0,
       baseUrl: this.baseUrl
@@ -93,6 +95,7 @@ class SonarApiClient {
     console.log(`   ⏳ Checking rate limit...`);
     await this._enforceRateLimit();
     console.log(`   ✓ Rate limit OK, starting attempts...`);
+    console.log(`   📊 maxRetries = ${this.maxRetries}`);
 
     let attempt = 0;
     let lastError = null;
