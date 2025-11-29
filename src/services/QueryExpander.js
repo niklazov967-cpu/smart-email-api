@@ -40,8 +40,18 @@ class QueryExpander {
         
         // Сколько еще нужно запросов
         const needed = targetCount - allQueries.length;
-        // Генерируем больше с запасом, учитывая что будут дубликаты
-        const generateCount = Math.max(needed * 2, 15); // Минимум 15, или в 2 раза больше чем нужно
+        
+        // Прогрессивный запас: 1-я попытка +10%, 2-я +20%, 3-я +30% и т.д.
+        // Это экономит время и токены, но учитывает возможные дубликаты
+        const bufferPercent = 0.1 * attempts; // 10%, 20%, 30%, 40%...
+        const generateCount = Math.ceil(needed * (1 + bufferPercent));
+        
+        this.logger.debug('QueryExpander: Calculate generation count', {
+          attempt: attempts,
+          needed,
+          bufferPercent: `${bufferPercent * 100}%`,
+          generateCount
+        });
         
         // Создать промпт для генерации под-запросов
         const prompt = attempts === 1 
