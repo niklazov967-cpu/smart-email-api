@@ -562,16 +562,22 @@
 
     function displayQueries(queries) {
       const container = document.getElementById('queriesList');
-      container.innerHTML = queries.map((q, idx) => `
+      container.innerHTML = queries.map((q, idx) => {
+        const relevance = q.relevance || q.relevance_score || 0;
+        // По умолчанию выбраны только запросы с релевантностью >= 70%
+        const isChecked = relevance >= 70;
+        
+        return `
         <div class="query-item" id="query-${idx}">
           <input type="checkbox" class="query-checkbox" id="checkbox-${idx}" 
-                 onchange="updateSelectedCount()" checked>
+                 onchange="updateSelectedCount()" ${isChecked ? 'checked' : ''}>
           <div class="query-content">
-            <div class="query-cn">${q.chinese_query || q.query}</div>
-            <div class="query-ru">${q.russian_query || q.translation || ''}</div>
+            <div class="query-cn">${q.query_cn || q.chinese_query || q.query}</div>
+            <div class="query-ru">${q.query_ru || q.russian_query || q.translation || ''}</div>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
       updateSelectedCount();
     }
 
