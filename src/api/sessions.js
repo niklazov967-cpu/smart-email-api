@@ -226,6 +226,46 @@ router.delete('/clear-all', async (req, res) => {
 });
 
 /**
+ * DELETE /api/sessions/:id/clear-progress
+ * Очистить прогресс обработки для конкретной сессии
+ */
+router.delete('/:id/clear-progress', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    req.logger.info('Clearing progress for session', { sessionId: id });
+    
+    // Удалить записи прогресса для этой сессии
+    const { error } = await req.db.supabase
+      .from('processing_progress')
+      .delete()
+      .eq('session_id', id);
+    
+    if (error) {
+      throw new Error(`Failed to clear progress: ${error.message}`);
+    }
+    
+    req.logger.info('Session progress cleared successfully', { sessionId: id });
+    
+    res.json({
+      success: true,
+      message: 'Прогресс очищен',
+      sessionId: id
+    });
+    
+  } catch (error) {
+    req.logger.error('Failed to clear session progress', { 
+      error: error.message,
+      sessionId: req.params.id
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/sessions/:id
  * Получить детали сессии
  */

@@ -440,6 +440,15 @@
           <div id="stageReadiness" style="display: none; padding: 15px; background: #f0f9ff; border-radius: 5px; border-left: 4px solid #0284c7; margin-top: 10px;">
             <p id="readinessMessage" style="margin: 0; color: #0c4a6e; font-size: 14px;"></p>
           </div>
+          
+          <!-- Информация о прогрессе этапов -->
+          <div id="stageProgress" style="display: none; padding: 15px; background: #fef3c7; border-radius: 5px; border-left: 4px solid #f59e0b; margin-top: 10px;">
+            <h5 style="margin: 0 0 8px 0; color: #92400e;">⚠️ Прогресс обработки</h5>
+            <p id="progressMessage" style="margin: 0; color: #92400e; font-size: 14px;"></p>
+            <button id="clearProgressBtn" style="margin-top: 10px; padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 13px;">
+              🗑️ Очистить прогресс и начать заново
+            </button>
+          </div>
         </div>
       </div>
       
@@ -779,6 +788,62 @@
         document.getElementById('totalCompanies').textContent = totalCompanies;
         document.getElementById('unprocessedCompanies').textContent = unprocessed;
         document.getElementById('completedCompanies').textContent = processed;
+        
+        // Проверить прогресс этапов
+        try {
+          const progressResponse = await fetch(`/api/sessions/${sessionId}/stage-progress`);
+          const progressData = await progressResponse.json();
+          
+          if (progressData.success && progressData.lastCompletedStage > 0) {
+            // Есть завершенные этапы - показать информацию
+            const lastCompleted = progressData.lastCompletedStage;
+            const nextStage = progressData.nextStage;
+            
+            const stageProgress = document.getElementById('stageProgress');
+            const progressMessage = document.getElementById('progressMessage');
+            
+            stageProgress.style.display = 'block';
+            
+            if (nextStage) {
+              progressMessage.innerHTML = `
+                <strong>Этапы 1-${lastCompleted} уже выполнены.</strong><br>
+                При запуске будет предложено продолжить с этапа ${nextStage}.
+              `;
+            } else {
+              progressMessage.innerHTML = `
+                <strong>Все этапы уже выполнены!</strong><br>
+                Можете начать заново, очистив прогресс.
+              `;
+            }
+            
+            // Обработчик кнопки очистки прогресса
+            document.getElementById('clearProgressBtn').onclick = async () => {
+              if (confirm('⚠️ Очистить прогресс обработки для этой сессии?\n\nЭто позволит начать обработку с этапа 1.')) {
+                try {
+                  // Удалить записи прогресса для этой сессии
+                  const response = await fetch(`/api/sessions/${sessionId}/clear-progress`, {
+                    method: 'DELETE'
+                  });
+                  
+                  if (response.ok) {
+                    alert('✅ Прогресс очищен! Теперь можете начать заново.');
+                    // Обновить информацию
+                    await updateSessionInfo();
+                  } else {
+                    alert('❌ Не удалось очистить прогресс. Попробуйте очистить всю базу.');
+                  }
+                } catch (error) {
+                  alert('❌ Ошибка: ' + error.message);
+                }
+              }
+            };
+          } else {
+            document.getElementById('stageProgress').style.display = 'none';
+          }
+        } catch (error) {
+          console.error('Error checking progress:', error);
+          document.getElementById('stageProgress').style.display = 'none';
+        }
         
         // Показать сообщение о готовности
         const stageReadiness = document.getElementById('stageReadiness');
