@@ -288,6 +288,10 @@ app.get('/api/sonar/stats', async (req, res) => {
   }
 });
 
+// API роуты для статистики расходов
+const creditsRouter = require('./routes/credits');
+app.use('/api/credits', creditsRouter);
+
 // Обработка 404
 app.use((req, res) => {
   res.status(404).json({
