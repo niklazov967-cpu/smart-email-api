@@ -51,13 +51,23 @@ class QueryExpander {
         // Для всех попыток - БЕЗ КЭША! Увеличиваем температуру для получения разных результатов
         const temperature = 0.3 + (attempts - 1) * 0.15; // Увеличиваем температуру с каждой попыткой: 0.3, 0.45, 0.6, 0.75...
 
-        // Запросить у API генерацию вариаций
-        const response = await this.apiClient.query(prompt, {
-          stage: attempts === 1 ? 'query_expansion' : 'query_expansion_retry',
-          maxTokens: 2000,
-          useCache: false, // КЭШ ОТКЛЮЧЕН ПОЛНОСТЬЮ!
-          temperature: temperature
-        });
+        let response;
+        try {
+          // Запросить у API генерацию вариаций
+          response = await this.apiClient.query(prompt, {
+            stage: attempts === 1 ? 'query_expansion' : 'query_expansion_retry',
+            maxTokens: 2000,
+            useCache: false, // КЭШ ОТКЛЮЧЕН ПОЛНОСТЬЮ!
+            temperature: temperature
+          });
+        } catch (apiError) {
+          this.logger.error('QueryExpander: API request failed', {
+            attempt: attempts,
+            error: apiError.message
+          });
+          // Продолжить со следующей попыткой
+          continue;
+        }
 
         // Парсить результат
         const newQueries = this._parseQueries(response);
@@ -260,6 +270,11 @@ JSON формат: queries с полями query_cn, query_ru, relevance.`,
 
   _parseQueries(response) {
     try {
+      // Проверка что response существует
+      if (!response) {
+        throw new Error('Empty or undefined response from API');
+      }
+      
       // Найти JSON в ответе
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
@@ -282,7 +297,7 @@ JSON формат: queries с полями query_cn, query_ru, relevance.`,
     } catch (error) {
       this.logger.error('Failed to parse QueryExpander response', {
         error: error.message,
-        response: response.substring(0, 200)
+        response: response ? response.substring(0, 200) : 'undefined or null'
       });
       return [];
     }
