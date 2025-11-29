@@ -19,13 +19,29 @@ class Stage3AnalyzeContacts {
       sessionId: sessionId || 'ALL',
       mode: sessionId ? 'session' : 'global'
     });
+    
+    console.log('\n========== STAGE 3 STARTING ==========');
+    console.log(`Mode: ${sessionId ? 'Session-based' : 'Global'}`);
+    console.log(`Session ID: ${sessionId || 'ALL'}`);
+    console.log('======================================\n');
 
     try {
       // Получить компании с найденными сайтами
       const companies = await this._getCompanies(sessionId);
       
+      console.log(`\n✅ Found ${companies.length} companies ready for Stage 3`);
+      if (companies.length > 0) {
+        console.log('First 3 companies:', companies.slice(0, 3).map(c => ({
+          name: c.company_name,
+          website: c.website,
+          stage2_status: c.stage2_status
+        })));
+      }
+      console.log('');
+      
       if (companies.length === 0) {
         this.logger.info('Stage 3: No companies need email search');
+        console.log('⚠️  No companies need email search\n');
         return { success: true, processed: 0, found: 0 };
       }
 
@@ -59,8 +75,8 @@ class Stage3AnalyzeContacts {
         }
       }
 
-      const successful = results.filter(r => r.success && r.emails.length > 0).length;
-      const failed = results.filter(r => !r.success || r.emails.length === 0).length;
+      const successful = results.filter(r => r.success && r.emails && r.emails.length > 0).length;
+      const failed = results.filter(r => !r.success || !r.emails || r.emails.length === 0).length;
       const hadFallback = results.filter(r => r.hadFallback).length;
 
       this.logger.info('Stage 3: Completed', {
@@ -71,15 +87,31 @@ class Stage3AnalyzeContacts {
         sessionId: sessionId || 'ALL'
       });
 
+      // Вывести результаты в консоль для немедленной диагностики
+      console.log('\n========== STAGE 3 RESULTS ==========');
+      console.log(`Total Companies: ${companies.length}`);
+      console.log(`Email Found: ${successful} (${(successful/companies.length*100).toFixed(1)}%)`);
+      console.log(`Email NOT Found: ${failed} (${(failed/companies.length*100).toFixed(1)}%)`);
+      console.log(`Used Fallback: ${hadFallback}`);
+      console.log('====================================\n');
+
       // Сохранить детальный отчет в файл
-      await this._saveDetailedReport({
-        sessionId: sessionId || 'ALL',
-        total: companies.length,
-        successful,
-        failed,
-        hadFallback,
-        results
-      });
+      try {
+        await this._saveDetailedReport({
+          sessionId: sessionId || 'ALL',
+          total: companies.length,
+          successful,
+          failed,
+          hadFallback,
+          results
+        });
+      } catch (reportError) {
+        this.logger.error('Stage 3: Failed to save report', {
+          error: reportError.message,
+          stack: reportError.stack
+        });
+        console.error('❌ Failed to save Stage 3 report:', reportError.message);
+      }
 
       return {
         success: true,
@@ -135,8 +167,12 @@ class Stage3AnalyzeContacts {
   async _analyzeContacts(company) {
     // sessionId больше не нужен - компания уже имеет session_id
     try {
+      console.log(`\n🔍 Processing company: ${company.company_name}`);
+      console.log(`   Website: ${company.website}`);
+      
       // Извлекаем главный домен из URL
       const mainDomain = this._extractMainDomain(company.website);
+      console.log(`   Main domain: ${mainDomain}`);
       
       const prompt = `Найди EMAIL-АДРЕС (НЕ ТЕЛЕФОН!) для этой компании через поиск в интернете:
 
@@ -191,6 +227,8 @@ class Stage3AnalyzeContacts {
         stage: 'stage3_analyze_contacts',
         useCache: false  // Отключаем кэш для свежих результатов
       });
+      
+      console.log(`   ✅ Got AI response (${response ? response.length : 0} chars)`);
 
       this.logger.info('Stage 3: Sonar response received', {
         company: company.company_name,
@@ -199,6 +237,13 @@ class Stage3AnalyzeContacts {
       });
 
       const result = this._parseResponse(response);
+      
+      console.log(`   📧 Emails found: ${result.emails.length}`);
+      if (result.emails.length > 0) {
+        console.log(`   ✉️  ${result.emails.join(', ')}`);
+      } else {
+        console.log(`   ❌ No emails: ${result.note || 'Unknown reason'}`);
+      }
 
       this.logger.info('Stage 3: Response parsed', {
         company: company.company_name,
