@@ -970,10 +970,16 @@ router.post('/:id/stage1', async (req, res) => {
     });
     
   } catch (error) {
-    req.logger.error('Stage 1 failed', { error: error.message, sessionId: req.params.id });
+    req.logger.error('Stage 1 failed', { 
+      error: error.message,
+      stack: error.stack,
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      sessionId: req.params.id 
+    });
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || 'Unknown error occurred',
+      details: error.stack ? error.stack.split('\n').slice(0, 3).join('\n') : undefined
     });
   }
 });

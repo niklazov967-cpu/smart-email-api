@@ -171,9 +171,20 @@ class Stage1FindCompanies {
     } catch (error) {
       this.logger.error('Stage 1: Failed', {
         error: error.message,
+        stack: error.stack,
+        errorName: error.name,
+        errorCode: error.code,
         sessionId
       });
-      throw error;
+      
+      // Более информативная ошибка
+      const enhancedError = new Error(
+        error.message || 'Stage 1 failed with unknown error'
+      );
+      enhancedError.originalError = error;
+      enhancedError.stack = error.stack;
+      
+      throw enhancedError;
     }
   }
 
