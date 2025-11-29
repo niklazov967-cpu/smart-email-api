@@ -155,7 +155,6 @@ class Stage2Retry {
   }
 
   async _attemptWebsiteSearch(company, attemptNumber) {
-  async _attemptWebsiteSearch(company, attemptNumber) {
     try {
       // Разные промпты для разных попыток
       const searchHint = attemptNumber === 1
