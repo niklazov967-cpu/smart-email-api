@@ -90,7 +90,9 @@ class SonarApiClient {
     }
 
     // Ожидать rate limit
+    console.log(`   ⏳ Checking rate limit...`);
     await this._enforceRateLimit();
+    console.log(`   ✓ Rate limit OK, starting attempts...`);
 
     let attempt = 0;
     let lastError = null;
