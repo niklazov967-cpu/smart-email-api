@@ -24,48 +24,101 @@ class QueryExpander {
     });
 
     try {
-      // Создать промпт для генерации под-запросов
-      const prompt = this._createExpansionPrompt(mainTopic, targetCount);
-
-      // Запросить у API генерацию вариаций
-      const response = await this.apiClient.query(prompt, {
-        stage: 'query_expansion',
-        maxTokens: 2000
-      });
-
-      // Парсить результат
-      const queries = this._parseQueries(response);
-
-      // Валидация
-      if (queries.length < 3) {
-        this.logger.warn('QueryExpander: Too few queries generated, retrying');
+      let allQueries = [];
+      let attempts = 0;
+      const maxAttempts = 3; // Максимум 3 попытки генерации
+      
+      // Продолжать генерацию пока не достигнем целевого количества
+      while (allQueries.length < targetCount && attempts < maxAttempts) {
+        attempts++;
         
-        // Вторая попытка с другим промптом
-        const retryPrompt = this._createRetryPrompt(mainTopic, targetCount);
-        const retryResponse = await this.apiClient.query(retryPrompt, {
-          stage: 'query_expansion_retry',
-          maxTokens: 2000
+        this.logger.info('QueryExpander: Generation attempt', {
+          attempt: attempts,
+          currentCount: allQueries.length,
+          targetCount
         });
         
-        const moreQueries = this._parseQueries(retryResponse);
-        queries.push(...moreQueries);
+        // Сколько еще нужно запросов
+        const needed = targetCount - allQueries.length;
+        const generateCount = Math.min(needed + 5, targetCount * 2); // Генерируем с запасом
+        
+        // Создать промпт для генерации под-запросов
+        const prompt = attempts === 1 
+          ? this._createExpansionPrompt(mainTopic, generateCount)
+          : this._createRetryPrompt(mainTopic, generateCount);
+
+        // Запросить у API генерацию вариаций
+        const response = await this.apiClient.query(prompt, {
+          stage: attempts === 1 ? 'query_expansion' : 'query_expansion_retry',
+          maxTokens: 2000
+        });
+
+        // Парсить результат
+        const newQueries = this._parseQueries(response);
+        
+        if (newQueries.length === 0) {
+          this.logger.warn('QueryExpander: No queries generated in attempt', {
+            attempt: attempts
+          });
+          continue;
+        }
+        
+        // Добавить к общему пулу
+        allQueries.push(...newQueries);
+        
+        // Удалить дубликаты внутри текущего пула
+        allQueries = this._removeDuplicates(allQueries);
+        
+        // ✨ ПРОВЕРИТЬ СУЩЕСТВУЮЩИЕ ЗАПРОСЫ В БД
+        allQueries = await this._filterExistingQueries(allQueries);
+        
+        this.logger.info('QueryExpander: After deduplication', {
+          attempt: attempts,
+          uniqueCount: allQueries.length,
+          targetCount,
+          needed: targetCount - allQueries.length
+        });
+        
+        // Если достигли целевого количества - выходим
+        if (allQueries.length >= targetCount) {
+          break;
+        }
+        
+        // Если это первая попытка и запросов мало - сразу пробуем еще раз
+        if (attempts === 1 && allQueries.length < Math.floor(targetCount / 2)) {
+          this.logger.info('QueryExpander: Too few unique queries, retrying immediately');
+          continue;
+        }
       }
 
-      // Удалить дубликаты
-      const uniqueQueries = this._removeDuplicates(queries);
+      // Если после всех попыток все равно мало запросов
+      if (allQueries.length < targetCount) {
+        this.logger.warn('QueryExpander: Could not generate enough unique queries', {
+          generated: allQueries.length,
+          target: targetCount,
+          attempts
+        });
+      }
 
-      // Ограничить до целевого количества
-      const finalQueries = uniqueQueries.slice(0, targetCount);
+      // Ограничить до целевого количества (взять лучшие по релевантности)
+      const finalQueries = allQueries
+        .sort((a, b) => (b.relevance || 50) - (a.relevance || 50))
+        .slice(0, targetCount);
 
       this.logger.info('QueryExpander: Completed', {
-        generated: finalQueries.length
+        totalAttempts: attempts,
+        uniqueGenerated: allQueries.length,
+        finalCount: finalQueries.length,
+        target: targetCount
       });
 
       return {
         success: true,
         main_topic: mainTopic,
         queries: finalQueries,
-        total: finalQueries.length
+        total: finalQueries.length,
+        attempts: attempts,
+        wasFiltered: allQueries.length > finalQueries.length
       };
 
     } catch (error) {
@@ -209,6 +262,49 @@ ${mainTopic}
       seen.add(key);
       return true;
     });
+  }
+
+  /**
+   * Проверить и отфильтровать запросы, которые уже существуют в БД
+   * @param {Array} queries - Массив новых запросов
+   * @returns {Array} Отфильтрованный массив запросов без дубликатов из БД
+   */
+  async _filterExistingQueries(queries) {
+    try {
+      // Получить все существующие подзапросы из БД
+      const result = await this.db.query(
+        `SELECT DISTINCT LOWER(query_cn) as query_cn_lower FROM session_queries`
+      );
+      
+      const existingQueries = new Set(
+        result.rows.map(row => row.query_cn_lower)
+      );
+      
+      // Фильтровать новые запросы
+      const filtered = queries.filter(query => {
+        const key = query.query_cn.toLowerCase().trim();
+        return !existingQueries.has(key);
+      });
+      
+      const duplicatesCount = queries.length - filtered.length;
+      
+      if (duplicatesCount > 0) {
+        this.logger.info('QueryExpander: Filtered existing queries from DB', {
+          total: queries.length,
+          duplicates: duplicatesCount,
+          unique: filtered.length
+        });
+      }
+      
+      return filtered;
+      
+    } catch (error) {
+      this.logger.error('QueryExpander: Failed to check existing queries', {
+        error: error.message
+      });
+      // В случае ошибки возвращаем все запросы
+      return queries;
+    }
   }
 
   /**
