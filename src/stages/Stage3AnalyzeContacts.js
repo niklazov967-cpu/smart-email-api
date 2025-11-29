@@ -113,6 +113,61 @@ class Stage3AnalyzeContacts {
         console.error('❌ Failed to save Stage 3 report:', reportError.message);
       }
 
+      // 🔄 АВТОМАТИЧЕСКИЙ ЗАПУСК STAGE 3 RETRY
+      // Если есть компании без email - запустить Stage 3 Retry автоматически
+      if (failed > 0) {
+        console.log('\n🔄 Starting Stage 3 Retry automatically...');
+        console.log(`   Companies without email: ${failed}`);
+        
+        try {
+          const Stage3Retry = require('./Stage3Retry');
+          const DeepSeekClient = require('../services/DeepSeekClient');
+          
+          // Создать DeepSeek клиент
+          const deepseekApiKey = process.env.DEEPSEEK_API_KEY || 'sk-85323bc753cb4b25b02a2664e9367f8a';
+          const deepseekClient = new DeepSeekClient(deepseekApiKey, this.logger, 'chat');
+          
+          // Создать Stage3Retry
+          const stage3Retry = new Stage3Retry(
+            this.db,
+            this.logger,
+            this.settings,
+            deepseekClient
+          );
+          
+          // Запустить retry
+          const retryResult = await stage3Retry.execute();
+          
+          console.log('\n========== STAGE 3 RETRY RESULTS ==========');
+          console.log(`Total Companies Retried: ${retryResult.total}`);
+          console.log(`Additional Emails Found: ${retryResult.found}`);
+          console.log(`Still No Email: ${retryResult.total - retryResult.found}`);
+          console.log('===========================================\n');
+          
+          this.logger.info('Stage 3 Retry: Completed automatically', {
+            retriedCompanies: retryResult.total,
+            additionalEmailsFound: retryResult.found
+          });
+          
+          // Обновить статистику
+          return {
+            success: true,
+            processed: companies.length,
+            found: successful + retryResult.found,
+            stage3Found: successful,
+            retryFound: retryResult.found,
+            totalFailed: failed - retryResult.found
+          };
+          
+        } catch (retryError) {
+          this.logger.error('Stage 3 Retry: Failed to execute automatically', {
+            error: retryError.message
+          });
+          console.error('❌ Stage 3 Retry failed:', retryError.message);
+          // Продолжаем даже если retry упал
+        }
+      }
+
       return {
         success: true,
         processed: companies.length,

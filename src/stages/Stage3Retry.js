@@ -69,17 +69,22 @@ class Stage3Retry {
 
   async _getCompanies() {
     // Получить компании которые:
-    // 1. Прошли Stage 3 (stage3_status = 'failed')
-    // 2. Имеют сайт
-    // 3. НЕ имеют email
+    // 1. Прошли Stage 3 (stage3_status = 'failed') ИЛИ не имеют сайта вообще
+    // 2. НЕ имеют email
+    // 3. Имеют хоть какую-то информацию (описание или тема)
     
     const { data, error } = await this.db.supabase
       .from('pending_companies')
-      .select('company_id, company_name, website, description, topic_description')
-      .not('website', 'is', null)
+      .select('company_id, company_name, website, description, topic_description, stage3_status, current_stage')
       .or('email.is.null,email.eq.""')
-      .eq('stage3_status', 'failed')
-      .gte('current_stage', 2);
+      .or(
+        // Компании после Stage 3 без email
+        'stage3_status.eq.failed,' +
+        // ИЛИ компании без сайта (Stage 2 провалился)
+        'and(website.is.null,stage2_status.eq.failed),' +
+        // ИЛИ компании только с названием (Stage 1 completed, но нет сайта)
+        'and(website.is.null,stage1_status.eq.completed)'
+      );
     
     if (error) {
       this.logger.error('Stage 3 Retry: Failed to get companies', { 
@@ -88,19 +93,34 @@ class Stage3Retry {
       throw error;
     }
     
-    this.logger.info(`Stage 3 Retry: Found ${data?.length || 0} companies for retry`);
-    return data || [];
+    // Фильтровать компании с минимальной информацией
+    const filtered = (data || []).filter(company => {
+      // Нужно хоть что-то: сайт, описание или тема
+      return company.website || company.description || company.topic_description;
+    });
+    
+    this.logger.info(`Stage 3 Retry: Found ${filtered.length} companies for retry`, {
+      withWebsite: filtered.filter(c => c.website).length,
+      withoutWebsite: filtered.filter(c => !c.website).length
+    });
+    
+    return filtered;
   }
 
   async _retryEmailSearch(company) {
     this.logger.info('Stage 3 Retry: Searching email with DeepSeek', {
       company: company.company_name,
-      website: company.website
+      website: company.website || 'NO WEBSITE',
+      hasDescription: !!company.description
     });
 
     try {
-      // Создать более агрессивный промпт для DeepSeek
-      const prompt = `Тебе нужно найти корпоративный EMAIL-АДРЕС для китайской компании.
+      // Разный промпт для компаний с сайтом и без
+      let prompt;
+      
+      if (company.website) {
+        // Промпт для компаний С сайтом
+        prompt = `Тебе нужно найти корпоративный EMAIL-АДРЕС для китайской компании.
 
 КОМПАНИЯ: ${company.company_name}
 ВЕБ-САЙТ: ${company.website}
@@ -126,6 +146,46 @@ class Stage3Retry {
 }
 
 Верни ТОЛЬКО JSON, без комментариев!`;
+      } else {
+        // Промпт для компаний БЕЗ сайта - ищем через каталоги и базы
+        prompt = `Тебе нужно найти корпоративный EMAIL-АДРЕС для китайской компании БЕЗ известного сайта.
+
+КОМПАНИЯ: ${company.company_name}
+ОПИСАНИЕ: ${company.description || 'Нет описания'}
+ТЕМА: ${company.topic_description || 'Услуги обработки металла'}
+СТАТУС: Официальный сайт не найден
+
+ТВОЯ ЗАДАЧА:
+1. Ищи компанию в отраслевых каталогах и справочниках:
+   - 中国机械企业名录
+   - 中国制造网
+   - 企查查 (qichacha.com)
+   - 天眼查 (tianyancha.com)
+   - Baidu企业信用
+
+2. Ищи упоминания компании в новостях и статьях
+
+3. Проверь профили в LinkedIn, Facebook, WeChat Official Accounts
+
+4. Ищи через Google/Baidu: "公司名称 + 联系方式" или "公司名称 + email"
+
+5. Приоритет email: info@, sales@, contact@, service@
+
+КРИТИЧЕСКИ ВАЖНО:
+❌ НЕ возвращай телефоны! Только EMAIL!
+❌ НЕ ищи на маркетплейсах (Alibaba, 1688, Made-in-China) - там нет email!
+✅ Ищи email в каталогах, справочниках, новостях
+✅ Корпоративный email с любым доменом (не обязательно домен компании)
+
+ФОРМАТ ОТВЕТА (ТОЛЬКО JSON):
+{
+  "email": "найденный@email.com или null",
+  "source": "где нашел (напр: '天眼查 каталог' или 'новость на Baidu')",
+  "confidence": "high/medium/low"
+}
+
+Верни ТОЛЬКО JSON, без комментариев!`;
+      }
 
       // Использовать DeepSeek Chat для поиска
       const response = await this.deepseek.query(prompt, {
