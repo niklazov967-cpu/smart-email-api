@@ -767,8 +767,8 @@
             const saveResult = await saveResponse.json();
 
             if (saveResult.success) {
-              const saved = saveResult.saved || 0;
-              const duplicates = saveResult.duplicates || 0;
+              const saved = saveResult.count || 0;  // API возвращает 'count', не 'saved'
+              const duplicates = 0;  // TODO: API пока не возвращает duplicates
               totalSaved += saved;
               totalDuplicates += duplicates;
               
