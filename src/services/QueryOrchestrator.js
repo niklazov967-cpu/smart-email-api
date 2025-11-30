@@ -375,96 +375,109 @@ class QueryOrchestrator {
   async runStage2Only(sessionId) {
     this.logger.info('Running Stage 2 only', { sessionId });
     
-    // Проверить сколько компаний ВСЕГО
-    const { count: totalCompanies, error: totalError } = await this.db.supabase
+    // Получить компании для обработки
+    const { data: companies, error: fetchError } = await this.db.supabase
       .from('pending_companies')
-      .select('*', { count: 'exact', head: true })
-      .eq('session_id', sessionId);
-    
-    if (totalError) {
-      this.logger.error('Stage 2: Failed to count total companies', { error: totalError.message });
-      throw new Error(`Failed to count companies: ${totalError.message}`);
-    }
-    
-    // Проверить сколько уже имеют website
-    const { count: alreadyHaveWebsite, error: websiteError } = await this.db.supabase
-      .from('pending_companies')
-      .select('*', { count: 'exact', head: true })
+      .select('*')
       .eq('session_id', sessionId)
-      .not('website', 'is', null);
+      .is('website', null); // Только без сайтов
     
-    if (websiteError) {
-      this.logger.error('Stage 2: Failed to count companies with website', { error: websiteError.message });
-      throw new Error(`Failed to count websites: ${websiteError.message}`);
+    if (fetchError) {
+      this.logger.error('Stage 2: Failed to fetch companies', { error: fetchError.message });
+      throw new Error(`Failed to fetch companies: ${fetchError.message}`);
     }
     
-    // Если ВСЕ компании уже имеют website - пропустить Stage 2
-    if (totalCompanies > 0 && alreadyHaveWebsite === totalCompanies) {
-      // Получить компании которые уже имеют website
-      const { data: companiesWithWebsite, error: fetchError } = await this.db.supabase
-        .from('pending_companies')
-        .select('company_name, website, email, stage, confidence_score')
-        .eq('session_id', sessionId)
-        .not('website', 'is', null);
+    const totalCompanies = companies?.length || 0;
+    
+    this.logger.info('Stage 2: Processing companies', { 
+      sessionId, 
+      companyCount: totalCompanies 
+    });
+    
+    // Инициализировать прогресс в БД
+    await this._updateStage2Progress(sessionId, {
+      totalCompanies,
+      processedCompanies: 0,
+      remainingCompanies: totalCompanies,
+      status: 'processing',
+      currentCompany: null
+    });
+    
+    // Установить callback для обновления прогресса
+    this.stage2.setProgressCallback(async (progress) => {
+      await this._updateStage2Progress(sessionId, {
+        totalCompanies: progress.total,
+        processedCompanies: progress.processed,
+        remainingCompanies: progress.total - progress.processed,
+        status: 'processing',
+        currentCompany: progress.currentCompany ? progress.currentCompany.substring(0, 100) : null
+      });
+    });
+    
+    try {
+      // Запустить полный Stage 2
+      const result = await this.stage2.execute(sessionId);
       
-      if (fetchError) {
-        this.logger.error('Stage 2: Failed to fetch companies', { error: fetchError.message });
-      }
-      
-      this.logger.info('Stage 2: All websites already found in Stage 1', {
-        sessionId,
-        total: totalCompanies,
-        withWebsite: alreadyHaveWebsite
+      // Завершить прогресс
+      await this._updateStage2Progress(sessionId, {
+        totalCompanies,
+        processedCompanies: totalCompanies,
+        remainingCompanies: 0,
+        status: 'completed',
+        currentCompany: null
       });
       
-      return {
-        success: true,
-        skipped: true,
-        reason: 'Все сайты найдены в Stage 1',
-        total: 0,                           // Компаний БЕЗ сайтов для обработки
-        found: 0,                           // Новых сайтов не искали
-        notFound: 0,                        // Не было чего искать
-        companiesProcessed: alreadyHaveWebsite,  // Общее количество
-        websitesFound: alreadyHaveWebsite,       // Все найдены в Stage 1
-        websites: (companiesWithWebsite || []).map(row => ({
-          company_name: row.company_name,
-          website: row.website,
-          email: row.email,
-          stage: row.stage,
-          confidence: row.confidence_score,
-          foundInStage1: true
-        }))
-      };
+      this.logger.info('Stage 2: All companies processed', {
+        sessionId,
+        companiesProcessed: totalCompanies,
+        websitesFound: result.found || 0
+      });
+      
+      return result;
+      
+    } catch (error) {
+      // Обновить прогресс с ошибкой
+      await this._updateStage2Progress(sessionId, {
+        totalCompanies,
+        processedCompanies: 0,
+        remainingCompanies: totalCompanies,
+        status: 'error',
+        currentCompany: null,
+        lastError: error.message
+      });
+      
+      throw error;
+    } finally {
+      // Очистить callback
+      this.stage2.setProgressCallback(null);
     }
-    
-    // Иначе выполнить Stage 2
-    const result = await this.stage2.execute(sessionId);
-    
-    // Получить компании с сайтами и email
-    const { data: allCompanies, error: allError } = await this.db.supabase
-      .from('pending_companies')
-      .select('company_name, website, email, stage, confidence_score')
-      .eq('session_id', sessionId);
-    
-    if (allError) {
-      this.logger.error('Stage 2: Failed to fetch all companies', { error: allError.message });
+  }
+
+  /**
+   * Обновить прогресс Stage 2 в БД
+   */
+  async _updateStage2Progress(sessionId, progress) {
+    try {
+      await this.db.supabase
+        .from('stage2_progress')
+        .upsert({
+          session_id: sessionId,
+          total_companies: progress.totalCompanies,
+          processed_companies: progress.processedCompanies,
+          remaining_companies: progress.remainingCompanies,
+          status: progress.status,
+          current_company: progress.currentCompany,
+          last_error: progress.lastError || null,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'session_id'
+        });
+    } catch (error) {
+      this.logger.error('Failed to update Stage 2 progress', { 
+        error: error.message,
+        sessionId 
+      });
     }
-    
-    return {
-      success: true,
-      total: result.total || 0,           // Компаний без сайтов (обработано)
-      found: result.found || 0,           // Сайтов найдено
-      notFound: result.notFound || 0,     // Не найдено
-      companiesProcessed: result.total || 0,  // Для обратной совместимости
-      websitesFound: result.found || 0,       // Для обратной совместимости
-      websites: (allCompanies || []).map(row => ({
-        company_name: row.company_name,
-        website: row.website,
-        email: row.email,
-        stage: row.stage,
-        confidence: row.confidence_score
-      }))
-    };
   }
 
   async runStage3Only(sessionId) {

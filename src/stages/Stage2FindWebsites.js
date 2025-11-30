@@ -11,6 +11,14 @@ class Stage2FindWebsites {
     this.db = database;
     this.logger = logger;
     this.tagExtractor = new TagExtractor();
+    this.progressCallback = null; // Callback для обновления прогресса
+  }
+
+  /**
+   * Установить callback для обновления прогресса
+   */
+  setProgressCallback(callback) {
+    this.progressCallback = callback;
   }
 
   async execute(sessionId = null) {
@@ -48,11 +56,24 @@ class Stage2FindWebsites {
 
       // Обработать батчами
       const results = [];
+      let processedCount = 0;
+      const totalCompanies = companies.length;
+      
       for (let i = 0; i < companies.length; i += concurrentRequests) {
         const batch = companies.slice(i, i + concurrentRequests);
         
+        // Обновить прогресс перед обработкой батча
+        if (this.progressCallback) {
+          await this.progressCallback({
+            processed: processedCount,
+            total: totalCompanies,
+            currentCompany: batch[0]?.company_name
+          });
+        }
+        
         this.logger.debug(`Stage 2: Processing batch ${Math.floor(i / concurrentRequests) + 1}`, {
-          batchSize: batch.length
+          batchSize: batch.length,
+          progress: `${processedCount}/${totalCompanies}`
         });
 
         // Параллельная обработка батча (sessionId НЕ нужен)
@@ -61,6 +82,16 @@ class Stage2FindWebsites {
         );
 
         results.push(...batchResults);
+        processedCount += batch.length;
+        
+        // Обновить прогресс после обработки батча
+        if (this.progressCallback) {
+          await this.progressCallback({
+            processed: processedCount,
+            total: totalCompanies,
+            currentCompany: null
+          });
+        }
 
         // Пауза между батчами
         if (i + concurrentRequests < companies.length) {

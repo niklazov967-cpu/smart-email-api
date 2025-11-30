@@ -472,6 +472,21 @@
         </div>
       </div>
 
+      <!-- Real-time Progress Counter -->
+      <div id="stage2ProgressContainer" style="display: none; margin: 15px 0; padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #10b981;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <strong style="color: #10b981;">⚡ Обработка компаний</strong>
+          <span id="stage2ProgressPercent" style="font-size: 20px; font-weight: bold; color: #10b981;">0%</span>
+        </div>
+        <div style="font-size: 14px; color: #666; margin-bottom: 6px;">
+          <span id="stage2ProgressText">Обработано: 0 из 0</span>
+        </div>
+        <div style="width: 100%; background: #e0e0e0; border-radius: 10px; height: 8px; overflow: hidden;">
+          <div id="stage2ProgressBar" style="width: 0%; background: linear-gradient(90deg, #10b981, #059669); height: 100%; transition: width 0.3s ease;"></div>
+        </div>
+        <div id="stage2CurrentCompany" style="margin-top: 8px; font-size: 12px; color: #888; font-style: italic; display: none;"></div>
+      </div>
+
       <div id="stage2Companies" class="companies-list" style="display: none;"></div>
 
       <button class="button button-primary" id="stage2Btn" onclick="runStage(2)">
@@ -921,6 +936,57 @@
           }
         } catch (error) {
           console.error('Failed to update Stage 1 progress:', error);
+        }
+      }
+      
+      // Первое обновление сразу
+      updateProgress();
+      
+      // Обновлять каждые 500ms
+      return setInterval(updateProgress, 500);
+    }
+
+    /**
+     * Запустить мониторинг прогресса Stage 2
+     * Обновляет UI каждые 500ms
+     */
+    function startStage2ProgressMonitor(sessionId) {
+      const progressBar = document.getElementById('stage2ProgressBar');
+      const progressPercent = document.getElementById('stage2ProgressPercent');
+      const progressText = document.getElementById('stage2ProgressText');
+      const currentCompany = document.getElementById('stage2CurrentCompany');
+      
+      async function updateProgress() {
+        try {
+          const response = await fetch(`/api/sessions/${sessionId}/stage2-progress`);
+          const data = await response.json();
+          
+          if (data.success && data.progress) {
+            const { processedCompanies, totalCompanies, remainingCompanies, percentComplete, currentCompany: company } = data.progress;
+            
+            // Обновить прогресс-бар
+            progressBar.style.width = `${percentComplete}%`;
+            progressPercent.textContent = `${percentComplete}%`;
+            
+            // Обновить текст
+            progressText.textContent = `Обработано: ${processedCompanies} из ${totalCompanies} (осталось: ${remainingCompanies})`;
+            
+            // Показать текущую компанию если есть
+            if (company) {
+              currentCompany.style.display = 'block';
+              currentCompany.textContent = `Текущая компания: ${company}`;
+            } else {
+              currentCompany.style.display = 'none';
+            }
+            
+            // Если завершено, остановить мониторинг
+            if (percentComplete >= 100 || remainingCompanies === 0) {
+              progressText.textContent = `✅ Завершено! Обработано: ${totalCompanies} компаний`;
+              currentCompany.style.display = 'none';
+            }
+          }
+        } catch (error) {
+          console.error('Failed to update Stage 2 progress:', error);
         }
       }
       

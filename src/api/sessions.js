@@ -545,6 +545,74 @@ router.get('/:id/stage1-progress', async (req, res) => {
 });
 
 /**
+ * GET /api/sessions/:id/stage2-progress
+ * Получить прогресс выполнения Stage 2 в реальном времени
+ */
+router.get('/:id/stage2-progress', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Получить прогресс из БД
+    const { data: progress, error } = await req.db.supabase
+      .from('stage2_progress')
+      .select('*')
+      .eq('session_id', id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+      throw new Error(`Failed to fetch Stage 2 progress: ${error.message}`);
+    }
+    
+    // Если нет записи, значит Stage 2 еще не запускался
+    if (!progress) {
+      return res.json({
+        success: true,
+        progress: {
+          sessionId: id,
+          totalCompanies: 0,
+          processedCompanies: 0,
+          remainingCompanies: 0,
+          status: 'idle',
+          currentCompany: null,
+          lastError: null,
+          percentComplete: 0
+        }
+      });
+    }
+    
+    // Вычислить процент завершения
+    const percentComplete = progress.total_companies > 0
+      ? Math.round((progress.processed_companies / progress.total_companies) * 100)
+      : 0;
+    
+    res.json({
+      success: true,
+      progress: {
+        sessionId: id,
+        totalCompanies: progress.total_companies,
+        processedCompanies: progress.processed_companies,
+        remainingCompanies: progress.remaining_companies,
+        status: progress.status,
+        currentCompany: progress.current_company,
+        lastError: progress.last_error,
+        percentComplete,
+        updatedAt: progress.updated_at
+      }
+    });
+    
+  } catch (error) {
+    req.logger.error('Failed to get Stage 2 progress', { 
+      error: error.message,
+      sessionId: req.params.id
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * PUT /api/sessions/:id/status
  * Обновить статус сессии
  */
