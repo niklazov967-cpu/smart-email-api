@@ -40,18 +40,24 @@ app.get('/', (req, res, next) => {
   return auth.requireAuth(req, res, next);
 });
 
-// Защита всех остальных статических файлов
+// ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ОТЛАДКИ (TODO: включить перед продакшеном!)
+// // Защита всех остальных статических файлов
+// app.use((req, res, next) => {
+//   // Проверять авторизацию только для HTML страниц и API
+//   if (req.path.endsWith('.html') || req.path.startsWith('/api')) {
+//     // Пропустить login.html, auth API и version API (публичные endpoints)
+//     if (req.path === '/login.html' || req.path.startsWith('/api/auth') || req.path === '/api/version') {
+//       return next();
+//     }
+//     // Требовать авторизацию
+//     return auth.requireAuth(req, res, next);
+//   }
+//   // Для CSS, JS, изображений - разрешить без авторизации
+//   next();
+// });
+
+// Временно: разрешить всё без авторизации для отладки
 app.use((req, res, next) => {
-  // Проверять авторизацию только для HTML страниц и API
-  if (req.path.endsWith('.html') || req.path.startsWith('/api')) {
-    // Пропустить login.html, auth API и version API (публичные endpoints)
-    if (req.path === '/login.html' || req.path.startsWith('/api/auth') || req.path === '/api/version') {
-      return next();
-    }
-    // Требовать авторизацию
-    return auth.requireAuth(req, res, next);
-  }
-  // Для CSS, JS, изображений - разрешить без авторизации
   next();
 });
 
