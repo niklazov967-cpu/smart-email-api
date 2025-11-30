@@ -134,16 +134,17 @@ class QueryExpander {
         throw new Error(errorMsg);
       }
 
-      // Ограничить до целевого количества (взять лучшие по релевантности)
+      // НЕ ограничиваем количество - сохраняем ВСЕ уникальные запросы!
+      // Сортируем только по релевантности (лучшие первыми)
       const finalQueries = allQueries
-        .sort((a, b) => (b.relevance || 50) - (a.relevance || 50))
-        .slice(0, targetCount);
+        .sort((a, b) => (b.relevance || 50) - (a.relevance || 50));
 
       this.logger.info('QueryExpander: Completed successfully', {
         totalAttempts: attempts,
         uniqueGenerated: allQueries.length,
         finalCount: finalQueries.length,
-        target: targetCount
+        target: targetCount,
+        savedAll: true // Сохранили все уникальные
       });
 
       return {
@@ -152,7 +153,7 @@ class QueryExpander {
         queries: finalQueries,
         total: finalQueries.length,
         attempts: attempts,
-        wasFiltered: allQueries.length > finalQueries.length
+        wasFiltered: false // Больше не фильтруем
       };
 
     } catch (error) {
