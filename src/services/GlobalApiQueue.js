@@ -9,7 +9,7 @@ class GlobalApiQueue {
     this.isProcessing = false;
     this.queueLength = 0;
     this.lastRequestTime = 0;
-    this.minDelayBetweenRequests = 1000; // 1 секунда между запросами
+    this.minDelayBetweenRequests = 500; // 500ms между запросами (увеличена скорость)
   }
 
   /**
