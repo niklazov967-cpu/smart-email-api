@@ -44,8 +44,8 @@ app.get('/', (req, res, next) => {
 app.use((req, res, next) => {
   // Проверять авторизацию только для HTML страниц и API
   if (req.path.endsWith('.html') || req.path.startsWith('/api')) {
-    // Пропустить login.html и auth API
-    if (req.path === '/login.html' || req.path.startsWith('/api/auth')) {
+    // Пропустить login.html, auth API и version API (публичные endpoints)
+    if (req.path === '/login.html' || req.path.startsWith('/api/auth') || req.path === '/api/version') {
       return next();
     }
     // Требовать авторизацию
