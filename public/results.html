@@ -765,6 +765,90 @@
             }
         }
 
+        /**
+         * Дедупликация компаний по email
+         * Оставляет только одну компанию для каждого уникального email
+         * Приоритет выбора:
+         * 1. Наивысший validation_score
+         * 2. Наличие сайта
+         * 3. Самая ранняя дата создания (первая найденная)
+         */
+        function deduplicateByEmail(companies) {
+            const emailMap = new Map();
+            let duplicatesRemoved = 0;
+            
+            companies.forEach(company => {
+                const email = company.email?.toLowerCase().trim();
+                
+                // Пропускаем компании без email
+                if (!email || email === '') {
+                    emailMap.set(`no-email-${company.company_id}`, company);
+                    return;
+                }
+                
+                if (emailMap.has(email)) {
+                    // Email уже существует - нужно выбрать более релевантную запись
+                    const existing = emailMap.get(email);
+                    const current = company;
+                    
+                    // Критерии выбора (в порядке приоритета):
+                    const existingScore = existing.validation_score || 0;
+                    const currentScore = current.validation_score || 0;
+                    const existingHasWebsite = existing.website && existing.website !== '';
+                    const currentHasWebsite = current.website && current.website !== '';
+                    
+                    let shouldReplace = false;
+                    
+                    // 1. Сравнить validation_score
+                    if (currentScore > existingScore) {
+                        shouldReplace = true;
+                    } else if (currentScore === existingScore) {
+                        // 2. Если score равен, предпочесть запись с сайтом
+                        if (currentHasWebsite && !existingHasWebsite) {
+                            shouldReplace = true;
+                        } else if (currentHasWebsite === existingHasWebsite) {
+                            // 3. Если и сайт одинаков, взять более раннюю запись
+                            const existingDate = new Date(existing.created_at);
+                            const currentDate = new Date(current.created_at);
+                            if (currentDate < existingDate) {
+                                shouldReplace = true;
+                            }
+                        }
+                    }
+                    
+                    if (shouldReplace) {
+                        console.log(`🔄 Replacing duplicate email: ${email}`, {
+                            old: { company: existing.company_name, score: existingScore, website: existing.website },
+                            new: { company: current.company_name, score: currentScore, website: current.website }
+                        });
+                        emailMap.set(email, current);
+                    } else {
+                        console.log(`⏭️  Skipping duplicate email: ${email}`, {
+                            kept: { company: existing.company_name, score: existingScore, website: existing.website },
+                            skipped: { company: current.company_name, score: currentScore, website: current.website }
+                        });
+                    }
+                    
+                    duplicatesRemoved++;
+                } else {
+                    // Первая встреча с этим email
+                    emailMap.set(email, company);
+                }
+            });
+            
+            const deduplicated = Array.from(emailMap.values());
+            
+            if (duplicatesRemoved > 0) {
+                console.log(`✅ Email дедупликация завершена:`, {
+                    original: companies.length,
+                    deduplicated: deduplicated.length,
+                    removed: duplicatesRemoved
+                });
+            }
+            
+            return deduplicated;
+        }
+
         // Загрузка компаний
         async function loadCompanies(sessionId = '') {
             try {
@@ -781,6 +865,9 @@
                 const data = await response.json();
                 
                 allCompanies = data.companies || [];
+                
+                // ДЕДУПЛИКАЦИЯ ПО EMAIL
+                allCompanies = deduplicateByEmail(allCompanies);
                 
                 updateStats();
                 applyFilters();
