@@ -28,6 +28,7 @@ class GlobalProgressEmitter extends EventEmitter {
    * Начать отслеживание прогресса для stage
    */
   startStage(stage, total) {
+    console.log(`🚀 [GlobalProgressEmitter] Starting ${stage} tracking: ${total} items`);
     this.progress[stage] = {
       total,
       processed: 0,
@@ -41,10 +42,14 @@ class GlobalProgressEmitter extends EventEmitter {
    * Обновить прогресс для stage
    */
   updateStage(stage, processed, current = null) {
-    if (!this.progress[stage].active) return;
+    if (!this.progress[stage].active) {
+      console.log(`⚠️  [GlobalProgressEmitter] Stage ${stage} not active, ignoring update`);
+      return;
+    }
 
     this.progress[stage].processed = processed;
     this.progress[stage].current = current;
+    console.log(`📊 [GlobalProgressEmitter] ${stage} update: ${processed}/${this.progress[stage].total} ${current ? `(${current})` : ''}`);
     this.emit(`${stage}:update`, this.progress[stage]);
   }
 
