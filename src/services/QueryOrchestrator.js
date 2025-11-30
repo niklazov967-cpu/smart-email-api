@@ -372,7 +372,7 @@ class QueryOrchestrator {
     }
   }
 
-  async runStage2Only(sessionId) {
+  async runStage2Only(sessionId, globalProgressCallback = null) {
     this.logger.info('Running Stage 2 only', { sessionId });
     
     // Получить компании для обработки
@@ -411,8 +411,9 @@ class QueryOrchestrator {
       });
     }
     
-    // Установить callback для обновления прогресса (только если не global)
+    // Установить callback для обновления прогресса
     if (sessionId && sessionId !== 'global') {
+      // Session-based: обновлять БД
       this.stage2.setProgressCallback(async (progress) => {
         await this._updateStage2Progress(sessionId, {
           totalCompanies: progress.total,
@@ -422,6 +423,10 @@ class QueryOrchestrator {
           currentCompany: progress.currentCompany ? progress.currentCompany.substring(0, 100) : null
         });
       });
+    } else if (globalProgressCallback) {
+      // Global: использовать переданный callback (SSE)
+      this.stage2.setGlobalProgressCallback(globalProgressCallback);
+      this.logger.info('Stage 2: Global progress callback set');
     }
     
     try {
