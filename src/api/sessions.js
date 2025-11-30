@@ -552,7 +552,25 @@ router.get('/:id/stage2-progress', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Получить прогресс из БД
+    // Для global обработки прогресс не отслеживается
+    if (id === 'global') {
+      return res.json({
+        success: true,
+        progress: {
+          sessionId: 'global',
+          totalCompanies: 0,
+          processedCompanies: 0,
+          remainingCompanies: 0,
+          status: 'processing',
+          currentCompany: null,
+          lastError: null,
+          percentComplete: 0,
+          note: 'Global processing does not track progress'
+        }
+      });
+    }
+    
+    // Получить прогресс из БД для конкретной сессии
     const { data: progress, error } = await req.db.supabase
       .from('stage2_progress')
       .select('*')

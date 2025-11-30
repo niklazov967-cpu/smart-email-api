@@ -1209,13 +1209,13 @@
       statusDiv.style.display = 'block';
       statusDiv.innerHTML = '<div class="status-message status-info">⏳ Начинаем обработку...</div>';
 
-      // Показать прогресс-бар для Stage 2
+      // НЕ показывать прогресс для global обработки (не поддерживается)
+      // Прогресс работает только для session-based обработки через Step-by-Step
       let progressMonitor = null;
-      if (stageNum === 2 && progressContainer) {
-        progressContainer.style.display = 'block';
-        // Для global обработки используем специальный sessionId
-        progressMonitor = startStage2ProgressMonitor('global');
-      }
+      // if (stageNum === 2 && progressContainer) {
+      //   progressContainer.style.display = 'block';
+      //   progressMonitor = startStage2ProgressMonitor('global');
+      // }
 
       try {
         let endpoint;
