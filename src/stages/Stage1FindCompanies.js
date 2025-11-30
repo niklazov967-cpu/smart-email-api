@@ -61,42 +61,73 @@ class Stage1FindCompanies {
         queriesCount: queries.length 
       });
       
-      // Обработать каждый запрос
+      // Обработать запросы ПАРАЛЛЕЛЬНО батчами (как Stage 2/3)
       let allCompanies = [];
+      const concurrentRequests = 5; // Обрабатывать по 5 запросов параллельно
+      let processedCount = 0;
+      const totalQueries = queries.length;
       
-      for (let i = 0; i < queries.length; i++) {
-        const query = queries[i];
-        const searchQuery = query.query_cn || query.query_ru;
+      for (let i = 0; i < queries.length; i += concurrentRequests) {
+        const batch = queries.slice(i, i + concurrentRequests);
         
-        // Обновить прогресс перед обработкой
+        // Обновить прогресс перед обработкой батча
         if (this.progressCallback) {
           await this.progressCallback({
-            processed: i,
-            total: queries.length,
-            currentQuery: searchQuery
+            processed: processedCount,
+            total: totalQueries,
+            currentQuery: batch[0]?.query_cn || batch[0]?.query_ru
           });
         }
         
-        this.logger.info('Stage 1: Processing query', { 
-          query: searchQuery,
-          queryId: query.query_id,
-          progress: `${i + 1}/${queries.length}`
+        this.logger.info('Stage 1: Processing batch', { 
+          batchSize: batch.length,
+          progress: `${processedCount}/${totalQueries}`,
+          batchNumber: Math.floor(i / concurrentRequests) + 1
         });
         
-        const companies = await this._processQuery(searchQuery, sessionId, topicDescription);
-        allCompanies.push(...companies);
+        // Обработать батч параллельно
+        const batchResults = await Promise.all(
+          batch.map(async (query) => {
+            const searchQuery = query.query_cn || query.query_ru;
+            this.logger.info('Stage 1: Processing query', { 
+              query: searchQuery,
+              queryId: query.query_id,
+              progress: `${processedCount + 1}/${totalQueries}`
+            });
+            
+            try {
+              const companies = await this._processQuery(searchQuery, sessionId, topicDescription);
+              return companies;
+            } catch (error) {
+              this.logger.error('Stage 1: Query failed', { 
+                query: searchQuery,
+                error: error.message
+              });
+              return []; // Вернуть пустой массив при ошибке
+            }
+          })
+        );
         
-        // Обновить прогресс после обработки
+        // Собрать результаты батча
+        batchResults.forEach(companies => {
+          allCompanies.push(...companies);
+        });
+        
+        processedCount += batch.length;
+        
+        // Обновить прогресс после обработки батча
         if (this.progressCallback) {
           await this.progressCallback({
-            processed: i + 1,
-            total: queries.length,
+            processed: processedCount,
+            total: totalQueries,
             currentQuery: null
           });
         }
         
-        // Небольшая задержка между запросами
-        await this._sleep(1000);
+        // Небольшая задержка между батчами (не между отдельными запросами)
+        if (i + concurrentRequests < queries.length) {
+          await this._sleep(1000);
+        }
       }
       
       this.logger.info('Stage 1: All queries processed', { 
