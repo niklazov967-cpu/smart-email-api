@@ -337,7 +337,7 @@ ${searchStrategy}
           if (result.website && !company.website && this._isValidWebsite(result.website)) {
             updateData.website = result.website;
             websiteWasAdded = true;
-            this.logger.info('🎁 BONUS: Website found opportunistically in Stage 3 Retry', {
+            this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 3 Retry', {
               company: company.company_name,
               website: result.website,
               source: result.source

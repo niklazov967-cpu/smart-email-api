@@ -273,7 +273,7 @@ class Stage2Retry {
           // 🎁 BONUS: Если DeepSeek случайно нашел email И у компании его еще нет
           if (result.email && !company.email && this._isValidEmail(result.email)) {
             updateData.email = result.email;
-            this.logger.info('🎁 BONUS: Email found opportunistically in Stage 2 Retry', {
+            this.logger.warn('🎁 BONUS: Email found opportunistically in Stage 2 Retry', {
               company: company.company_name,
               email: result.email,
               source: result.source

@@ -398,7 +398,7 @@ class Stage3AnalyzeContacts {
         if (result.website && !company.website) {
           updateData.website = result.website;
           websiteWasAdded = true;
-          this.logger.info('🎁 BONUS: Website found opportunistically in Stage 3', {
+          this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 3', {
             company: company.company_name,
             website: result.website,
             source: result.source || 'perplexity search'

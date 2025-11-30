@@ -160,7 +160,7 @@ class Stage4AnalyzeServices {
           if (result.website && !company.website) {
             updateData.website = result.website;
             websiteWasAdded = true;
-            this.logger.info('🎁 BONUS: Website found opportunistically in Stage 4', {
+            this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 4', {
               company: company.company_name,
               website: result.website
             });
@@ -171,7 +171,7 @@ class Stage4AnalyzeServices {
           if (result.email && !company.email) {
             updateData.email = result.email;
             emailWasAdded = true;
-            this.logger.info('🎁 BONUS: Email found opportunistically in Stage 4', {
+            this.logger.warn('🎁 BONUS: Email found opportunistically in Stage 4', {
               company: company.company_name,
               email: result.email
             });
