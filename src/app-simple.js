@@ -120,6 +120,42 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Version endpoint (public, no auth required)
+app.get('/api/version', (req, res) => {
+  const { execSync } = require('child_process');
+  const packageJson = require('../package.json');
+  
+  try {
+    const commit = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+    const commitShort = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim();
+    const tag = execSync('git describe --tags --exact-match 2>/dev/null || echo ""', { encoding: 'utf-8' }).trim();
+    const commitDate = execSync('git log -1 --format=%cd --date=iso', { encoding: 'utf-8' }).trim();
+    const commitMessage = execSync('git log -1 --format=%s', { encoding: 'utf-8' }).trim();
+    const author = execSync('git log -1 --format=%an', { encoding: 'utf-8' }).trim();
+    
+    res.json({
+      commit,
+      commitShort,
+      branch,
+      tag: tag || packageJson.version,
+      packageVersion: packageJson.version,
+      commitDate,
+      commitMessage,
+      author,
+      buildDate: new Date().toISOString()
+    });
+  } catch (error) {
+    // Fallback if git is not available
+    res.json({
+      tag: packageJson.version,
+      packageVersion: packageJson.version,
+      buildDate: new Date().toISOString(),
+      error: 'Git info not available'
+    });
+  }
+});
+
 // Подключение API роутов (с обработкой ошибок)
 (async () => {
 try {

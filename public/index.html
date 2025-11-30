@@ -593,43 +593,38 @@
     // Загрузить версию приложения
     async function loadVersion() {
       try {
-        // Try to load version from version.json (generated at build time)
-        const versionResponse = await fetch('/version.json');
+        // Try to load version from API endpoint (always available)
+        const versionResponse = await fetch('/api/version');
         if (versionResponse.ok) {
           const versionData = await versionResponse.json();
+          const versionTag = versionData.tag || versionData.packageVersion || '2.2.2';
           document.getElementById('appVersion').textContent = 
-            `v${versionData.tag || '2.1.3'} | DeepSeek + Perplexity Integration`;
+            `${versionTag} | DeepSeek + Perplexity Integration`;
           
           // Show commit info
-          const commitDate = new Date(versionData.commitDate).toLocaleString('ru-RU', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-          
-          document.getElementById('commitInfo').innerHTML = 
-            `<span title="${versionData.commitMessage}">` +
-            `📦 Commit: <code>${versionData.commitShort}</code> ` +
-            `| 🌿 ${versionData.branch} ` +
-            `| 📅 ${commitDate}` +
-            `</span>`;
-          
-          console.log('Version info:', versionData);
-          return;
-        }
-        
-        // Fallback to old API
-        const response = await fetch('/api/version');
-        const data = await response.json();
-        if (data.success) {
-          document.getElementById('appVersion').textContent = 
-            `Версия ${data.version} | DeepSeek + Perplexity Integration`;
+          if (versionData.commitDate) {
+            const commitDate = new Date(versionData.commitDate).toLocaleString('ru-RU', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+            
+            document.getElementById('commitInfo').innerHTML = 
+              `<span title="${versionData.commitMessage || 'No commit message'}">` +
+              `📦 Commit: <code>${versionData.commitShort}</code> ` +
+              `| 🌿 ${versionData.branch} ` +
+              `| 📅 ${commitDate}` +
+              `</span>`;
+          }
+        } else {
+          // Fallback if API fails
+          document.getElementById('appVersion').textContent = 'v2.2.2 | DeepSeek + Perplexity Integration';
         }
       } catch (error) {
-        console.error('Failed to load version:', error);
-        document.getElementById('appVersion').textContent = 'Версия 2.1.3';
+        console.error('Failed to load version info:', error);
+        document.getElementById('appVersion').textContent = 'v2.2.2 | DeepSeek + Perplexity Integration';
       }
     }
 
