@@ -12,6 +12,22 @@ class Stage2Retry {
     this.logger = logger;
     this.settings = settings;
     this.deepseek = deepseek;
+    this.globalProgressCallback = null; // Callback для global прогресса (SSE)
+    this.progressOffset = 0; // Начальный offset для прогресса
+  }
+
+  /**
+   * Установить callback для global прогресса (SSE)
+   */
+  setGlobalProgressCallback(callback) {
+    this.globalProgressCallback = callback;
+  }
+
+  /**
+   * Установить начальный offset для прогресса (сколько уже обработано в Stage 2)
+   */
+  setProgressOffset(offset) {
+    this.progressOffset = offset;
   }
 
   async execute() {
@@ -43,11 +59,17 @@ class Stage2Retry {
       console.log('   Starting website search with DeepSeek...\n');
 
       let found = 0;
+      let processedCount = this.progressOffset; // Начать с offset
 
       // Обрабатывать последовательно (DeepSeek медленнее)
       for (let i = 0; i < companies.length; i++) {
         const company = companies[i];
         console.log(`   [${i + 1}/${companies.length}] ${company.company_name}...`);
+        
+        // Обновить global прогресс ПЕРЕД обработкой
+        if (this.globalProgressCallback) {
+          this.globalProgressCallback(processedCount, company.company_name);
+        }
         
         const result = await this._retryWebsiteSearch(company);
         if (result.success && result.website) {
@@ -55,6 +77,13 @@ class Stage2Retry {
           console.log(`      ✅ Website found: ${result.website}`);
         } else {
           console.log(`      ❌ No website found`);
+        }
+        
+        processedCount++;
+        
+        // Обновить global прогресс ПОСЛЕ обработки
+        if (this.globalProgressCallback) {
+          this.globalProgressCallback(processedCount, null);
         }
         
         // Пауза между запросами

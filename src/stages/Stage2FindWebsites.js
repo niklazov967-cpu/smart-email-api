@@ -170,6 +170,15 @@ class Stage2FindWebsites {
             deepseekClient
           );
           
+          // Передать globalProgressCallback в Stage2Retry
+          if (this.globalProgressCallback) {
+            console.log('   Setting global progress callback for Stage2Retry...');
+            stage2Retry.setGlobalProgressCallback(this.globalProgressCallback);
+            // Передать текущий прогресс (processedCount) как offset
+            console.log(`   Setting progress offset to ${processedCount} (already processed in Stage 2)`);
+            stage2Retry.setProgressOffset(processedCount);
+          }
+          
           console.log('   Executing Stage 2 Retry...');
           // Запустить retry
           const retryResult = await stage2Retry.execute();
