@@ -66,8 +66,6 @@ class Stage3AnalyzeContacts {
 
       // Обработать батчами
       const results = [];
-      // Обработать батчами
-      const results = [];
       let processedCount = 0;
       const totalCompanies = companies.length;
       
