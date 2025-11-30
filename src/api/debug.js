@@ -244,7 +244,7 @@ router.post('/test-fallback', async (req, res) => {
  */
 router.get('/companies', async (req, res) => {
   try {
-    const { session_id, limit = 100, include_translations = 'true' } = req.query;
+    const { session_id, limit = 1000, include_translations = 'true' } = req.query;
 
     // Если запрошены переводы, используем Supabase с JOIN
     if (include_translations === 'true') {
