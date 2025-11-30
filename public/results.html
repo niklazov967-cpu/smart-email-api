@@ -752,10 +752,10 @@
                     select.appendChild(option);
                 });
 
-                // Автовыбор последней сессии
-                if (sessions.length > 0) {
-                    select.value = sessions[0].session_id;
-                }
+                // НЕ автовыбираем сессию - оставляем "Все сессии" по умолчанию
+                // if (sessions.length > 0) {
+                //     select.value = sessions[0].session_id;
+                // }
                 
                 console.log('Loaded sessions:', sessions.length);
             } catch (error) {
