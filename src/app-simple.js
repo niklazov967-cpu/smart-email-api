@@ -345,19 +345,26 @@ try {
   
   console.log('✅ API routes loaded successfully');
   
+  // Start server ПОСЛЕ инициализации роутов
+  app.listen(PORT, () => {
+    console.log(`🚀 Smart Email API running on http://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`💾 Database: Supabase (PostgreSQL)`);
+    console.log(`✨ Server ready with all routes!`);
+  });
+  
 } catch (error) {
   console.error('⚠️  Failed to load API routes:', error.message);
+  console.error(error.stack);
   console.log('Running in basic mode only');
+  
+  // Запустить сервер даже при ошибке (для диагностики)
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running in BASIC MODE on http://localhost:${PORT}`);
+    console.log(`⚠️  Some features may not work`);
+  });
 }
 })();
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Smart Email API running on http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💾 Database: Supabase (PostgreSQL)`);
-  console.log(`✨ Server ready!`);
-});
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
