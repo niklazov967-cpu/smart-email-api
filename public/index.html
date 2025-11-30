@@ -388,32 +388,56 @@
         <textarea id="mainTopic" rows="3" placeholder="Например: Производители деталей для обработки металла в Китае"></textarea>
       </div>
 
-      <div class="input-group">
-        <label>Количество под-запросов (10-50):</label>
-        <input type="number" id="numQueries" value="10" min="10" max="50">
+      <div style="display: flex; gap: 15px;">
+        <div class="input-group" style="flex: 1;">
+          <label>Количество под-запросов за проход (10-50):</label>
+          <input type="number" id="numQueries" value="50" min="10" max="50">
+        </div>
+
+        <div class="input-group" style="flex: 1;">
+          <label>Количество проходов генерации:</label>
+          <input type="number" id="numPasses" value="1" min="1" max="10">
+        </div>
       </div>
 
-      <button class="button button-primary" onclick="generateQueries()">
+      <button class="button button-primary" onclick="generateQueries()" id="generateBtn">
         ✨ Сгенерировать запросы
       </button>
 
       <div id="generationStatus" style="display: none;"></div>
 
+      <!-- Прогресс генерации -->
+      <div id="generationProgressContainer" style="display: none; margin: 15px 0; padding: 15px; background: #f0f4ff; border-radius: 8px; border-left: 4px solid #667eea;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <strong style="color: #667eea;">⚡ Генерация запросов</strong>
+          <span id="generationProgressPercent" style="font-size: 20px; font-weight: bold; color: #667eea;">0%</span>
+        </div>
+        <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
+          <span id="generationProgressText">Проход: 0 из 0</span>
+        </div>
+        <div style="width: 100%; background: #e0e0e0; border-radius: 10px; height: 10px; overflow: hidden;">
+          <div id="generationProgressBar" style="width: 0%; background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; transition: width 0.3s ease;"></div>
+        </div>
+        <div id="generationCurrentStatus" style="margin-top: 10px; font-size: 13px; color: #888; font-style: italic;"></div>
+      </div>
+
       <!-- Список сгенерированных запросов -->
       <div id="queriesSection" style="display: none;">
-        <h3 style="margin: 20px 0 10px; color: #667eea;">📝 Выберите запросы для обработки:</h3>
-        <div style="margin-bottom: 15px;">
-          <button class="button button-success" onclick="selectAllQueries(true)">✅ Выбрать все</button>
-          <button class="button button-danger" onclick="selectAllQueries(false)">❌ Снять все</button>
-          <span style="margin-left: 15px; color: #666;">
-            Выбрано: <strong id="selectedCount">0</strong> запросов
-          </span>
+        <h3 style="margin: 20px 0 10px; color: #667eea;">
+          ✅ Релевантные запросы добавлены в базу
+        </h3>
+        <div style="margin-bottom: 15px; padding: 12px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; color: #155724;">
+          <strong>📊 Статистика:</strong>
+          <div style="margin-top: 8px;">
+            <div>Всего сгенерировано: <strong id="totalGenerated">0</strong> запросов</div>
+            <div>Релевантные (≥70%): <strong id="relevantCount">0</strong> запросов</div>
+            <div>Добавлено в базу: <strong id="savedCount">0</strong> запросов</div>
+            <div>Дубликатов отфильтровано: <strong id="duplicatesCount">0</strong> запросов</div>
+          </div>
         </div>
-        <div id="queriesList" class="queries-list"></div>
         
-        <button class="button button-success" id="saveQueriesBtn" onclick="saveSelectedQueries()" style="margin-top: 20px;">
-          💾 Сохранить выбранные запросы и создать тему
-        </button>
+        <h4 style="margin: 15px 0 10px; color: #667eea;">📝 Добавленные запросы с рейтингом:</h4>
+        <div id="queriesList" class="queries-list"></div>
       </div>
     </div>
 
@@ -661,7 +685,10 @@
     async function generateQueries() {
       const topic = document.getElementById('mainTopic').value.trim();
       const numQueries = parseInt(document.getElementById('numQueries').value);
+      const numPasses = parseInt(document.getElementById('numPasses').value);
       const statusDiv = document.getElementById('generationStatus');
+      const progressContainer = document.getElementById('generationProgressContainer');
+      const generateBtn = document.getElementById('generateBtn');
 
       if (!topic) {
         alert('Пожалуйста, введите тему для генерации запросов');
@@ -673,176 +700,159 @@
         return;
       }
 
-      statusDiv.style.display = 'block';
-      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Генерируем запросы...</div>';
-
-      try {
-        const response = await fetch('/api/queries/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic, numQueries })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-          generatedQueries = result.queries || [];
-          displayQueries(generatedQueries);
-          statusDiv.innerHTML = '<div class="status-message status-success">✅ Запросы успешно сгенерированы!</div>';
-          document.getElementById('queriesSection').style.display = 'block';
-        } else {
-          throw new Error(result.error || 'Unknown error');
-        }
-      } catch (error) {
-        console.error('Generation error:', error);
-        statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${error.message}</div>`;
-      }
-    }
-
-    function displayQueries(queries) {
-      const container = document.getElementById('queriesList');
-      container.innerHTML = queries.map((q, idx) => {
-        const relevance = q.relevance || q.relevance_score || 0;
-        const relevanceColor = relevance >= 80 ? '#10b981' : relevance >= 60 ? '#f59e0b' : '#ef4444';
-        const relevanceLabel = relevance >= 80 ? 'Высокая' : relevance >= 60 ? 'Средняя' : 'Низкая';
-        
-        // По умолчанию выбраны только запросы с релевантностью >= 70%
-        const isChecked = relevance >= 70;
-        
-        return `
-        <div class="query-item" id="query-${idx}">
-          <input type="checkbox" class="query-checkbox" id="checkbox-${idx}" 
-                 onchange="updateSelectedCount()" ${isChecked ? 'checked' : ''}>
-          <div class="query-content">
-            <div class="query-cn">${q.query_cn || q.chinese_query || q.query}</div>
-            <div class="query-ru">${q.query_ru || q.russian_query || q.translation || ''}</div>
-          </div>
-          <div style="margin-left: 15px; text-align: right; min-width: 100px;">
-            <div style="font-size: 20px; font-weight: bold; color: ${relevanceColor};">${relevance}</div>
-            <div style="font-size: 11px; color: ${relevanceColor}; font-weight: 600;">${relevanceLabel}</div>
-          </div>
-        </div>
-      `;
-      }).join('');
-      updateSelectedCount();
-    }
-
-    function selectAllQueries(checked) {
-      const checkboxes = document.querySelectorAll('.query-checkbox');
-      checkboxes.forEach(cb => {
-        cb.checked = checked;
-        const item = cb.closest('.query-item');
-        if (checked) {
-          item.classList.add('selected');
-        } else {
-          item.classList.remove('selected');
-        }
-      });
-      updateSelectedCount();
-    }
-
-    function updateSelectedCount() {
-      const checked = document.querySelectorAll('.query-checkbox:checked').length;
-      document.getElementById('selectedCount').textContent = checked;
-    }
-
-    async function saveSelectedQueries() {
-      const topic = document.getElementById('mainTopic').value.trim();
-      const checkboxes = document.querySelectorAll('.query-checkbox:checked');
-      const saveBtn = document.getElementById('saveQueriesBtn'); // Получить кнопку по ID
-      
-      if (checkboxes.length === 0) {
-        alert('Выберите хотя бы один запрос');
+      if (numPasses < 1 || numPasses > 10) {
+        alert('Количество проходов должно быть от 1 до 10');
         return;
       }
 
-      // БЛОКИРОВКА: отключить кнопку сразу
-      saveBtn.disabled = true;
-      saveBtn.textContent = '⏳ Сохраняем...';
-      saveBtn.style.opacity = '0.6';
-      saveBtn.style.cursor = 'not-allowed';
-
-      const selectedQueries = Array.from(checkboxes).map(cb => {
-        const idx = parseInt(cb.id.replace('checkbox-', ''));
-        return generatedQueries[idx];
-      });
-
-      const statusDiv = document.getElementById('generationStatus');
-      statusDiv.innerHTML = '<div class="status-message status-info">⏳ Сохраняем запросы...</div>';
+      // Disable button and show progress
+      generateBtn.disabled = true;
+      statusDiv.style.display = 'none';
+      progressContainer.style.display = 'block';
+      generatedQueries = [];
+      let allSavedQueries = [];
+      let totalGenerated = 0;
+      let totalRelevant = 0;
+      let totalSaved = 0;
+      let totalDuplicates = 0;
 
       try {
-        const response = await fetch('/api/queries/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            mainTopic: topic,
-            queries: selectedQueries 
-          })
-        });
+        for (let pass = 1; pass <= numPasses; pass++) {
+          // Update progress
+          const progressPercent = Math.round(((pass - 1) / numPasses) * 100);
+          document.getElementById('generationProgressPercent').textContent = progressPercent + '%';
+          document.getElementById('generationProgressText').textContent = `Проход: ${pass} из ${numPasses}`;
+          document.getElementById('generationProgressBar').style.width = progressPercent + '%';
+          document.getElementById('generationCurrentStatus').textContent = `⏳ Генерация ${numQueries} запросов...`;
 
-        const result = await response.json();
-
-        if (result.success) {
-          createdSessionId = result.sessionId;
-          statusDiv.innerHTML = `<div class="status-message status-success">
-            ✅ Сохранено ${selectedQueries.length} запросов! Тема создана: ${result.sessionId}
-          </div>`;
-          
-          // БЛОКИРОВКА: заблокировать все чекбоксы
-          document.querySelectorAll('.query-checkbox').forEach(cb => {
-            cb.disabled = true;
-            cb.style.cursor = 'not-allowed';
+          // Generate queries
+          const response = await fetch('/api/queries/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic, numQueries })
           });
+
+          const result = await response.json();
+
+          if (!result.success) {
+            throw new Error(result.error || 'Unknown error');
+          }
+
+          const queries = result.queries || [];
+          totalGenerated += queries.length;
           
-          // Заблокировать кнопки "Выбрать все" и "Снять все"
-          document.querySelectorAll('#queriesSection .button-success, #queriesSection .button-danger').forEach(btn => {
-            if (btn.id !== 'saveQueriesBtn') { // Не трогаем кнопку сохранения
-              btn.disabled = true;
-              btn.style.opacity = '0.5';
-              btn.style.cursor = 'not-allowed';
+          // Filter relevant queries (≥70%)
+          const relevantQueries = queries.filter(q => {
+            const relevance = q.relevance || q.relevance_score || 0;
+            return relevance >= 70;
+          });
+          totalRelevant += relevantQueries.length;
+
+          document.getElementById('generationCurrentStatus').textContent = `💾 Сохранение ${relevantQueries.length} релевантных запросов...`;
+
+          // Save relevant queries automatically
+          if (relevantQueries.length > 0) {
+            const saveResponse = await fetch('/api/queries/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                topic, 
+                queries: relevantQueries 
+              })
+            });
+
+            const saveResult = await saveResponse.json();
+
+            if (saveResult.success) {
+              const saved = saveResult.saved || 0;
+              const duplicates = saveResult.duplicates || 0;
+              totalSaved += saved;
+              totalDuplicates += duplicates;
+              
+              // Collect saved queries for display
+              allSavedQueries.push(...relevantQueries.slice(0, saved));
+              
+              if (!createdSessionId && saveResult.sessionId) {
+                createdSessionId = saveResult.sessionId;
+              }
             }
-          });
-          
-          // Визуально затемнить весь список
-          document.getElementById('queriesList').style.opacity = '0.6';
-          document.getElementById('queriesList').style.pointerEvents = 'none';
-          
-          // Изменить текст и стиль кнопки на "Сохранено"
-          saveBtn.textContent = '✅ Сохранено';
-          saveBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-          saveBtn.style.opacity = '1';
-          
-          // Обновить список тем и АВТОМАТИЧЕСКИ выбрать созданную тему
-          await loadSessions();
-          
-          // Убедиться что выбрана правильная тема
-          const select = document.getElementById('stage1SessionSelect');
-          select.value = createdSessionId;
-          
-          // ВАЖНО: обновить информацию о теме и активировать кнопку
-          await updateStage1SessionInfo();
-          
-          // Прокрутить к Stage 1
-          setTimeout(() => {
+          }
+
+          // Small delay between passes
+          if (pass < numPasses) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+
+        // Complete progress
+        document.getElementById('generationProgressPercent').textContent = '100%';
+        document.getElementById('generationProgressText').textContent = `Завершено: ${numPasses} из ${numPasses}`;
+        document.getElementById('generationProgressBar').style.width = '100%';
+        document.getElementById('generationCurrentStatus').textContent = '✅ Генерация завершена!';
+
+        // Display results
+        generatedQueries = allSavedQueries;
+        displaySavedQueries(allSavedQueries, totalGenerated, totalRelevant, totalSaved, totalDuplicates);
+        
+        statusDiv.style.display = 'block';
+        statusDiv.innerHTML = `<div class="status-message status-success">✅ Генерация завершена! Добавлено ${totalSaved} релевантных запросов в базу.</div>`;
+        document.getElementById('queriesSection').style.display = 'block';
+
+        // Reload sessions to show new topic
+        loadSessions();
+
+        // Auto-select created session in Stage 1
+        setTimeout(async () => {
+          if (createdSessionId) {
+            const select = document.getElementById('stage1SessionSelect');
+            select.value = createdSessionId;
+            await updateStage1SessionInfo();
+            
+            // Scroll to Stage 1
             document.getElementById('stage1Card').scrollIntoView({ 
               behavior: 'smooth', 
               block: 'start' 
             });
-          }, 500);
-        } else {
-          throw new Error(result.error || 'Unknown error');
-        }
+          }
+        }, 1000);
+
       } catch (error) {
-        console.error('Save error:', error);
+        console.error('Generation error:', error);
+        statusDiv.style.display = 'block';
         statusDiv.innerHTML = `<div class="status-message status-error">❌ Ошибка: ${error.message}</div>`;
-        
-        // В случае ошибки - разблокировать кнопку
-        saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Сохранить выбранные запросы и создать тему';
-        saveBtn.style.opacity = '1';
-        saveBtn.style.cursor = 'pointer';
-        saveBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        progressContainer.style.display = 'none';
+      } finally {
+        generateBtn.disabled = false;
       }
+    }
+
+    function displaySavedQueries(queries, totalGenerated, totalRelevant, totalSaved, totalDuplicates) {
+      // Update statistics
+      document.getElementById('totalGenerated').textContent = totalGenerated;
+      document.getElementById('relevantCount').textContent = totalRelevant;
+      document.getElementById('savedCount').textContent = totalSaved;
+      document.getElementById('duplicatesCount').textContent = totalDuplicates;
+
+      // Display queries list with relevance scores
+      const container = document.getElementById('queriesList');
+      container.innerHTML = queries.map((q, idx) => {
+        const relevance = q.relevance || q.relevance_score || 0;
+        const relevanceColor = relevance >= 80 ? '#10b981' : relevance >= 70 ? '#f59e0b' : '#ef4444';
+        const relevanceLabel = relevance >= 80 ? 'Высокая' : relevance >= 70 ? 'Средняя' : 'Низкая';
+        
+        return `
+        <div class="query-item" style="background: white; border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="flex: 1;">
+            <div style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 4px;">${q.query_cn || q.chinese_query || q.query}</div>
+            <div style="font-size: 14px; color: #666;">${q.query_ru || q.russian_query || q.translation || ''}</div>
+          </div>
+          <div style="margin-left: 20px; text-align: center; min-width: 80px; padding: 8px 12px; background: ${relevanceColor}15; border-radius: 6px; border: 2px solid ${relevanceColor};">
+            <div style="font-size: 22px; font-weight: bold; color: ${relevanceColor};">${relevance}</div>
+            <div style="font-size: 11px; color: ${relevanceColor}; font-weight: 600; margin-top: 2px;">${relevanceLabel}</div>
+          </div>
+        </div>
+      `;
+      }).join('');
     }
 
     async function loadSessions() {
