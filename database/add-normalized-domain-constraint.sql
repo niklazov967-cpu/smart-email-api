@@ -30,21 +30,86 @@ CREATE INDEX IF NOT EXISTS idx_pending_companies_normalized_domain
 ON pending_companies(normalized_domain)
 WHERE normalized_domain IS NOT NULL;
 
--- Шаг 4: Создать UNIQUE constraint для предотвращения дубликатов
+-- Шаг 3.5: ПЕРЕД удалением дубликатов - показать их для информации
+DO $$
+DECLARE
+  duplicate_domains TEXT;
+BEGIN
+  SELECT string_agg(DISTINCT normalized_domain, ', ')
+  INTO duplicate_domains
+  FROM (
+    SELECT normalized_domain
+    FROM pending_companies
+    WHERE normalized_domain IS NOT NULL
+    GROUP BY normalized_domain
+    HAVING COUNT(*) > 1
+  ) dups;
+  
+  IF duplicate_domains IS NOT NULL THEN
+    RAISE NOTICE 'Found duplicate domains: %', duplicate_domains;
+  ELSE
+    RAISE NOTICE 'No duplicate domains found';
+  END IF;
+END $$;
+
+-- Показать детали дубликатов
+SELECT 
+  normalized_domain,
+  COUNT(*) as duplicate_count,
+  array_agg(company_name ORDER BY created_at) as companies,
+  array_agg(created_at::text ORDER BY created_at) as timestamps
+FROM pending_companies
+WHERE normalized_domain IS NOT NULL
+GROUP BY normalized_domain
+HAVING COUNT(*) > 1
+ORDER BY COUNT(*) DESC
+LIMIT 10;
+
+-- Шаг 4: Удалить существующие дубликаты (оставить самую старую запись)
+-- Это необходимо, чтобы создать UNIQUE constraint
+DO $$
+DECLARE
+  deleted_count INTEGER;
+BEGIN
+  -- Удалить дубликаты, оставив запись с минимальным created_at (самую старую)
+  WITH duplicates AS (
+    SELECT 
+      company_id,
+      normalized_domain,
+      created_at,
+      ROW_NUMBER() OVER (
+        PARTITION BY normalized_domain 
+        ORDER BY created_at ASC, company_id ASC
+      ) as rn
+    FROM pending_companies
+    WHERE normalized_domain IS NOT NULL
+  )
+  DELETE FROM pending_companies
+  WHERE company_id IN (
+    SELECT company_id 
+    FROM duplicates 
+    WHERE rn > 1
+  );
+  
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+  RAISE NOTICE 'Deleted % duplicate records', deleted_count;
+END $$;
+
+-- Шаг 5: Создать UNIQUE constraint для предотвращения дубликатов
 -- Используем частичный unique index (только для записей с доменом)
 DROP INDEX IF EXISTS idx_pending_companies_unique_domain;
 CREATE UNIQUE INDEX idx_pending_companies_unique_domain 
 ON pending_companies(normalized_domain) 
 WHERE normalized_domain IS NOT NULL;
 
--- Шаг 5: Добавить комментарии
+-- Шаг 6: Добавить комментарии
 COMMENT ON COLUMN pending_companies.normalized_domain IS 
   'Нормализованный домен (без протокола, www, пути) для дедупликации. Пример: example.com';
 
 COMMENT ON INDEX idx_pending_companies_unique_domain IS 
   'Гарантирует уникальность домена. Решает race condition при параллельном Stage 1.';
 
--- Проверка результата
+-- Шаг 7: Проверка результата
 SELECT 
   COUNT(*) as total_companies,
   COUNT(DISTINCT normalized_domain) as unique_domains,
