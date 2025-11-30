@@ -1200,6 +1200,7 @@
       const btn = document.getElementById(`stage${stageNum}Btn`);
       const statusDiv = document.getElementById(`stage${stageNum}Status`);
       const badge = document.getElementById(`stage${stageNum}Badge`);
+      const progressContainer = document.getElementById(`stage${stageNum}ProgressContainer`);
 
       if (!confirm(`Запустить Stage ${stageNum} для всех готовых компаний?`)) {
         return;
@@ -1212,6 +1213,14 @@
       badge.className = 'stage-badge badge-running';
       statusDiv.style.display = 'block';
       statusDiv.innerHTML = '<div class="status-message status-info">⏳ Начинаем обработку...</div>';
+
+      // Показать прогресс-бар для Stage 2
+      let progressMonitor = null;
+      if (stageNum === 2 && progressContainer) {
+        progressContainer.style.display = 'block';
+        // Для global обработки используем специальный sessionId
+        progressMonitor = startStage2ProgressMonitor('global');
+      }
 
       try {
         let endpoint;
@@ -1250,6 +1259,18 @@
           </div>
         `;
       } finally {
+        // Остановить мониторинг прогресса
+        if (progressMonitor) {
+          clearInterval(progressMonitor);
+        }
+        
+        // Скрыть прогресс-бар через 2 секунды
+        if (progressContainer) {
+          setTimeout(() => {
+            progressContainer.style.display = 'none';
+          }, 2000);
+        }
+        
         isProcessing = false;
         btn.textContent = `🚀 Запустить Stage ${stageNum}`;
         setTimeout(() => loadStatistics(), 2000);

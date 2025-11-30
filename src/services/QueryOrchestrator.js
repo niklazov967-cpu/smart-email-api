@@ -376,11 +376,17 @@ class QueryOrchestrator {
     this.logger.info('Running Stage 2 only', { sessionId });
     
     // Получить компании для обработки
-    const { data: companies, error: fetchError } = await this.db.supabase
+    const queryBuilder = this.db.supabase
       .from('pending_companies')
       .select('*')
-      .eq('session_id', sessionId)
       .is('website', null); // Только без сайтов
+    
+    // Если sessionId не 'global', фильтровать по session_id
+    if (sessionId && sessionId !== 'global') {
+      queryBuilder.eq('session_id', sessionId);
+    }
+    
+    const { data: companies, error: fetchError } = await queryBuilder;
     
     if (fetchError) {
       this.logger.error('Stage 2: Failed to fetch companies', { error: fetchError.message });
@@ -394,38 +400,44 @@ class QueryOrchestrator {
       companyCount: totalCompanies 
     });
     
-    // Инициализировать прогресс в БД
-    await this._updateStage2Progress(sessionId, {
-      totalCompanies,
-      processedCompanies: 0,
-      remainingCompanies: totalCompanies,
-      status: 'processing',
-      currentCompany: null
-    });
-    
-    // Установить callback для обновления прогресса
-    this.stage2.setProgressCallback(async (progress) => {
+    // Инициализировать прогресс в БД (только если не global)
+    if (sessionId && sessionId !== 'global') {
       await this._updateStage2Progress(sessionId, {
-        totalCompanies: progress.total,
-        processedCompanies: progress.processed,
-        remainingCompanies: progress.total - progress.processed,
+        totalCompanies,
+        processedCompanies: 0,
+        remainingCompanies: totalCompanies,
         status: 'processing',
-        currentCompany: progress.currentCompany ? progress.currentCompany.substring(0, 100) : null
+        currentCompany: null
       });
-    });
+    }
+    
+    // Установить callback для обновления прогресса (только если не global)
+    if (sessionId && sessionId !== 'global') {
+      this.stage2.setProgressCallback(async (progress) => {
+        await this._updateStage2Progress(sessionId, {
+          totalCompanies: progress.total,
+          processedCompanies: progress.processed,
+          remainingCompanies: progress.total - progress.processed,
+          status: 'processing',
+          currentCompany: progress.currentCompany ? progress.currentCompany.substring(0, 100) : null
+        });
+      });
+    }
     
     try {
       // Запустить полный Stage 2
-      const result = await this.stage2.execute(sessionId);
+      const result = await this.stage2.execute(sessionId === 'global' ? null : sessionId);
       
-      // Завершить прогресс
-      await this._updateStage2Progress(sessionId, {
-        totalCompanies,
-        processedCompanies: totalCompanies,
-        remainingCompanies: 0,
-        status: 'completed',
-        currentCompany: null
-      });
+      // Завершить прогресс (только если не global)
+      if (sessionId && sessionId !== 'global') {
+        await this._updateStage2Progress(sessionId, {
+          totalCompanies,
+          processedCompanies: totalCompanies,
+          remainingCompanies: 0,
+          status: 'completed',
+          currentCompany: null
+        });
+      }
       
       this.logger.info('Stage 2: All companies processed', {
         sessionId,
@@ -436,15 +448,17 @@ class QueryOrchestrator {
       return result;
       
     } catch (error) {
-      // Обновить прогресс с ошибкой
-      await this._updateStage2Progress(sessionId, {
-        totalCompanies,
-        processedCompanies: 0,
-        remainingCompanies: totalCompanies,
-        status: 'error',
-        currentCompany: null,
-        lastError: error.message
-      });
+      // Обновить прогресс с ошибкой (только если не global)
+      if (sessionId && sessionId !== 'global') {
+        await this._updateStage2Progress(sessionId, {
+          totalCompanies,
+          processedCompanies: 0,
+          remainingCompanies: totalCompanies,
+          status: 'error',
+          currentCompany: null,
+          lastError: error.message
+        });
+      }
       
       throw error;
     } finally {

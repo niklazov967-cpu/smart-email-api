@@ -1143,6 +1143,20 @@ router.post('/global/stage2', async (req, res) => {
   try {
     req.logger.info('Starting global Stage 2');
     
+    // Используем orchestrator если доступен (для прогресс-трекинга)
+    if (req.orchestrator) {
+      // Используем специальный sessionId 'global' для отслеживания прогресса
+      const result = await req.orchestrator.runStage2Only('global');
+      
+      return res.json({
+        success: true,
+        total: result.total || 0,
+        found: result.found || 0,
+        notFound: result.notFound || 0
+      });
+    }
+    
+    // Fallback: прямой вызов без orchestrator
     const Stage2FindWebsites = require('../stages/Stage2FindWebsites');
     
     // Использовать уже инициализированный Sonar Basic client (с API ключом)
