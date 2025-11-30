@@ -11,6 +11,14 @@ class Stage1FindCompanies {
     this.db = database;
     this.logger = logger;
     this.tagExtractor = new TagExtractor();
+    this.progressCallback = null; // Callback для обновления прогресса
+  }
+
+  /**
+   * Установить callback для обновления прогресса
+   */
+  setProgressCallback(callback) {
+    this.progressCallback = callback;
   }
 
   async execute(sessionId) {
@@ -56,15 +64,36 @@ class Stage1FindCompanies {
       // Обработать каждый запрос
       let allCompanies = [];
       
-      for (const query of queries) {
+      for (let i = 0; i < queries.length; i++) {
+        const query = queries[i];
         const searchQuery = query.query_cn || query.query_ru;
+        
+        // Обновить прогресс перед обработкой
+        if (this.progressCallback) {
+          await this.progressCallback({
+            processed: i,
+            total: queries.length,
+            currentQuery: searchQuery
+          });
+        }
+        
         this.logger.info('Stage 1: Processing query', { 
           query: searchQuery,
-          queryId: query.query_id
+          queryId: query.query_id,
+          progress: `${i + 1}/${queries.length}`
         });
         
         const companies = await this._processQuery(searchQuery, sessionId, topicDescription);
         allCompanies.push(...companies);
+        
+        // Обновить прогресс после обработки
+        if (this.progressCallback) {
+          await this.progressCallback({
+            processed: i + 1,
+            total: queries.length,
+            currentQuery: null
+          });
+        }
         
         // Небольшая задержка между запросами
         await this._sleep(1000);

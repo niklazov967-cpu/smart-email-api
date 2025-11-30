@@ -1020,21 +1020,36 @@ router.post('/:id/stage1', async (req, res) => {
     const { id } = req.params;
     req.logger.info('Starting Stage 1 for session', { sessionId: id });
     
-    const Stage1FindCompanies = require('../stages/Stage1FindCompanies');
+    // Используем QueryOrchestrator для отслеживания прогресса
+    if (!req.orchestrator) {
+      // Fallback: если orchestrator недоступен, используем прямой вызов
+      req.logger.warn('Orchestrator not available, using direct Stage1 call');
+      
+      const Stage1FindCompanies = require('../stages/Stage1FindCompanies');
+      const stage1 = new Stage1FindCompanies(
+        req.sonarProClient,
+        req.settingsManager,
+        req.db,
+        req.logger
+      );
+      
+      const result = await stage1.execute(id);
+      
+      return res.json({
+        success: true,
+        ...result
+      });
+    }
     
-    // Используем уже инициализированный sonarProClient из req
-    const stage1 = new Stage1FindCompanies(
-      req.sonarProClient,  // Используем существующий клиент
-      req.settingsManager,
-      req.db,
-      req.logger
-    );
-    
-    const result = await stage1.execute(id);
+    // Используем orchestrator для прогресс-трекинга
+    const result = await req.orchestrator.runStage1Only(id);
     
     res.json({
       success: true,
-      ...result
+      queriesProcessed: result.queriesProcessed,
+      companiesFound: result.companiesFound,
+      total: result.companiesFound,
+      companies: result.companies
     });
     
   } catch (error) {

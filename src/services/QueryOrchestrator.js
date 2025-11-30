@@ -269,16 +269,13 @@ class QueryOrchestrator {
   async runStage1Only(sessionId) {
     this.logger.info('Running Stage 1 only', { sessionId });
     
-    // Получить запросы сессии (используем is_selected вместо selected)
+    // Получить запросы сессии для подсчета
     const queriesResult = await this.db.query(
       'SELECT * FROM session_queries WHERE session_id = $1 AND (is_selected = true OR selected = true)',
       [sessionId]
     );
     
-    const queries = queriesResult.rows;
-    const companies = [];
-    const totalQueries = queries.length;
-    let processedQueries = 0;
+    const totalQueries = queriesResult.rows.length;
     
     this.logger.info('Stage 1: Processing queries', { 
       sessionId, 
@@ -294,104 +291,58 @@ class QueryOrchestrator {
       currentQuery: null
     });
     
-    for (let i = 0; i < queries.length; i++) {
-      const query = queries[i];
-      try {
-        // Используем query_cn или query_text
-        const queryText = query.query_text || query.query_cn || query.query_ru;
-        
-        if (!queryText) {
-          this.logger.warn('Stage 1: Query without text', { query });
-          processedQueries++;
-          await this._updateStage1Progress(sessionId, {
-            totalQueries,
-            processedQueries,
-            remainingQueries: totalQueries - processedQueries,
-            status: 'processing',
-            currentQuery: null
-          });
-          continue;
-        }
-        
-        // Обновить прогресс перед обработкой
-        await this._updateStage1Progress(sessionId, {
-          totalQueries,
-          processedQueries,
-          remainingQueries: totalQueries - processedQueries,
-          status: 'processing',
-          currentQuery: queryText.substring(0, 100)
-        });
-        
-        this.logger.info('Stage 1: Processing query', { 
-          queryIndex: i + 1,
-          totalQueries,
-          queryText: queryText.substring(0, 50) 
-        });
-        
-        const result = await this.stage1.execute(queryText, sessionId);
-        
-        if (result.success && result.companies) {
-          companies.push(...result.companies.map(c => ({
-            ...c,
-            query_text: queryText
-          })));
-          
-          this.logger.info('Stage 1: Query completed', { 
-            queryText: queryText.substring(0, 50),
-            companiesFound: result.companies.length
-          });
-        }
-        
-        processedQueries++;
-        
-        // Обновить прогресс после обработки
-        await this._updateStage1Progress(sessionId, {
-          totalQueries,
-          processedQueries,
-          remainingQueries: totalQueries - processedQueries,
-          status: 'processing',
-          currentQuery: null
-        });
-        
-      } catch (error) {
-        this.logger.error('Stage 1 query failed', { 
-          queryId: query.query_id, 
-          error: error.message 
-        });
-        processedQueries++;
-        
-        // Обновить прогресс даже при ошибке
-        await this._updateStage1Progress(sessionId, {
-          totalQueries,
-          processedQueries,
-          remainingQueries: totalQueries - processedQueries,
-          status: 'processing',
-          currentQuery: null,
-          lastError: error.message
-        });
-      }
+    // Установить callback для обновления прогресса
+    this.stage1.setProgressCallback(async (progress) => {
+      await this._updateStage1Progress(sessionId, {
+        totalQueries: progress.total,
+        processedQueries: progress.processed,
+        remainingQueries: progress.total - progress.processed,
+        status: 'processing',
+        currentQuery: progress.currentQuery ? progress.currentQuery.substring(0, 100) : null
+      });
+    });
+    
+    try {
+      // Запустить полный Stage 1 (он обрабатывает все queries внутри)
+      const result = await this.stage1.execute(sessionId);
+      
+      // Завершить прогресс
+      await this._updateStage1Progress(sessionId, {
+        totalQueries,
+        processedQueries: totalQueries,
+        remainingQueries: 0,
+        status: 'completed',
+        currentQuery: null
+      });
+      
+      this.logger.info('Stage 1: All queries processed', {
+        sessionId,
+        queriesProcessed: totalQueries,
+        totalCompanies: result.count || 0
+      });
+      
+      return {
+        queriesProcessed: totalQueries,
+        companiesFound: result.count || 0,
+        companies: result.companies || []
+      };
+      
+    } catch (error) {
+      // Обновить прогресс с ошибкой
+      await this._updateStage1Progress(sessionId, {
+        totalQueries,
+        processedQueries: 0,
+        remainingQueries: totalQueries,
+        status: 'error',
+        currentQuery: null,
+        lastError: error.message
+      });
+      
+      throw error;
+    } finally {
+      // Очистить callback
+      this.stage1.setProgressCallback(null);
     }
-    
-    // Завершить прогресс
-    await this._updateStage1Progress(sessionId, {
-      totalQueries,
-      processedQueries,
-      remainingQueries: 0,
-      status: 'completed',
-      currentQuery: null
-    });
-    
-    this.logger.info('Stage 1: All queries processed', {
-      sessionId,
-      queriesProcessed: queries.length,
-      totalCompanies: companies.length
-    });
-    
-    return {
-      queriesProcessed: queries.length,
-      companiesFound: companies.length,
-      companies
-    };
   }
 
   /**
