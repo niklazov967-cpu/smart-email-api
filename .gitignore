@@ -46,3 +46,4 @@ temp/
 # Auto-generated version files
 public/version.json
 public/version.js
+.railway/
