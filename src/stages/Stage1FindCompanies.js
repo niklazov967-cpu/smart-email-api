@@ -490,10 +490,10 @@ STRICT JSON OUTPUT ONLY.`;
         }
         
         return {
-          name: c.name,
+          name: c.company_name || c.name,  // ИСПРАВЛЕНО: поддержка обоих вариантов
           website: website,
           email: (c.email && this._isValidEmail(c.email)) ? c.email : null,  // Валидация email
-          description: c.brief_description || c.description || null,
+          description: c.brief_description || c.description || c.specialization || null,  // УЛУЧШЕНО: больше вариантов описания
           domain_extension: c.likely_domain_extension || '.cn'
         };
       });
