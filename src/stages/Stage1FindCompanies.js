@@ -507,6 +507,13 @@ STRICT JSON OUTPUT ONLY.`;
     }
   }
 
+  /**
+   * Удаляет дубликаты компаний внутри одного набора результатов
+   * Проверяет по нормализованному названию и домену
+   * 
+   * @param {Array} companies - Массив компаний для дедупликации
+   * @returns {Array} - Массив уникальных компаний
+   */
   _removeDuplicates(companies) {
     const seenNames = new Set();
     const seenDomains = new Set();
@@ -518,10 +525,21 @@ STRICT JSON OUTPUT ONLY.`;
         return false;
       }
       
-      // Проверка по названию
-      const nameKey = company.name.toLowerCase().trim();
-      if (seenNames.has(nameKey)) {
-        this.logger.debug('Stage 1: Duplicate name filtered', { name: company.name });
+      // Проверка по нормализованному названию
+      const normalizedName = this._normalizeCompanyName(company.name);
+      
+      if (!normalizedName) {
+        this.logger.warn('Stage 1: Company with empty normalized name filtered', { 
+          original: company.name 
+        });
+        return false;
+      }
+      
+      if (seenNames.has(normalizedName)) {
+        this.logger.debug('Stage 1: Duplicate name filtered', { 
+          original: company.name,
+          normalized: normalizedName
+        });
         return false;
       }
       
@@ -541,7 +559,7 @@ STRICT JSON OUTPUT ONLY.`;
         }
       }
       
-      seenNames.add(nameKey);
+      seenNames.add(normalizedName);
       return true;
     });
   }
@@ -889,6 +907,45 @@ STRICT JSON OUTPUT ONLY.`;
     return blogPatterns.some(pattern => lowerUrl.includes(pattern));
   }
 
+  /**
+   * Нормализует название компании для сравнения и дедупликации
+   * Цель: "韦肯 (Wayken)" и "韦肯" должны быть одним ключом
+   * 
+   * @param {string} name - Оригинальное название компании
+   * @returns {string} - Нормализованное название
+   */
+  _normalizeCompanyName(name) {
+    if (!name || typeof name !== 'string') {
+      return '';
+    }
+    
+    try {
+      return name
+        .toLowerCase()
+        .trim()
+        // Убрать все внутренние пробелы
+        .replace(/\s+/g, '')
+        // Убрать скобки и их содержимое: "韦肯(Wayken)" → "韦肯"
+        // Обрабатываем латинские и китайские скобки
+        .replace(/\([^)]*\)/g, '')    // Латинские круглые скобки ()
+        .replace(/（[^）]*）/g, '')    // Китайские круглые скобки （）
+        .replace(/\[[^\]]*\]/g, '')   // Квадратные скобки []
+        .replace(/【[^】]*】/g, '')    // Китайские квадратные скобки 【】
+        // Убрать специальные символы и пунктуацию
+        .replace(/[.,!?;:，。！？；：、]/g, '')
+        // Убрать лишние дефисы и подчеркивания
+        .replace(/[-_]+/g, '')
+        // Убрать точки в конце
+        .replace(/\.+$/g, '');
+    } catch (error) {
+      this.logger.error('Stage 1: Failed to normalize company name', { 
+        name, 
+        error: error.message 
+      });
+      return name.toLowerCase().trim();
+    }
+  }
+
   _extractMainDomain(url) {
     try {
       if (!url) return null;
@@ -996,29 +1053,77 @@ STRICT JSON OUTPUT ONLY.`;
       };
       
       try {
-        // Проверить существование компании по normalized_domain И company_name
-        if (normalizedDomain || company.name) {
-          const { data: existing, error: checkError } = await this.db.supabase
+        // УЛУЧШЕННАЯ ПРОВЕРКА НА ДУБЛИКАТЫ (3-уровневая защита)
+        // Приоритет: normalized_domain > нормализованное название
+        
+        const normalizedName = this._normalizeCompanyName(company.name);
+        let existing = null;
+        let checkError = null;
+        let matchedBy = null;
+        
+        // Уровень 1: Проверка по домену (ПРИОРИТЕТ, если есть website)
+        if (normalizedDomain) {
+          const result = await this.db.supabase
             .from('pending_companies')
-            .select('company_id, company_name, website, email, normalized_domain')
-            .or(
-              normalizedDomain 
-                ? `normalized_domain.eq.${normalizedDomain},company_name.eq.${company.name.replace(/'/g, "''")}`
-                : `company_name.eq.${company.name.replace(/'/g, "''")}`
-            )
+            .select('company_id, company_name, website, normalized_domain')
+            .eq('normalized_domain', normalizedDomain)
             .limit(1);
           
+          checkError = result.error;
+          existing = result.data;
+          matchedBy = 'normalized_domain';
+          
           if (!checkError && existing && existing.length > 0) {
-            const existingCompany = existing[0];
-            this.logger.debug('Stage 1: Duplicate detected, skipping', {
+            this.logger.debug('Stage 1: Duplicate detected by domain', {
               newCompany: company.name,
-              existingCompany: existingCompany.company_name,
-              matchedBy: existingCompany.normalized_domain === normalizedDomain ? 'normalized_domain' : 'company_name',
-              normalizedDomain,
-              existing_id: existingCompany.company_id
+              existingCompany: existing[0].company_name,
+              domain: normalizedDomain,
+              existing_id: existing[0].company_id
             });
             duplicateCount++;
-            continue; // Пропустить эту компанию
+            continue; // Пропустить
+          }
+        }
+        
+        // Уровень 2: Проверка по нормализованному названию (если нет домена)
+        // Используем ILIKE для гибкого поиска похожих названий
+        if (!normalizedDomain && normalizedName) {
+          // Экранировать специальные символы для SQL LIKE
+          const escapedName = normalizedName.replace(/[%_]/g, '\\$&');
+          
+          // Поиск записей, где нормализованное название содержится в company_name
+          // Это ловит варианты: "韦肯", "韦肯 (Wayken)", "韦肯(Wayken)" и т.д.
+          const result = await this.db.supabase
+            .from('pending_companies')
+            .select('company_id, company_name, normalized_domain')
+            .ilike('company_name', `%${escapedName}%`)
+            .limit(1);
+          
+          checkError = result.error;
+          const potentialDuplicates = result.data;
+          
+          // Дополнительная проверка: нормализовать найденные записи и сравнить
+          if (!checkError && potentialDuplicates && potentialDuplicates.length > 0) {
+            for (const candidate of potentialDuplicates) {
+              const candidateNormalized = this._normalizeCompanyName(candidate.company_name);
+              if (candidateNormalized === normalizedName) {
+                existing = [candidate];
+                matchedBy = 'normalized_name';
+                break;
+              }
+            }
+            
+            if (existing && existing.length > 0) {
+              this.logger.debug('Stage 1: Duplicate detected by normalized name', {
+                newCompany: company.name,
+                normalizedNew: normalizedName,
+                existingCompany: existing[0].company_name,
+                normalizedExisting: this._normalizeCompanyName(existing[0].company_name),
+                existing_id: existing[0].company_id
+              });
+              duplicateCount++;
+              continue; // Пропустить
+            }
           }
         }
         
