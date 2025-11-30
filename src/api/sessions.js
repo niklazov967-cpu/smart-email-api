@@ -225,23 +225,27 @@ router.get('/', async (req, res) => {
   try {
     const { status, limit = 50, offset = 0 } = req.query;
     
-    let query = 'SELECT * FROM search_sessions';
-    const params = [];
+    // Использовать Supabase API вместо прямого SQL
+    let query = req.db.supabase
+      .from('search_sessions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
     
     if (status) {
-      query += ' WHERE status = $1';
-      params.push(status);
+      query = query.eq('status', status);
     }
     
-    query += ' ORDER BY created_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
-    params.push(parseInt(limit), parseInt(offset));
+    const { data, error, count } = await query;
     
-    const result = await req.db.query(query, params);
+    if (error) {
+      throw new Error(`Failed to fetch sessions: ${error.message}`);
+    }
     
     res.json({
       success: true,
-      count: result.rows.length,
-      data: result.rows
+      count: data?.length || 0,
+      data: data || []
     });
   } catch (error) {
     req.logger.error('Failed to get sessions', { error: error.message });
