@@ -996,6 +996,32 @@ STRICT JSON OUTPUT ONLY.`;
       };
       
       try {
+        // Проверить существование компании по normalized_domain И company_name
+        if (normalizedDomain || company.name) {
+          const { data: existing, error: checkError } = await this.db.supabase
+            .from('pending_companies')
+            .select('company_id, company_name, website, email, normalized_domain')
+            .or(
+              normalizedDomain 
+                ? `normalized_domain.eq.${normalizedDomain},company_name.eq.${company.name.replace(/'/g, "''")}`
+                : `company_name.eq.${company.name.replace(/'/g, "''")}`
+            )
+            .limit(1);
+          
+          if (!checkError && existing && existing.length > 0) {
+            const existingCompany = existing[0];
+            this.logger.debug('Stage 1: Duplicate detected, skipping', {
+              newCompany: company.name,
+              existingCompany: existingCompany.company_name,
+              matchedBy: existingCompany.normalized_domain === normalizedDomain ? 'normalized_domain' : 'company_name',
+              normalizedDomain,
+              existing_id: existingCompany.company_id
+            });
+            duplicateCount++;
+            continue; // Пропустить эту компанию
+          }
+        }
+        
         // Использовать прямой INSERT через Supabase API
         await this.db.directInsert('pending_companies', {
           session_id: sessionId,
