@@ -314,14 +314,14 @@ class QueryOrchestrator {
         status: 'completed',
         currentQuery: null
       });
-      
-      this.logger.info('Stage 1: All queries processed', {
-        sessionId,
+    
+    this.logger.info('Stage 1: All queries processed', {
+      sessionId,
         queriesProcessed: totalQueries,
         totalCompanies: result.count || 0
-      });
-      
-      return {
+    });
+    
+    return {
         queriesProcessed: totalQueries,
         companiesFound: result.count || 0,
         companies: result.companies || []

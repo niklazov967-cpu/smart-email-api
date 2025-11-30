@@ -1,10 +1,12 @@
 const axios = require('axios');
 const crypto = require('crypto');
+const globalQueue = require('./GlobalApiQueue');
 
 /**
  * SonarApiClient - Клиент для Perplexity Sonar API
  * Поддерживает обе модели: sonar (базовая) и sonar-pro
  * Управляет вызовами, rate limiting, повторами и кешированием
+ * ИСПОЛЬЗУЕТ ГЛОБАЛЬНУЮ ОЧЕРЕДЬ для всех запросов
  */
 class SonarApiClient {
   constructor(database, settingsManager, logger, modelType = 'sonar-pro') {
@@ -60,11 +62,17 @@ class SonarApiClient {
   /**
    * Получить текущий статус очереди
    */
+  /**
+   * Получить статус очереди
+   * Теперь возвращает статус ГЛОБАЛЬНОЙ очереди
+   */
   getQueueStatus() {
+    const globalStatus = globalQueue.getStatus();
     return {
-      queueLength: this.queueLength,
-      inProgress: this.requestInProgress,
-      timestamp: Date.now()
+      queueLength: globalStatus.queueLength,
+      inProgress: globalStatus.isProcessing,
+      timestamp: Date.now(),
+      model: this.model
     };
   }
 
@@ -101,46 +109,55 @@ class SonarApiClient {
 
   /**
    * Выполнить запрос к Sonar API
+   * ИСПОЛЬЗУЕТ ГЛОБАЛЬНУЮ ОЧЕРЕДЬ
    */
   async query(prompt, options = {}) {
     const {
       stage = 'unknown',
       sessionId = null,
-      useCache = false,  // КЭШ ОТКЛЮЧЕН ПО УМОЛЧАНИЮ
+      useCache = false,
       temperature = this.temperature,
       maxTokens = this.maxTokens
     } = options;
 
     console.log(`\n🔵 SonarApiClient.query() START`);
     console.log(`   Stage: ${stage}`);
+    console.log(`   Model: ${this.model}`);
     console.log(`   API Key exists: ${!!this.apiKey} (length: ${this.apiKey?.length || 0})`);
     console.log(`   Use cache: ${useCache}`);
     console.log(`   Prompt length: ${prompt?.length || 0} chars`);
 
-    // 🔒 ГЛОБАЛЬНАЯ БЛОКИРОВКА: ждем пока предыдущий запрос завершится
-    let waitingStartTime = null;
-    
-    if (this.requestInProgress) {
-      waitingStartTime = Date.now();
-      this.queueLength++;
-      this._notifyQueueChange();
-      console.log(`   ⏸️  Added to queue. Queue length: ${this.queueLength}`);
-    }
-    
-    while (this.requestInProgress) {
-      await this._sleep(100);
-    }
-    
-    if (waitingStartTime) {
-      const waitTime = Date.now() - waitingStartTime;
-      console.log(`   ⏳ Waited ${waitTime}ms in queue`);
-      this.queueLength--;
-      this._notifyQueueChange();
-    }
-    
-    this.requestInProgress = true;
-    this._notifyQueueChange();
-    console.log(`   🔓 Lock acquired, proceeding with request`);
+    // Обернуть запрос для глобальной очереди
+    const requestFn = async () => {
+      return await this._executeRequest(prompt, {
+        stage,
+        sessionId,
+        useCache,
+        temperature,
+        maxTokens
+      });
+    };
+
+    // Добавить в глобальную очередь
+    return await globalQueue.enqueue(requestFn, {
+      stage,
+      model: this.model,
+      sessionId
+    });
+  }
+
+  /**
+   * Внутренний метод выполнения запроса
+   * Вызывается из глобальной очереди
+   */
+  async _executeRequest(prompt, options) {
+    const {
+      stage,
+      sessionId,
+      useCache,
+      temperature,
+      maxTokens
+    } = options;
 
     const startTime = Date.now();
     
@@ -151,11 +168,6 @@ class SonarApiClient {
         this.logger.debug(`Cache HIT for stage: ${stage}`);
         console.log(`   💾 Using cached response`);
         await this._logApiCall(sessionId, stage, 'success', 0, Date.now() - startTime, 0, true);
-        
-        // 🔓 Освобождаем блокировку перед возвратом
-        this.requestInProgress = false;
-        this._notifyQueueChange();
-        console.log(`   🔓 Lock released (cache hit)`);
         
         return cached;
       } else {
@@ -244,11 +256,6 @@ class SonarApiClient {
           attempts: attempt
         });
 
-        // 🔓 Освобождаем блокировку перед возвратом
-        this.requestInProgress = false;
-        this._notifyQueueChange();
-        console.log(`   🔓 Lock released (success)`);
-
         return result;
 
       } catch (error) {
@@ -299,11 +306,6 @@ class SonarApiClient {
             stage,
             finalError: error.message
           });
-          
-          // 🔓 Освобождаем блокировку перед выбросом ошибки
-          this.requestInProgress = false;
-          this._notifyQueueChange();
-          console.log(`   🔓 Lock released (all retries failed)`);
           
           throw new Error(`Sonar API failed after ${this.maxRetries} attempts: ${lastError.message}`);
         }

@@ -1024,20 +1024,20 @@ router.post('/:id/stage1', async (req, res) => {
     if (!req.orchestrator) {
       // Fallback: если orchestrator недоступен, используем прямой вызов
       req.logger.warn('Orchestrator not available, using direct Stage1 call');
-      
+    
       const Stage1FindCompanies = require('../stages/Stage1FindCompanies');
-      const stage1 = new Stage1FindCompanies(
+    const stage1 = new Stage1FindCompanies(
         req.sonarProClient,
-        req.settingsManager,
-        req.db,
-        req.logger
-      );
-      
-      const result = await stage1.execute(id);
-      
+      req.settingsManager,
+      req.db,
+      req.logger
+    );
+    
+    const result = await stage1.execute(id);
+    
       return res.json({
-        success: true,
-        ...result
+      success: true,
+      ...result
       });
     }
     

@@ -504,19 +504,33 @@ router.delete('/translations/:companyId', async (req, res) => {
 
 /**
  * GET /api/debug/queue-status
- * Получить текущий статус очереди API запросов
+ * Получить текущий статус ГЛОБАЛЬНОЙ очереди API запросов
  */
 router.get('/queue-status', async (req, res) => {
   try {
-    const sonarProStatus = req.sonarProClient ? req.sonarProClient.getQueueStatus() : null;
-    const sonarBasicStatus = req.sonarBasicClient ? req.sonarBasicClient.getQueueStatus() : null;
+    const globalQueue = require('../services/GlobalApiQueue');
+    const globalStatus = globalQueue.getStatus();
 
     res.json({
       success: true,
       timestamp: Date.now(),
+      global_queue: {
+        queueLength: globalStatus.queueLength,
+        isProcessing: globalStatus.isProcessing,
+        lastRequestTime: globalStatus.lastRequestTime
+      },
+      // Для обратной совместимости с frontend
       queues: {
-        sonar_pro: sonarProStatus,
-        sonar_basic: sonarBasicStatus
+        sonar_pro: {
+          queueLength: globalStatus.queueLength,
+          inProgress: globalStatus.isProcessing,
+          timestamp: Date.now()
+        },
+        sonar_basic: {
+          queueLength: globalStatus.queueLength,
+          inProgress: globalStatus.isProcessing,
+          timestamp: Date.now()
+        }
       }
     });
   } catch (error) {
