@@ -11,14 +11,22 @@ class Stage2FindWebsites {
     this.db = database;
     this.logger = logger;
     this.tagExtractor = new TagExtractor();
-    this.progressCallback = null; // Callback для обновления прогресса
+    this.progressCallback = null; // Callback для обновления прогресса (session-based)
+    this.globalProgressCallback = null; // Callback для global прогресса (SSE)
   }
 
   /**
-   * Установить callback для обновления прогресса
+   * Установить callback для обновления прогресса (session-based)
    */
   setProgressCallback(callback) {
     this.progressCallback = callback;
+  }
+
+  /**
+   * Установить callback для global прогресса (SSE)
+   */
+  setGlobalProgressCallback(callback) {
+    this.globalProgressCallback = callback;
   }
 
   async execute(sessionId = null) {
@@ -62,13 +70,18 @@ class Stage2FindWebsites {
       for (let i = 0; i < companies.length; i += concurrentRequests) {
         const batch = companies.slice(i, i + concurrentRequests);
         
-        // Обновить прогресс перед обработкой батча
+        // Обновить прогресс перед обработкой батча (session-based)
         if (this.progressCallback) {
           await this.progressCallback({
             processed: processedCount,
             total: totalCompanies,
             currentCompany: batch[0]?.company_name
           });
+        }
+        
+        // Обновить global прогресс
+        if (this.globalProgressCallback) {
+          this.globalProgressCallback(processedCount, batch[0]?.company_name);
         }
         
         this.logger.debug(`Stage 2: Processing batch ${Math.floor(i / concurrentRequests) + 1}`, {
@@ -84,13 +97,18 @@ class Stage2FindWebsites {
         results.push(...batchResults);
         processedCount += batch.length;
         
-        // Обновить прогресс после обработки батча
+        // Обновить прогресс после обработки батча (session-based)
         if (this.progressCallback) {
           await this.progressCallback({
             processed: processedCount,
             total: totalCompanies,
             currentCompany: null
           });
+        }
+        
+        // Обновить global прогресс
+        if (this.globalProgressCallback) {
+          this.globalProgressCallback(processedCount, null);
         }
 
         // Пауза между батчами

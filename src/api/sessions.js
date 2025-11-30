@@ -1,6 +1,46 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
+const globalProgressEmitter = require('../services/GlobalProgressEmitter');
+
+/**
+ * GET /api/sessions/global/progress-stream
+ * SSE endpoint для real-time прогресса global обработки
+ */
+router.get('/global/progress-stream', (req, res) => {
+  // Настроить SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // Отправить начальное состояние
+  const sendProgress = () => {
+    const data = {
+      stage2: globalProgressEmitter.getProgress('stage2'),
+      stage3: globalProgressEmitter.getProgress('stage3'),
+      stage4: globalProgressEmitter.getProgress('stage4')
+    };
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Отправить сразу
+  sendProgress();
+
+  // Слушать обновления
+  const handler = () => sendProgress();
+  globalProgressEmitter.on('stage2:update', handler);
+  globalProgressEmitter.on('stage3:update', handler);
+  globalProgressEmitter.on('stage4:update', handler);
+
+  // Cleanup при закрытии соединения
+  req.on('close', () => {
+    globalProgressEmitter.off('stage2:update', handler);
+    globalProgressEmitter.off('stage3:update', handler);
+    globalProgressEmitter.off('stage4:update', handler);
+    res.end();
+  });
+});
 
 /**
  * GET /api/sessions/debug-stage3
@@ -1161,10 +1201,27 @@ router.post('/global/stage2', async (req, res) => {
   try {
     req.logger.info('Starting global Stage 2');
     
-    // Используем orchestrator если доступен (для прогресс-трекинга)
+    // Получить компании для обработки
+    const { data: companies, error: fetchError } = await req.db.supabase
+      .from('pending_companies')
+      .select('*')
+      .is('website', null);
+    
+    const totalCompanies = companies?.length || 0;
+    
+    // Инициализировать прогресс
+    globalProgressEmitter.startStage('stage2', totalCompanies);
+    
+    // Callback для обновления прогресса
+    const progressCallback = (processed, current) => {
+      globalProgressEmitter.updateStage('stage2', processed, current);
+    };
+    
+    // Используем orchestrator если доступен
     if (req.orchestrator) {
-      // Используем специальный sessionId 'global' для отслеживания прогресса
-      const result = await req.orchestrator.runStage2Only('global');
+      const result = await req.orchestrator.runStage2Only('global', progressCallback);
+      
+      globalProgressEmitter.finishStage('stage2');
       
       return res.json({
         success: true,
@@ -1177,7 +1234,6 @@ router.post('/global/stage2', async (req, res) => {
     // Fallback: прямой вызов без orchestrator
     const Stage2FindWebsites = require('../stages/Stage2FindWebsites');
     
-    // Использовать уже инициализированный Sonar Basic client (с API ключом)
     const stage2 = new Stage2FindWebsites(
       req.sonarBasicClient,
       req.settingsManager,
@@ -1185,8 +1241,13 @@ router.post('/global/stage2', async (req, res) => {
       req.logger
     );
     
+    // Установить callback для прогресса
+    stage2.setGlobalProgressCallback(progressCallback);
+    
     // Запустить без sessionId = обработать ВСЕ компании
     const result = await stage2.execute();
+    
+    globalProgressEmitter.finishStage('stage2');
     
     res.json({
       success: true,
@@ -1195,6 +1256,7 @@ router.post('/global/stage2', async (req, res) => {
     
   } catch (error) {
     req.logger.error('Global Stage 2 failed', { error: error.message });
+    globalProgressEmitter.finishStage('stage2');
     res.status(500).json({
       success: false,
       error: error.message

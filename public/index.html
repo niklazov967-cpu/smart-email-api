@@ -1209,13 +1209,52 @@
       statusDiv.style.display = 'block';
       statusDiv.innerHTML = '<div class="status-message status-info">⏳ Начинаем обработку...</div>';
 
-      // НЕ показывать прогресс для global обработки (не поддерживается)
-      // Прогресс работает только для session-based обработки через Step-by-Step
-      let progressMonitor = null;
-      // if (stageNum === 2 && progressContainer) {
-      //   progressContainer.style.display = 'block';
-      //   progressMonitor = startStage2ProgressMonitor('global');
-      // }
+      // Показать прогресс-бар для Stage 2 с SSE
+      let eventSource = null;
+      if (stageNum === 2 && progressContainer) {
+        progressContainer.style.display = 'block';
+        
+        // Подключиться к SSE stream
+        eventSource = new EventSource('/api/sessions/global/progress-stream');
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const stage2Progress = data.stage2;
+            
+            if (stage2Progress && stage2Progress.active) {
+              const percent = stage2Progress.total > 0 
+                ? Math.round((stage2Progress.processed / stage2Progress.total) * 100)
+                : 0;
+              
+              // Обновить прогресс-бар
+              const progressBar = document.getElementById('stage2ProgressBar');
+              const progressPercent = document.getElementById('stage2ProgressPercent');
+              const progressText = document.getElementById('stage2ProgressText');
+              const currentCompany = document.getElementById('stage2CurrentCompany');
+              
+              if (progressBar) progressBar.style.width = `${percent}%`;
+              if (progressPercent) progressPercent.textContent = `${percent}%`;
+              if (progressText) {
+                progressText.textContent = `Обработано: ${stage2Progress.processed} из ${stage2Progress.total}`;
+              }
+              if (currentCompany && stage2Progress.current) {
+                currentCompany.style.display = 'block';
+                currentCompany.textContent = `Текущая компания: ${stage2Progress.current}`;
+              } else if (currentCompany) {
+                currentCompany.style.display = 'none';
+              }
+            }
+          } catch (error) {
+            console.error('Failed to parse SSE data:', error);
+          }
+        };
+        
+        eventSource.onerror = (error) => {
+          console.error('SSE connection error:', error);
+          eventSource.close();
+        };
+      }
 
       try {
         let endpoint;
@@ -1254,9 +1293,9 @@
           </div>
         `;
       } finally {
-        // Остановить мониторинг прогресса
-        if (progressMonitor) {
-          clearInterval(progressMonitor);
+        // Закрыть SSE соединение
+        if (eventSource) {
+          eventSource.close();
         }
         
         // Скрыть прогресс-бар через 2 секунды
