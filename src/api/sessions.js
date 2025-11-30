@@ -477,6 +477,74 @@ router.get('/:id/progress', async (req, res) => {
 });
 
 /**
+ * GET /api/sessions/:id/stage1-progress
+ * Получить прогресс выполнения Stage 1 в реальном времени
+ */
+router.get('/:id/stage1-progress', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Получить прогресс из БД
+    const { data: progress, error } = await req.db.supabase
+      .from('stage1_progress')
+      .select('*')
+      .eq('session_id', id)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+      throw new Error(`Failed to fetch Stage 1 progress: ${error.message}`);
+    }
+    
+    // Если нет записи, значит Stage 1 еще не запускался
+    if (!progress) {
+      return res.json({
+        success: true,
+        progress: {
+          sessionId: id,
+          totalQueries: 0,
+          processedQueries: 0,
+          remainingQueries: 0,
+          status: 'idle',
+          currentQuery: null,
+          lastError: null,
+          percentComplete: 0
+        }
+      });
+    }
+    
+    // Вычислить процент завершения
+    const percentComplete = progress.total_queries > 0
+      ? Math.round((progress.processed_queries / progress.total_queries) * 100)
+      : 0;
+    
+    res.json({
+      success: true,
+      progress: {
+        sessionId: id,
+        totalQueries: progress.total_queries,
+        processedQueries: progress.processed_queries,
+        remainingQueries: progress.remaining_queries,
+        status: progress.status,
+        currentQuery: progress.current_query,
+        lastError: progress.last_error,
+        percentComplete,
+        updatedAt: progress.updated_at
+      }
+    });
+    
+  } catch (error) {
+    req.logger.error('Failed to get Stage 1 progress', { 
+      error: error.message,
+      sessionId: req.params.id
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * PUT /api/sessions/:id/status
  * Обновить статус сессии
  */

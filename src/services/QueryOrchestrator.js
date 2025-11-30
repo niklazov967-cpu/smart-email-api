@@ -277,23 +277,54 @@ class QueryOrchestrator {
     
     const queries = queriesResult.rows;
     const companies = [];
+    const totalQueries = queries.length;
+    let processedQueries = 0;
     
     this.logger.info('Stage 1: Processing queries', { 
       sessionId, 
-      queryCount: queries.length 
+      queryCount: totalQueries 
     });
     
-    for (const query of queries) {
+    // Инициализировать прогресс в БД
+    await this._updateStage1Progress(sessionId, {
+      totalQueries,
+      processedQueries: 0,
+      remainingQueries: totalQueries,
+      status: 'processing',
+      currentQuery: null
+    });
+    
+    for (let i = 0; i < queries.length; i++) {
+      const query = queries[i];
       try {
         // Используем query_cn или query_text
         const queryText = query.query_text || query.query_cn || query.query_ru;
         
         if (!queryText) {
           this.logger.warn('Stage 1: Query without text', { query });
+          processedQueries++;
+          await this._updateStage1Progress(sessionId, {
+            totalQueries,
+            processedQueries,
+            remainingQueries: totalQueries - processedQueries,
+            status: 'processing',
+            currentQuery: null
+          });
           continue;
         }
         
+        // Обновить прогресс перед обработкой
+        await this._updateStage1Progress(sessionId, {
+          totalQueries,
+          processedQueries,
+          remainingQueries: totalQueries - processedQueries,
+          status: 'processing',
+          currentQuery: queryText.substring(0, 100)
+        });
+        
         this.logger.info('Stage 1: Processing query', { 
+          queryIndex: i + 1,
+          totalQueries,
           queryText: queryText.substring(0, 50) 
         });
         
@@ -310,13 +341,45 @@ class QueryOrchestrator {
             companiesFound: result.companies.length
           });
         }
+        
+        processedQueries++;
+        
+        // Обновить прогресс после обработки
+        await this._updateStage1Progress(sessionId, {
+          totalQueries,
+          processedQueries,
+          remainingQueries: totalQueries - processedQueries,
+          status: 'processing',
+          currentQuery: null
+        });
+        
       } catch (error) {
         this.logger.error('Stage 1 query failed', { 
           queryId: query.query_id, 
           error: error.message 
         });
+        processedQueries++;
+        
+        // Обновить прогресс даже при ошибке
+        await this._updateStage1Progress(sessionId, {
+          totalQueries,
+          processedQueries,
+          remainingQueries: totalQueries - processedQueries,
+          status: 'processing',
+          currentQuery: null,
+          lastError: error.message
+        });
       }
     }
+    
+    // Завершить прогресс
+    await this._updateStage1Progress(sessionId, {
+      totalQueries,
+      processedQueries,
+      remainingQueries: 0,
+      status: 'completed',
+      currentQuery: null
+    });
     
     this.logger.info('Stage 1: All queries processed', {
       sessionId,
@@ -329,6 +392,33 @@ class QueryOrchestrator {
       companiesFound: companies.length,
       companies
     };
+  }
+
+  /**
+   * Обновить прогресс Stage 1 в БД
+   */
+  async _updateStage1Progress(sessionId, progress) {
+    try {
+      await this.db.supabase
+        .from('stage1_progress')
+        .upsert({
+          session_id: sessionId,
+          total_queries: progress.totalQueries,
+          processed_queries: progress.processedQueries,
+          remaining_queries: progress.remainingQueries,
+          status: progress.status,
+          current_query: progress.currentQuery,
+          last_error: progress.lastError || null,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'session_id'
+        });
+    } catch (error) {
+      this.logger.error('Failed to update Stage 1 progress', { 
+        error: error.message,
+        sessionId 
+      });
+    }
   }
 
   async runStage2Only(sessionId) {
