@@ -1272,6 +1272,23 @@ router.post('/global/stage3', async (req, res) => {
   try {
     req.logger.info('Starting global Stage 3');
     
+    // Получить компании для обработки
+    const { data: companies, error: fetchError } = await req.db.supabase
+      .from('pending_companies')
+      .select('*')
+      .not('website', 'is', null)
+      .or('email.is.null,email.eq.""');
+    
+    const totalCompanies = companies?.length || 0;
+    
+    // Инициализировать прогресс
+    globalProgressEmitter.startStage('stage3', totalCompanies);
+    
+    // Callback для обновления прогресса
+    const progressCallback = (processed, current) => {
+      globalProgressEmitter.updateStage('stage3', processed, current);
+    };
+    
     const Stage3AnalyzeContacts = require('../stages/Stage3AnalyzeContacts');
     
     // Использовать уже инициализированный Sonar Basic client (с API ключом)
@@ -1282,8 +1299,13 @@ router.post('/global/stage3', async (req, res) => {
       req.logger
     );
     
+    // Установить callback для прогресса
+    stage3.setGlobalProgressCallback(progressCallback);
+    
     // Запустить без sessionId = обработать ВСЕ компании
     const result = await stage3.execute();
+    
+    globalProgressEmitter.finishStage('stage3');
     
     res.json({
       success: true,
@@ -1292,6 +1314,7 @@ router.post('/global/stage3', async (req, res) => {
     
   } catch (error) {
     req.logger.error('Global Stage 3 failed', { error: error.message });
+    globalProgressEmitter.finishStage('stage3');
     res.status(500).json({
       success: false,
       error: error.message

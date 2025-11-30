@@ -510,6 +510,21 @@
         </div>
       </div>
 
+      <!-- Real-time Progress Counter -->
+      <div id="stage3ProgressContainer" style="display: none; margin: 15px 0; padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #3b82f6;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <strong style="color: #3b82f6;">⚡ Поиск email</strong>
+          <span id="stage3ProgressPercent" style="font-size: 20px; font-weight: bold; color: #3b82f6;">0%</span>
+        </div>
+        <div style="font-size: 14px; color: #666; margin-bottom: 6px;">
+          <span id="stage3ProgressText">Обработано: 0 из 0</span>
+        </div>
+        <div style="width: 100%; background: #e0e0e0; border-radius: 10px; height: 8px; overflow: hidden;">
+          <div id="stage3ProgressBar" style="width: 0%; background: linear-gradient(90deg, #3b82f6, #2563eb); height: 100%; transition: width 0.3s ease;"></div>
+        </div>
+        <div id="stage3CurrentCompany" style="margin-top: 8px; font-size: 12px; color: #888; font-style: italic; display: none;"></div>
+      </div>
+
       <div id="stage3Companies" class="companies-list" style="display: none;"></div>
 
       <button class="button button-primary" id="stage3Btn" onclick="runStage(3)">
@@ -1209,9 +1224,9 @@
       statusDiv.style.display = 'block';
       statusDiv.innerHTML = '<div class="status-message status-info">⏳ Начинаем обработку...</div>';
 
-      // Показать прогресс-бар для Stage 2 с SSE
+      // Показать прогресс-бар для Stage 2 и Stage 3 с SSE
       let eventSource = null;
-      if (stageNum === 2 && progressContainer) {
+      if ((stageNum === 2 || stageNum === 3) && progressContainer) {
         progressContainer.style.display = 'block';
         
         // Подключиться к SSE stream
@@ -1220,29 +1235,30 @@
         eventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            const stage2Progress = data.stage2;
+            const stageKey = `stage${stageNum}`;
+            const stageProgress = data[stageKey];
             
-            if (stage2Progress && stage2Progress.active) {
-              const percent = stage2Progress.total > 0 
-                ? Math.round((stage2Progress.processed / stage2Progress.total) * 100)
+            if (stageProgress && stageProgress.active) {
+              const percent = stageProgress.total > 0 
+                ? Math.round((stageProgress.processed / stageProgress.total) * 100)
                 : 0;
               
               // Обновить прогресс-бар
-              const progressBar = document.getElementById('stage2ProgressBar');
-              const progressPercent = document.getElementById('stage2ProgressPercent');
-              const progressText = document.getElementById('stage2ProgressText');
-              const currentCompany = document.getElementById('stage2CurrentCompany');
+              const progressBar = document.getElementById(`${stageKey}ProgressBar`);
+              const progressPercent = document.getElementById(`${stageKey}ProgressPercent`);
+              const progressText = document.getElementById(`${stageKey}ProgressText`);
+              const currentItem = document.getElementById(`${stageKey}CurrentCompany`);
               
               if (progressBar) progressBar.style.width = `${percent}%`;
               if (progressPercent) progressPercent.textContent = `${percent}%`;
               if (progressText) {
-                progressText.textContent = `Обработано: ${stage2Progress.processed} из ${stage2Progress.total}`;
+                progressText.textContent = `Обработано: ${stageProgress.processed} из ${stageProgress.total}`;
               }
-              if (currentCompany && stage2Progress.current) {
-                currentCompany.style.display = 'block';
-                currentCompany.textContent = `Текущая компания: ${stage2Progress.current}`;
-              } else if (currentCompany) {
-                currentCompany.style.display = 'none';
+              if (currentItem && stageProgress.current) {
+                currentItem.style.display = 'block';
+                currentItem.textContent = `Текущая компания: ${stageProgress.current}`;
+              } else if (currentItem) {
+                currentItem.style.display = 'none';
               }
             }
           } catch (error) {

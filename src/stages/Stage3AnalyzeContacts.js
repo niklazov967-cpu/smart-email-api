@@ -11,6 +11,14 @@ class Stage3AnalyzeContacts {
     this.db = database;
     this.logger = logger;
     this.tagExtractor = new TagExtractor();
+    this.globalProgressCallback = null; // Callback для global прогресса (SSE)
+  }
+
+  /**
+   * Установить callback для global прогресса (SSE)
+   */
+  setGlobalProgressCallback(callback) {
+    this.globalProgressCallback = callback;
   }
 
   async execute(sessionId = null) {
@@ -58,10 +66,22 @@ class Stage3AnalyzeContacts {
 
       // Обработать батчами
       const results = [];
+      // Обработать батчами
+      const results = [];
+      let processedCount = 0;
+      const totalCompanies = companies.length;
+      
       for (let i = 0; i < companies.length; i += concurrentRequests) {
         const batch = companies.slice(i, i + concurrentRequests);
         
-        this.logger.debug(`Stage 3: Processing batch ${Math.floor(i / concurrentRequests) + 1}`);
+        // Обновить global прогресс перед обработкой
+        if (this.globalProgressCallback) {
+          this.globalProgressCallback(processedCount, batch[0]?.company_name);
+        }
+        
+        this.logger.debug(`Stage 3: Processing batch ${Math.floor(i / concurrentRequests) + 1}`, {
+          progress: `${processedCount}/${totalCompanies}`
+        });
 
         // sessionId больше не нужен в _analyzeContacts
         const batchResults = await Promise.all(
@@ -69,6 +89,12 @@ class Stage3AnalyzeContacts {
         );
 
         results.push(...batchResults);
+        processedCount += batch.length;
+        
+        // Обновить global прогресс после обработки
+        if (this.globalProgressCallback) {
+          this.globalProgressCallback(processedCount, null);
+        }
 
         if (i + concurrentRequests < companies.length) {
           await this._sleep(batchDelay);
