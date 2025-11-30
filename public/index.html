@@ -759,22 +759,24 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
-                mainTopic: topic,  // FIX: было 'topic', должно быть 'mainTopic'
-                queries: relevantQueries 
+                mainTopic: topic,
+                queries: relevantQueries,
+                sessionId: createdSessionId  // ВАЖНО: передаем существующий sessionId для объединения запросов
               })
             });
 
             const saveResult = await saveResponse.json();
 
             if (saveResult.success) {
-              const saved = saveResult.count || 0;  // API возвращает 'count', не 'saved'
-              const duplicates = 0;  // TODO: API пока не возвращает duplicates
+              const saved = saveResult.count || 0;
+              const duplicates = 0;
               totalSaved += saved;
               totalDuplicates += duplicates;
               
               // Collect saved queries for display
               allSavedQueries.push(...relevantQueries.slice(0, saved));
               
+              // Запомнить sessionId при первом проходе
               if (!createdSessionId && saveResult.sessionId) {
                 createdSessionId = saveResult.sessionId;
               }

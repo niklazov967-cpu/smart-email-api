@@ -61,7 +61,8 @@ router.post('/save', async (req, res) => {
   try {
     const {
       mainTopic,    // Основная тема
-      queries       // Массив выбранных запросов
+      queries,      // Массив выбранных запросов
+      sessionId     // Опционально: существующий sessionId для объединения запросов
     } = req.body;
 
     if (!mainTopic || !queries || queries.length === 0) {
@@ -73,53 +74,80 @@ router.post('/save', async (req, res) => {
 
     req.logger.info('Queries API: Saving queries', { 
       mainTopic, 
-      count: queries.length 
+      count: queries.length,
+      existingSession: !!sessionId
     });
 
-    // Создать новую сессию
-    const { v4: uuidv4 } = require('uuid');
-    const sessionId = uuidv4();
+    let finalSessionId = sessionId;
     
-    // Форматировать время
-    const now = new Date();
-    const timeStr = now.toLocaleString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).replace(',', '');
-    
-    const topic_description = `${mainTopic} [${timeStr}]`;
-    
-    // Сохранить сессию в БД
-    const { error: insertError } = await req.db.supabase
-      .from('search_sessions')
-      .insert({
-        session_id: sessionId,
-        search_query: mainTopic,
-        topic_description: topic_description,
-        target_count: queries.length,
-        status: 'pending',
-        created_at: now
+    // Если sessionId не передан - создать новую сессию
+    if (!finalSessionId) {
+      const { v4: uuidv4 } = require('uuid');
+      finalSessionId = uuidv4();
+      
+      // Форматировать время
+      const now = new Date();
+      const timeStr = now.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).replace(',', '');
+      
+      const topic_description = `${mainTopic} [${timeStr}]`;
+      
+      // Сохранить сессию в БД
+      const { error: insertError } = await req.db.supabase
+        .from('search_sessions')
+        .insert({
+          session_id: finalSessionId,
+          search_query: mainTopic,
+          topic_description: topic_description,
+          target_count: queries.length,
+          status: 'pending',
+          created_at: now
+        });
+      
+      if (insertError) {
+        throw new Error(`Failed to create session: ${insertError.message}`);
+      }
+      
+      req.logger.info('Queries API: New session created', { 
+        sessionId: finalSessionId,
+        topic_description
       });
-    
-    if (insertError) {
-      throw new Error(`Failed to create session: ${insertError.message}`);
+    } else {
+      // Обновить target_count для существующей сессии
+      const { error: updateError } = await req.db.supabase
+        .from('search_sessions')
+        .update({
+          target_count: req.db.supabase.raw('target_count + ?', [queries.length])
+        })
+        .eq('session_id', finalSessionId);
+      
+      if (updateError) {
+        req.logger.warn('Failed to update session target_count', { 
+          sessionId: finalSessionId, 
+          error: updateError.message 
+        });
+      }
+      
+      req.logger.info('Queries API: Adding to existing session', { 
+        sessionId: finalSessionId
+      });
     }
 
     // Сохранить запросы в БД
-    await req.queryExpander.saveQueries(sessionId, mainTopic, queries);
+    await req.queryExpander.saveQueries(finalSessionId, mainTopic, queries);
 
-    req.logger.info('Queries API: Session created and queries saved', { 
-      sessionId,
-      topic_description,
+    req.logger.info('Queries API: Queries saved', { 
+      sessionId: finalSessionId,
       count: queries.length 
     });
 
     res.json({
       success: true,
-      sessionId: sessionId,
-      topic: topic_description,
+      sessionId: finalSessionId,
       count: queries.length
     });
 
