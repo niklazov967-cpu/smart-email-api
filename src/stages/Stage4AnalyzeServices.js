@@ -155,6 +155,24 @@ class Stage4AnalyzeServices {
             }
           }
           
+          // 🎁 BONUS: Если DeepSeek нашел website в raw_data И у компании его еще нет
+          if (result.website && !company.website) {
+            updateData.website = result.website;
+            this.logger.info('🎁 BONUS: Website found opportunistically in Stage 4', {
+              company: company.company_name,
+              website: result.website
+            });
+          }
+          
+          // 🎁 BONUS: Если DeepSeek нашел email в raw_data И у компании его еще нет
+          if (result.email && !company.email) {
+            updateData.email = result.email;
+            this.logger.info('🎁 BONUS: Email found opportunistically in Stage 4', {
+              company: company.company_name,
+              email: result.email
+            });
+          }
+          
           const { error: updateError } = await this.db.supabase
             .from('pending_companies')
             .update(updateData)
@@ -338,6 +356,8 @@ Analyze ALL available information and provide:
    - Типы производства (мелкосерийное, прототипирование)
 5. Confidence in data quality (0-100)
 6. Validation reason
+7. **Extract website from raw_data if company missing it**
+8. **Extract email from raw_data if company missing it**
 
 RULES:
 ⚠️ КРИТИЧЕСКИ ВАЖНО - РАЗЛИЧИЕ ПРОИЗВОДИТЕЛЬ vs СЕРВИС ОБРАБОТКИ:
@@ -368,7 +388,9 @@ Return JSON:
   "description": "comprehensive description based on all data",
   "services": "service1, service2, service3",
   "tags": ["tag1", "tag2", ..., "tag20"],
-  "reason": "why this score"
+  "reason": "why this score",
+  "website": "https://... или null (если нашел в raw_data)",
+  "email": "...@... или null (если нашел в raw_data)"
 }`.trim();
   }
 
@@ -444,6 +466,8 @@ Return JSON:
         aiDescription: data.description || null,
         confidence: data.confidence || 50,
         services: data.services || company.services,
+        website: data.website || null,
+        email: data.email || null,
         tags
       };
 
@@ -472,11 +496,13 @@ Return JSON:
     
     return {
       stage,
-      score: relevance,
+      score,
       reason: `${reason} (relevance: ${relevance})`,
       aiDescription: null,
       confidence,
       services: company.services,
+      website: null,
+      email: null,
       tags
     };
   }
@@ -522,6 +548,8 @@ Return JSON:
       aiDescription: null,
       confidence: score,
       services: company.services,
+      website: null,
+      email: null,
       tags
     };
   }

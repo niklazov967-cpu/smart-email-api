@@ -231,9 +231,14 @@ class Stage2Retry {
 ФОРМАТ ОТВЕТА (ТОЛЬКО JSON):
 {
   "website": "https://example.com или null",
+  "email": "email@company.cn или null",
   "source": "откуда нашел (Baidu/Qichacha/Tianyancha/Google...)",
   "confidence": "high/medium/low"
 }
+
+ДОПОЛНИТЕЛЬНО:
+- Если в профиле компании (企查查/天眼查) есть email - верни его
+- Email может быть рядом с website в каталоге
 
 Верни ТОЛЬКО JSON, без комментариев!`;
 
@@ -251,30 +256,44 @@ class Stage2Retry {
       if (result.website) {
         // Валидировать URL
         if (this._isValidWebsite(result.website)) {
-          // Сохранить найденный сайт
+          // Подготовить данные для обновления
+          const updateData = {
+            website: result.website,
+            stage2_status: 'completed',
+            current_stage: 2, // Готов для Stage 3
+            stage2_raw_data: {
+              source: 'deepseek_retry',
+              response: response.substring(0, 1000),
+              confidence: result.confidence,
+              timestamp: new Date().toISOString()
+            },
+            updated_at: new Date().toISOString()
+          };
+          
+          // 🎁 BONUS: Если DeepSeek случайно нашел email И у компании его еще нет
+          if (result.email && !company.email && this._isValidEmail(result.email)) {
+            updateData.email = result.email;
+            this.logger.info('🎁 BONUS: Email found opportunistically in Stage 2 Retry', {
+              company: company.company_name,
+              email: result.email,
+              source: result.source
+            });
+          }
+          
+          // Сохранить найденный сайт (и возможно email)
           await this.db.supabase
             .from('pending_companies')
-            .update({
-              website: result.website,
-              stage2_status: 'completed',
-              current_stage: 2, // Готов для Stage 3
-              stage2_raw_data: {
-                source: 'deepseek_retry',
-                response: response.substring(0, 1000),
-                confidence: result.confidence,
-                timestamp: new Date().toISOString()
-              },
-              updated_at: new Date().toISOString()
-            })
+            .update(updateData)
             .eq('company_id', company.company_id);
 
           this.logger.info('Stage 2 Retry: Website found!', {
             company: company.company_name,
             website: result.website,
+            email: result.email || 'not found',
             confidence: result.confidence
           });
 
-          return { success: true, website: result.website };
+          return { success: true, website: result.website, email: result.email };
         } else {
           this.logger.warn('Stage 2 Retry: Invalid or marketplace website', {
             company: company.company_name,
@@ -309,6 +328,7 @@ class Stage2Retry {
       const parsed = JSON.parse(jsonText);
       return {
         website: parsed.website || null,
+        email: parsed.email || null,
         source: parsed.source || 'unknown',
         confidence: parsed.confidence || 'low'
       };
@@ -366,6 +386,20 @@ class Stage2Retry {
         return false;
       }
     }
+    
+    return true;
+  }
+
+  _isValidEmail(email) {
+    if (!email || typeof email !== 'string') return false;
+    
+    // Базовая валидация email
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) return false;
+    
+    // Проверить что это не телефон
+    if (/^\d+@/.test(email)) return false;
+    if (email.includes('+86')) return false;
     
     return true;
   }

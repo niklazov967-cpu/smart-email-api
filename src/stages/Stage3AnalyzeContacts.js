@@ -355,6 +355,11 @@ class Stage3AnalyzeContacts {
       } else {
         console.log(`   ❌ No emails: ${result.note || 'Unknown reason'}`);
       }
+      
+      // 🎁 BONUS: Проверка на случайно найденный website
+      if (result.website) {
+        console.log(`   🌐 BONUS: Website found: ${result.website}`);
+      }
 
       this.logger.info('Stage 3: Response parsed', {
         company: company.company_name,
@@ -377,17 +382,30 @@ class Stage3AnalyzeContacts {
           search_type: 'direct'
         };
         
+        // Подготовить данные для обновления
+        const updateData = {
+          email: primaryEmail,
+          contacts_json: result,
+          stage: 'contacts_found',
+          stage3_status: 'completed',
+          current_stage: 3, // Готов для Stage 4
+          stage3_raw_data: rawData,
+          updated_at: new Date().toISOString()
+        };
+        
+        // 🎁 BONUS: Если Perplexity случайно нашел правильный website И у компании его еще нет
+        if (result.website && !company.website) {
+          updateData.website = result.website;
+          this.logger.info('🎁 BONUS: Website found opportunistically in Stage 3', {
+            company: company.company_name,
+            website: result.website,
+            source: result.source || 'perplexity search'
+          });
+        }
+        
         const { error: updateError } = await this.db.supabase
           .from('pending_companies')
-          .update({
-            email: primaryEmail,
-            contacts_json: result,
-            stage: 'contacts_found',
-            stage3_status: 'completed',
-            current_stage: 3, // Готов для Stage 4
-            stage3_raw_data: rawData,
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('company_id', company.company_id);
 
         if (updateError) {
@@ -401,14 +419,15 @@ class Stage3AnalyzeContacts {
           company: company.company_name,
           email: primaryEmail,
           emailCount: result.emails.length,
+          website: result.website || 'not found',
           source: result.source
         });
 
         return { 
           success: true, 
           emails: result.emails,
+          website: result.website,
           company_name: company.company_name,
-          website: company.website,
           note: result.note
         };
       } else {
@@ -582,6 +601,7 @@ class Stage3AnalyzeContacts {
       
       return {
         emails: emails,
+        website: data.website || null,
         contact_page: data.contact_page || null,
         found_in: data.found_in || null,
         source: data.source || null,

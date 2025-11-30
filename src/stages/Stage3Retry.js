@@ -292,9 +292,14 @@ ${searchStrategy}
 ФОРМАТ ОТВЕТА (ТОЛЬКО JSON):
 {
   "email": "найденный@email.com или null",
+  "website": "https://company.cn или null",
   "source": "где нашел (напр: '天眼查 каталог' или 'новость на Baidu')",
   "confidence": "high/medium/low"
 }
+
+ДОПОЛНИТЕЛЬНО:
+- Если в каталоге/профиле есть website компании - верни его
+- Website может быть указан рядом с email
 
 Верни ТОЛЬКО JSON, без комментариев!`;
       }
@@ -313,30 +318,44 @@ ${searchStrategy}
       if (result.email) {
         // Валидировать email
         if (this._isValidEmail(result.email)) {
-          // Сохранить найденный email
+          // Подготовить данные для обновления
+          const updateData = {
+            email: result.email,
+            stage3_status: 'completed',
+            current_stage: 3,
+            stage3_raw_data: {
+              source: 'deepseek_retry',
+              response: response.substring(0, 1000),
+              confidence: result.confidence,
+              timestamp: new Date().toISOString()
+            },
+            updated_at: new Date().toISOString()
+          };
+          
+          // 🎁 BONUS: Если DeepSeek случайно нашел website И у компании его еще нет
+          if (result.website && !company.website && this._isValidWebsite(result.website)) {
+            updateData.website = result.website;
+            this.logger.info('🎁 BONUS: Website found opportunistically in Stage 3 Retry', {
+              company: company.company_name,
+              website: result.website,
+              source: result.source
+            });
+          }
+          
+          // Сохранить найденный email (и возможно website)
           await this.db.supabase
             .from('pending_companies')
-            .update({
-              email: result.email,
-              stage3_status: 'completed',
-              current_stage: 3,
-              stage3_raw_data: {
-                source: 'deepseek_retry',
-                response: response.substring(0, 1000),
-                confidence: result.confidence,
-                timestamp: new Date().toISOString()
-              },
-              updated_at: new Date().toISOString()
-            })
+            .update(updateData)
             .eq('company_id', company.company_id);
 
           this.logger.info('Stage 3 Retry: Email found!', {
             company: company.company_name,
             email: result.email,
+            website: result.website || 'not found',
             confidence: result.confidence
           });
 
-          return { success: true, email: result.email };
+          return { success: true, email: result.email, website: result.website };
         } else {
           this.logger.warn('Stage 3 Retry: Invalid email format', {
             company: company.company_name,
@@ -371,6 +390,7 @@ ${searchStrategy}
       const parsed = JSON.parse(jsonText);
       return {
         email: parsed.email || null,
+        website: parsed.website || null,
         source: parsed.source || 'unknown',
         confidence: parsed.confidence || 'low'
       };
@@ -399,6 +419,30 @@ ${searchStrategy}
     // Проверить что это не телефон
     if (/^\d+@/.test(email)) return false;
     if (email.includes('+86')) return false;
+    
+    return true;
+  }
+  
+  _isValidWebsite(url) {
+    if (!url || typeof url !== 'string') return false;
+    
+    // Базовая валидация URL
+    const urlRegex = /^https?:\/\/.+\..+$/;
+    if (!urlRegex.test(url)) return false;
+    
+    // Фильтр маркетплейсов
+    const blockedDomains = [
+      'alibaba.com', '1688.com', 'made-in-china.com',
+      'amazon.', 'ebay.', 'aliexpress.',
+      'taobao.com', 'tmall.com', 'jd.com'
+    ];
+    
+    const urlLower = url.toLowerCase();
+    for (const blocked of blockedDomains) {
+      if (urlLower.includes(blocked)) {
+        return false;
+      }
+    }
     
     return true;
   }
