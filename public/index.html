@@ -396,7 +396,7 @@
 
         <div class="input-group" style="flex: 1;">
           <label>Количество проходов генерации:</label>
-          <input type="number" id="numPasses" value="1" min="1" max="10">
+          <input type="number" id="numPasses" value="1" min="1" max="100">
         </div>
       </div>
 
@@ -433,6 +433,9 @@
             <div>Релевантные (≥70%): <strong id="relevantCount">0</strong> запросов</div>
             <div>Добавлено в базу: <strong id="savedCount">0</strong> запросов</div>
             <div>Дубликатов отфильтровано: <strong id="duplicatesCount">0</strong> запросов</div>
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 2px solid #c3e6cb; font-size: 16px;">
+              🎯 <strong>Уникальных подзапросов добавлено:</strong> <span style="color: #10b981; font-size: 20px; font-weight: bold;" id="uniqueSavedCount">0</span>
+            </div>
           </div>
         </div>
         
@@ -700,8 +703,8 @@
         return;
       }
 
-      if (numPasses < 1 || numPasses > 10) {
-        alert('Количество проходов должно быть от 1 до 10');
+      if (numPasses < 1 || numPasses > 100) {
+        alert('Количество проходов должно быть от 1 до 100');
         return;
       }
 
@@ -827,11 +830,20 @@
     }
 
     function displaySavedQueries(queries, totalGenerated, totalRelevant, totalSaved, totalDuplicates) {
+      // Calculate unique saved queries
+      const uniqueQueries = new Set();
+      queries.forEach(q => {
+        const queryCn = q.query_cn || q.chinese_query || q.query;
+        uniqueQueries.add(queryCn.toLowerCase().trim());
+      });
+      const uniqueSavedCount = uniqueQueries.size;
+
       // Update statistics
       document.getElementById('totalGenerated').textContent = totalGenerated;
       document.getElementById('relevantCount').textContent = totalRelevant;
       document.getElementById('savedCount').textContent = totalSaved;
       document.getElementById('duplicatesCount').textContent = totalDuplicates;
+      document.getElementById('uniqueSavedCount').textContent = uniqueSavedCount;
 
       // Display queries list with relevance scores
       const container = document.getElementById('queriesList');
