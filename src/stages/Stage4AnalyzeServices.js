@@ -156,8 +156,10 @@ class Stage4AnalyzeServices {
           }
           
           // 🎁 BONUS: Если DeepSeek нашел website в raw_data И у компании его еще нет
+          let websiteWasAdded = false;
           if (result.website && !company.website) {
             updateData.website = result.website;
+            websiteWasAdded = true;
             this.logger.info('🎁 BONUS: Website found opportunistically in Stage 4', {
               company: company.company_name,
               website: result.website
@@ -165,11 +167,25 @@ class Stage4AnalyzeServices {
           }
           
           // 🎁 BONUS: Если DeepSeek нашел email в raw_data И у компании его еще нет
+          let emailWasAdded = false;
           if (result.email && !company.email) {
             updateData.email = result.email;
+            emailWasAdded = true;
             this.logger.info('🎁 BONUS: Email found opportunistically in Stage 4', {
               company: company.company_name,
               email: result.email
+            });
+          }
+          
+          // ВАЖНО: Если нашли website, но НЕ нашли email
+          // Нужно вернуть компанию на Stage 3 для поиска email
+          if (websiteWasAdded && !result.email && !company.email) {
+            updateData.stage3_status = null;      // Сбросить Stage 3
+            updateData.current_stage = 2;         // Вернуть на Stage 2 (готов для Stage 3)
+            updateData.stage4_status = 'pending'; // Stage 4 будет позже
+            this.logger.info('🔄 Stage 4: Website added without email, will retry Stage 3 then Stage 4', {
+              company: company.company_name,
+              newWebsite: result.website
             });
           }
           

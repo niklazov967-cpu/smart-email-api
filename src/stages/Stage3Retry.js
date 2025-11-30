@@ -333,12 +333,23 @@ ${searchStrategy}
           };
           
           // 🎁 BONUS: Если DeepSeek случайно нашел website И у компании его еще нет
+          let websiteWasAdded = false;
           if (result.website && !company.website && this._isValidWebsite(result.website)) {
             updateData.website = result.website;
+            websiteWasAdded = true;
             this.logger.info('🎁 BONUS: Website found opportunistically in Stage 3 Retry', {
               company: company.company_name,
               website: result.website,
               source: result.source
+            });
+            
+            // ВАЖНО: Если нашли website в каталоге, но изначально не было сайта
+            // Нужно пометить для повторного Stage 3 на этом новом сайте
+            updateData.stage3_status = null; // Сбросить статус Stage 3
+            updateData.current_stage = 2;     // Вернуть на Stage 2 (готов для Stage 3)
+            this.logger.info('🔄 Stage 3 Retry: Website added from catalog, will retry Stage 3 on new website', {
+              company: company.company_name,
+              newWebsite: result.website
             });
           }
           
@@ -352,6 +363,8 @@ ${searchStrategy}
             company: company.company_name,
             email: result.email,
             website: result.website || 'not found',
+            websiteAdded: websiteWasAdded,
+            willRetryStage3: websiteWasAdded,
             confidence: result.confidence
           });
 

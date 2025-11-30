@@ -394,13 +394,26 @@ class Stage3AnalyzeContacts {
         };
         
         // 🎁 BONUS: Если Perplexity случайно нашел правильный website И у компании его еще нет
+        let websiteWasAdded = false;
         if (result.website && !company.website) {
           updateData.website = result.website;
+          websiteWasAdded = true;
           this.logger.info('🎁 BONUS: Website found opportunistically in Stage 3', {
             company: company.company_name,
             website: result.website,
             source: result.source || 'perplexity search'
           });
+          
+          // ВАЖНО: Если нашли website, но изначально не было email
+          // Нужно пометить для повторного Stage 3 на этом новом сайте
+          if (!company.email) {
+            updateData.stage3_status = null; // Сбросить статус Stage 3
+            updateData.current_stage = 2;     // Вернуть на Stage 2 (готов для Stage 3)
+            this.logger.info('🔄 Stage 3: Website added without original website, will retry Stage 3', {
+              company: company.company_name,
+              newWebsite: result.website
+            });
+          }
         }
         
         const { error: updateError } = await this.db.supabase
@@ -420,6 +433,8 @@ class Stage3AnalyzeContacts {
           email: primaryEmail,
           emailCount: result.emails.length,
           website: result.website || 'not found',
+          websiteAdded: websiteWasAdded,
+          willRetryStage3: websiteWasAdded && !company.email,
           source: result.source
         });
 
