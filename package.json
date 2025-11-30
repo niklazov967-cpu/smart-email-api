@@ -13,13 +13,15 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
+    "prestart": "node scripts/generate-version.js",
     "start": "node src/app-simple.js",
     "dev": "nodemon src/app.js",
     "migrate": "node database/migrate.js",
     "seed": "node database/seed.js",
     "test": "jest",
     "translate:start": "node src/workers/translationWorker.js",
-    "translate:stop": "pkill -f translationWorker.js"
+    "translate:stop": "pkill -f translationWorker.js",
+    "version:generate": "node scripts/generate-version.js"
   },
   "keywords": [
     "perplexity",
