@@ -436,9 +436,10 @@ STRICT JSON OUTPUT ONLY.`;
         });
 
         // Автоматическая починка усечённого JSON
-        // 1. Найти массив companies
-        const companiesMatch = jsonString.match(/"companies"\s*:\s*\[([\s\S]*?)(\]|$)/);
+        // 1. Найти массив companies (поддержка разных названий)
+        const companiesMatch = jsonString.match(/"(?:companies|companies_found|results)"\s*:\s*\[([\s\S]*?)(\]|$)/);
         if (companiesMatch) {
+          const fieldName = jsonString.match(/"(companies|companies_found|results)"/)[1];
           let companiesText = companiesMatch[1];
           
           // 2. Удалить неполную последнюю компанию
@@ -456,8 +457,8 @@ STRICT JSON OUTPUT ONLY.`;
             }
           }
 
-          // 3. Собрать валидный JSON
-          jsonString = `{"companies": [${companiesText}], "total": 0}`;
+          // 3. Собрать валидный JSON с правильным названием поля
+          jsonString = `{"${fieldName}": [${companiesText}], "total": 0}`;
           
           this.logger.info('JSON fixed successfully', { preview: jsonString.substring(0, 200) });
           data = JSON.parse(jsonString);
@@ -467,16 +468,19 @@ STRICT JSON OUTPUT ONLY.`;
         }
       }
       
-      if (!data.companies || !Array.isArray(data.companies)) {
+      // Поддержка разных названий поля с компаниями
+      let companies = data.companies || data.companies_found || data.results || [];
+      
+      if (!Array.isArray(companies)) {
         this.logger.error('Invalid companies array in response', { data });
         throw new Error('Invalid companies array');
       }
 
-      if (data.companies.length === 0) {
+      if (companies.length === 0) {
         this.logger.warn('Empty companies array in response');
       }
 
-      return data.companies.map(c => {
+      return companies.map(c => {
         let website = c.website || null;
         
         // Если website это блог/статья - извлечь главный домен
