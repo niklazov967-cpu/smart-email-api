@@ -2,33 +2,6 @@ const express = require('express');
 const router = express.Router();
 
 /**
- * GET /api/credits/:sessionId
- * Получить текущие расходы для сессии
- */
-router.get('/:sessionId', async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-
-    const costs = await req.creditsTracker.getSessionCosts(sessionId);
-
-    res.json({
-      success: true,
-      session_id: sessionId,
-      data: costs
-    });
-
-  } catch (error) {
-    req.logger.error('Credits API: Failed to get session costs', { 
-      error: error.message 
-    });
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-/**
  * GET /api/credits/stats/total
  * Получить общую статистику по всем сессиям
  */
@@ -82,6 +55,70 @@ router.get('/history', async (req, res) => {
 
   } catch (error) {
     req.logger.error('Credits API: Failed to get costs history', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/credits/logs
+ * Получить все логи API запросов для статистики
+ */
+router.get('/logs', async (req, res) => {
+  try {
+    const { limit = 1000, offset = 0 } = req.query;
+
+    // Получить логи из таблицы api_credits_log
+    const { data: logs, error } = await req.db.supabase
+      .from('api_credits_log')
+      .select('*')
+      .order('timestamp', { ascending: false })
+      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+
+    if (error) {
+      throw new Error(`Supabase SELECT error: ${error.message}`);
+    }
+
+    res.json({
+      success: true,
+      logs: logs || [],
+      count: logs?.length || 0
+    });
+
+  } catch (error) {
+    req.logger.error('Credits API: Failed to get logs', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      logs: []
+    });
+  }
+});
+
+/**
+ * GET /api/credits/:sessionId
+ * Получить текущие расходы для сессии
+ */
+router.get('/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const costs = await req.creditsTracker.getSessionCosts(sessionId);
+
+    res.json({
+      success: true,
+      session_id: sessionId,
+      data: costs
+    });
+
+  } catch (error) {
+    req.logger.error('Credits API: Failed to get session costs', { 
       error: error.message 
     });
     res.status(500).json({
