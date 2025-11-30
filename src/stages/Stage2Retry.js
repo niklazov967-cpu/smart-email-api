@@ -58,6 +58,14 @@ class Stage2Retry {
       console.log(`\n✅ Found ${companies.length} companies to retry`);
       console.log('   Starting website search with DeepSeek...\n');
 
+      // Обновить total в GlobalProgressEmitter (если callback установлен)
+      // Новый total = offset (уже обработано в Stage 2) + companies.length (будет обработано в retry)
+      if (this.globalProgressCallback && this.globalProgressCallback.updateTotal) {
+        const newTotal = this.progressOffset + companies.length;
+        console.log(`   Updating total: ${newTotal} (${this.progressOffset} + ${companies.length})`);
+        this.globalProgressCallback.updateTotal(newTotal);
+      }
+
       let found = 0;
       let processedCount = this.progressOffset; // Начать с offset
 

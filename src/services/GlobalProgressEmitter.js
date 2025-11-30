@@ -54,6 +54,20 @@ class GlobalProgressEmitter extends EventEmitter {
   }
 
   /**
+   * Обновить total для stage (например, когда начинается retry)
+   */
+  updateTotal(stage, newTotal) {
+    if (!this.progress[stage].active) {
+      console.log(`⚠️  [GlobalProgressEmitter] Stage ${stage} not active, ignoring total update`);
+      return;
+    }
+
+    this.progress[stage].total = newTotal;
+    console.log(`🔄 [GlobalProgressEmitter] ${stage} total updated: ${newTotal} items`);
+    this.emit(`${stage}:update`, this.progress[stage]);
+  }
+
+  /**
    * Завершить отслеживание прогресса для stage
    */
   finishStage(stage) {

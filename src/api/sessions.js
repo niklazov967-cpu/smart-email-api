@@ -1216,9 +1216,13 @@ router.post('/global/stage2', async (req, res) => {
     // Инициализировать прогресс
     globalProgressEmitter.startStage('stage2', totalCompanies);
     
-    // Callback для обновления прогресса
+    // Callback для обновления прогресса (с методом updateTotal для retry)
     const progressCallback = (processed, current) => {
       globalProgressEmitter.updateStage('stage2', processed, current);
+    };
+    // Добавить метод updateTotal для Stage2Retry
+    progressCallback.updateTotal = (newTotal) => {
+      globalProgressEmitter.updateTotal('stage2', newTotal);
     };
     
     // Используем orchestrator если доступен
@@ -1288,9 +1292,13 @@ router.post('/global/stage3', async (req, res) => {
     // Инициализировать прогресс
     globalProgressEmitter.startStage('stage3', totalCompanies);
     
-    // Callback для обновления прогресса
+    // Callback для обновления прогресса (с методом updateTotal для retry)
     const progressCallback = (processed, current) => {
       globalProgressEmitter.updateStage('stage3', processed, current);
+    };
+    // Добавить метод updateTotal для Stage3Retry
+    progressCallback.updateTotal = (newTotal) => {
+      globalProgressEmitter.updateTotal('stage3', newTotal);
     };
     
     const Stage3AnalyzeContacts = require('../stages/Stage3AnalyzeContacts');
