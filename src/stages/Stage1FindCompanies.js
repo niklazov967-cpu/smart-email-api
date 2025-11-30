@@ -901,6 +901,9 @@ STRICT JSON OUTPUT ONLY.`;
   }
 
   async _saveCompanies(companies, sessionId) {
+    let savedCount = 0;
+    let duplicateCount = 0;
+    
     for (const company of companies) {
       // Нормализовать website: убрать лишние пути
       let normalizedWebsite = company.website;
@@ -914,6 +917,9 @@ STRICT JSON OUTPUT ONLY.`;
           });
         }
       }
+      
+      // Извлечь normalized_domain для дедупликации
+      const normalizedDomain = normalizedWebsite ? this._extractMainDomain(normalizedWebsite) : null;
       
       // НОВАЯ ЛОГИКА: Определяем статусы для каждого этапа
       let currentStage = 1;
@@ -958,46 +964,77 @@ STRICT JSON OUTPUT ONLY.`;
         source: 'perplexity_sonar_pro'
       };
       
-      // Использовать прямой INSERT через Supabase API
-      await this.db.directInsert('pending_companies', {
-        session_id: sessionId,
-        company_name: company.name,
-        website: normalizedWebsite, // Используем нормализованный URL
-        email: company.email,
-        description: company.description,
-        services: services,
-        search_query_text: company.rawQuery || null, // Поисковый запрос
-        topic_description: company.topicDescription || null, // НОВОЕ: Главная тема
-        stage1_raw_data: rawData, // Сырые данные
-        tag1: tagData.tag1,
-        tag2: tagData.tag2,
-        tag3: tagData.tag3,
-        tag4: tagData.tag4,
-        tag5: tagData.tag5,
-        tag6: tagData.tag6,
-        tag7: tagData.tag7,
-        tag8: tagData.tag8,
-        tag9: tagData.tag9,
-        tag10: tagData.tag10,
-        tag11: tagData.tag11,
-        tag12: tagData.tag12,
-        tag13: tagData.tag13,
-        tag14: tagData.tag14,
-        tag15: tagData.tag15,
-        tag16: tagData.tag16,
-        tag17: tagData.tag17,
-        tag18: tagData.tag18,
-        tag19: tagData.tag19,
-        tag20: tagData.tag20,
-        stage: legacyStage,
-        // НОВЫЕ ПОЛЯ для отслеживания прогресса
-        stage1_status: 'completed',
-        stage2_status: stage2Status,
-        stage3_status: stage3Status,
-        stage4_status: null,
-        current_stage: currentStage
-      });
+      try {
+        // Использовать прямой INSERT через Supabase API
+        await this.db.directInsert('pending_companies', {
+          session_id: sessionId,
+          company_name: company.name,
+          website: normalizedWebsite, // Используем нормализованный URL
+          normalized_domain: normalizedDomain, // НОВОЕ: Для дедупликации
+          email: company.email,
+          description: company.description,
+          services: services,
+          search_query_text: company.rawQuery || null, // Поисковый запрос
+          topic_description: company.topicDescription || null, // НОВОЕ: Главная тема
+          stage1_raw_data: rawData, // Сырые данные
+          tag1: tagData.tag1,
+          tag2: tagData.tag2,
+          tag3: tagData.tag3,
+          tag4: tagData.tag4,
+          tag5: tagData.tag5,
+          tag6: tagData.tag6,
+          tag7: tagData.tag7,
+          tag8: tagData.tag8,
+          tag9: tagData.tag9,
+          tag10: tagData.tag10,
+          tag11: tagData.tag11,
+          tag12: tagData.tag12,
+          tag13: tagData.tag13,
+          tag14: tagData.tag14,
+          tag15: tagData.tag15,
+          tag16: tagData.tag16,
+          tag17: tagData.tag17,
+          tag18: tagData.tag18,
+          tag19: tagData.tag19,
+          tag20: tagData.tag20,
+          stage: legacyStage,
+          // НОВЫЕ ПОЛЯ для отслеживания прогресса
+          stage1_status: 'completed',
+          stage2_status: stage2Status,
+          stage3_status: stage3Status,
+          stage4_status: null,
+          current_stage: currentStage
+        });
+        
+        savedCount++;
+        
+      } catch (error) {
+        // Проверить на duplicate key violation (PostgreSQL error code 23505)
+        if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
+          duplicateCount++;
+          this.logger.info('Stage 1: Company already exists (concurrent insert blocked)', {
+            name: company.name,
+            domain: normalizedDomain,
+            sessionId
+          });
+          continue; // Пропустить, не падать
+        }
+        
+        // Другие ошибки - пробросить
+        this.logger.error('Stage 1: Failed to save company', {
+          error: error.message,
+          code: error.code,
+          company: company.name
+        });
+        throw error;
+      }
     }
+    
+    this.logger.info('Stage 1: Save summary', {
+      total: companies.length,
+      saved: savedCount,
+      duplicates: duplicateCount
+    });
     
     const tagsCount = companies.filter(c => {
       const tags = this.tagExtractor.extractTags(c.description);
