@@ -548,6 +548,21 @@
         </div>
       </div>
 
+      <!-- Real-time Progress Counter -->
+      <div id="stage4ProgressContainer" style="display: none; margin: 15px 0; padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #8b5cf6;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <strong style="color: #8b5cf6;">⚡ AI Валидация</strong>
+          <span id="stage4ProgressPercent" style="font-size: 20px; font-weight: bold; color: #8b5cf6;">0%</span>
+        </div>
+        <div style="font-size: 14px; color: #666; margin-bottom: 6px;">
+          <span id="stage4ProgressText">Обработано: 0 из 0</span>
+        </div>
+        <div style="width: 100%; background: #e0e0e0; border-radius: 10px; height: 8px; overflow: hidden;">
+          <div id="stage4ProgressBar" style="width: 0%; background: linear-gradient(90deg, #8b5cf6, #7c3aed); height: 100%; transition: width 0.3s ease;"></div>
+        </div>
+        <div id="stage4CurrentCompany" style="margin-top: 8px; font-size: 12px; color: #888; font-style: italic; display: none;"></div>
+      </div>
+
       <div id="stage4Companies" class="companies-list" style="display: none;"></div>
 
       <button class="button button-primary" id="stage4Btn" onclick="runStage(4)">
@@ -1224,9 +1239,9 @@
       statusDiv.style.display = 'block';
       statusDiv.innerHTML = '<div class="status-message status-info">⏳ Начинаем обработку...</div>';
 
-      // Показать прогресс-бар для Stage 2 и Stage 3 с SSE
+      // Показать прогресс-бар для Stage 2, 3 и 4 с SSE
       let eventSource = null;
-      if ((stageNum === 2 || stageNum === 3) && progressContainer) {
+      if ((stageNum === 2 || stageNum === 3 || stageNum === 4) && progressContainer) {
         progressContainer.style.display = 'block';
         
         // Подключиться к SSE stream

@@ -1342,6 +1342,23 @@ router.post('/global/stage4', async (req, res) => {
   try {
     req.logger.info('Starting global Stage 4');
     
+    // Получить компании для обработки
+    const { data: companies, error: fetchError } = await req.db.supabase
+      .from('pending_companies')
+      .select('*')
+      .gte('current_stage', 3)
+      .is('stage4_status', null);
+    
+    const totalCompanies = companies?.length || 0;
+    
+    // Инициализировать прогресс
+    globalProgressEmitter.startStage('stage4', totalCompanies);
+    
+    // Callback для обновления прогресса
+    const progressCallback = (processed, current) => {
+      globalProgressEmitter.updateStage('stage4', processed, current);
+    };
+    
     const Stage4AnalyzeServices = require('../stages/Stage4AnalyzeServices');
     
     // Использовать уже инициализированный DeepSeek client
@@ -1352,8 +1369,13 @@ router.post('/global/stage4', async (req, res) => {
       req.logger
     );
     
+    // Установить callback для прогресса
+    stage4.setGlobalProgressCallback(progressCallback);
+    
     // Запустить без sessionId = обработать ВСЕ компании
     const result = await stage4.execute();
+    
+    globalProgressEmitter.finishStage('stage4');
     
     res.json({
       success: true,

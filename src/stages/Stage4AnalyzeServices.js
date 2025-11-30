@@ -12,6 +12,14 @@ class Stage4AnalyzeServices {
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
+    this.globalProgressCallback = null; // Callback для global прогресса (SSE)
+  }
+
+  /**
+   * Установить callback для global прогресса (SSE)
+   */
+  setGlobalProgressCallback(callback) {
+    this.globalProgressCallback = callback;
   }
 
   async execute(sessionId = null) {
@@ -83,13 +91,22 @@ class Stage4AnalyzeServices {
       const BATCH_SIZE = 3;
       const DELAY_BETWEEN_BATCHES = 1000;
       
+      let processedCount = 0;
+      const totalCompanies = companies.length;
+      
       for (let i = 0; i < companies.length; i += BATCH_SIZE) {
         const batch = companies.slice(i, i + BATCH_SIZE);
+        
+        // Обновить global прогресс перед обработкой батча
+        if (this.globalProgressCallback) {
+          this.globalProgressCallback(processedCount, batch[0]?.company_name);
+        }
         
         this.logger.debug('Stage 4: Processing batch', {
           batch: Math.floor(i / BATCH_SIZE) + 1,
           total: Math.ceil(companies.length / BATCH_SIZE),
-          companies: batch.length
+          companies: batch.length,
+          progress: `${processedCount}/${totalCompanies}`
         });
         
         // Обработать батч параллельно, каждая компания использует свою topic_description
@@ -100,6 +117,13 @@ class Stage4AnalyzeServices {
             return this._enrichAndValidateCompany(company, mainTopic);
           })
         );
+        
+        processedCount += batch.length;
+        
+        // Обновить global прогресс после обработки батча
+        if (this.globalProgressCallback) {
+          this.globalProgressCallback(processedCount, null);
+        }
         
         // Сохранить результаты батча
         for (let j = 0; j < batch.length; j++) {
