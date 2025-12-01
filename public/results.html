@@ -1089,19 +1089,37 @@
             const status = document.getElementById('statusFilter').value;
             const relevance = document.getElementById('relevanceFilter').value;
             const search = document.getElementById('searchInput').value.toLowerCase();
+            
+            // Сбросить фильтр качества страниц если используется фильтр релевантности
+            if (relevance) {
+                activeQualityFilter = 'all';
+                document.querySelectorAll('.quality-filter-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.querySelector('[data-quality="all"]')?.classList.add('active');
+            }
 
             filteredCompanies = allCompanies.filter(company => {
                 // Фильтр по статусу (только с/без email)
                 if (status === 'with-email' && (!company.email || company.email === '')) return false;
                 if (status === 'no-email' && company.email && company.email !== '') return false;
 
-                // Фильтр по релевантности (validation_score)
+                // Фильтр по релевантности (validation_score) из выпадающего списка
                 if (relevance) {
                     const score = company.validation_score || 0;
                     if (relevance === 'high' && score < 80) return false;
                     if (relevance === 'medium' && (score < 50 || score >= 80)) return false;
                     if (relevance === 'low' && (score === 0 || score >= 50)) return false;
                     if (relevance === 'no-score' && score > 0) return false;
+                }
+                
+                // Фильтр по качеству (activeQualityFilter) из кнопок внизу
+                if (activeQualityFilter !== 'all') {
+                    const score = company.validation_score || 0;
+                    if (activeQualityFilter === 'excellent' && score < 80) return false;
+                    if (activeQualityFilter === 'good' && (score < 65 || score >= 80)) return false;
+                    if (activeQualityFilter === 'medium' && (score < 50 || score >= 65)) return false;
+                    if (activeQualityFilter === 'low' && (score === 0 || score >= 50)) return false;
                 }
 
                 // Поиск
@@ -1278,57 +1296,39 @@
             // Рассчитать качество каждой страницы (по релевантности)
             const pageQuality = calculatePageQuality(totalPages);
 
+            // Обычная логика с многоточиями (всегда)
+            const maxVisible = 7;
             let pages = [];
-
-            // Если фильтр активен - показываем ВСЕ страницы с нужным качеством
-            if (activeQualityFilter !== 'all') {
-                // Собрать все страницы с нужным качеством
-                for (let i = 1; i <= totalPages; i++) {
-                    const qualityClass = pageQuality[i] || '';
-                    if (qualityClass === `quality-${activeQualityFilter}`) {
-                        pages.push(i);
-                    }
-                }
-                
-                // Если нет страниц с таким качеством, показать сообщение
-                if (pages.length === 0) {
-                    container.innerHTML = '<span class="page-info" style="color: #e53e3e;">Нет страниц с выбранным качеством</span>';
-                    return;
-                }
+            
+            if (totalPages <= maxVisible) {
+                pages = Array.from({length: totalPages}, (_, i) => i + 1);
             } else {
-                // Обычная логика с многоточиями
-                const maxVisible = 7;
-                
-                if (totalPages <= maxVisible) {
-                    pages = Array.from({length: totalPages}, (_, i) => i + 1);
-                } else {
-                    pages.push(1);
+                pages.push(1);
 
-                    let start = Math.max(2, currentPage - 1);
-                    let end = Math.min(totalPages - 1, currentPage + 1);
+                let start = Math.max(2, currentPage - 1);
+                let end = Math.min(totalPages - 1, currentPage + 1);
 
-                    if (currentPage <= 3) {
-                        end = 4;
-                    }
-
-                    if (currentPage >= totalPages - 2) {
-                        start = totalPages - 3;
-                    }
-
-                    if (start > 2) {
-                        pages.push('...');
-                    }
-
-                    for (let i = start; i <= end; i++) {
-                        pages.push(i);
-                    }
-
-                    if (end < totalPages - 1) {
-                        pages.push('...');
-                    }
-
-                    pages.push(totalPages);
+                if (currentPage <= 3) {
+                    end = 4;
                 }
+
+                if (currentPage >= totalPages - 2) {
+                    start = totalPages - 3;
+                }
+
+                if (start > 2) {
+                    pages.push('...');
+                }
+
+                for (let i = start; i <= end; i++) {
+                    pages.push(i);
+                }
+
+                if (end < totalPages - 1) {
+                    pages.push('...');
+                }
+
+                pages.push(totalPages);
             }
 
             // Отрисовываем кнопки
@@ -1426,31 +1426,23 @@
         function filterByQuality(quality) {
             activeQualityFilter = quality;
             
+            // Сбросить фильтр релевантности вверху если активируется фильтр качества
+            if (quality !== 'all') {
+                document.getElementById('relevanceFilter').value = '';
+            }
+            
             // Обновить активную кнопку
             document.querySelectorAll('.quality-filter-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
             document.querySelector(`[data-quality="${quality}"]`).classList.add('active');
 
-            // Перерисовать пагинацию с учетом фильтра
-            const totalPages = Math.ceil(filteredCompanies.length / itemsPerPage);
-            renderPageNumbers(totalPages);
-
-            // Если текущая страница скрыта, перейти на первую видимую
-            const visiblePageButtons = Array.from(document.querySelectorAll('.page-number'))
-                .filter(btn => btn.style.display !== 'none' && !isNaN(parseInt(btn.textContent)));
+            // Перезагрузить данные с новыми фильтрами
+            applyFilters();
             
-            if (visiblePageButtons.length > 0) {
-                const currentPageVisible = visiblePageButtons.find(btn => 
-                    parseInt(btn.textContent) === currentPage
-                );
-                
-                if (!currentPageVisible) {
-                    // Перейти на первую видимую страницу
-                    const firstVisiblePage = parseInt(visiblePageButtons[0].textContent);
-                    goToPage(firstVisiblePage);
-                }
-            }
+            // Перейти на первую страницу
+            currentPage = 1;
+            renderTable();
         }
 
         // Вспомогательные функции
@@ -1530,7 +1522,15 @@
 
         // Пагинация
         function changePage(delta) {
-            currentPage += delta;
+            const totalPages = Math.ceil(filteredCompanies.length / itemsPerPage);
+            const newPage = currentPage + delta;
+            
+            // Проверить границы
+            if (newPage < 1 || newPage > totalPages) {
+                return; // Не выходить за пределы
+            }
+            
+            currentPage = newPage;
             renderTable();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
