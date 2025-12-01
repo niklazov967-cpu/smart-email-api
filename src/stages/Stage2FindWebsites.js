@@ -471,7 +471,8 @@ class Stage2FindWebsites {
         const updateData = {
           website: finalWebsite,
           normalized_domain: normalizedDomain, // ДОБАВЛЕНО: для дедупликации
-          email: result.email,
+          base_domain: baseDomain, // ДОБАВЛЕНО: для TLD deduplication
+          email: result.email || undefined, // ИСПРАВЛЕНО: не затирать существующий email если не найден
           description: result.description || undefined,
           services: services || undefined,
           stage: legacyStage,
