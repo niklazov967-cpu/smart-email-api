@@ -588,6 +588,25 @@
         .back-link:hover {
             background: rgba(255,255,255,0.3);
         }
+
+        /* Улучшенные tooltips */
+        [title] {
+            cursor: help;
+            position: relative;
+        }
+
+        .stat-card[title]:hover,
+        .filter-group[title]:hover,
+        th[title]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: all 0.2s ease;
+        }
+
+        /* Иконки подсказок */
+        .label::after {
+            content: '';
+        }
     </style>
 </head>
 <body>
@@ -600,27 +619,51 @@
         </div>
 
         <div class="stats">
-            <div class="stat-card">
+            <div class="stat-card" title="Общее количество компаний в базе данных, найденных на Stage 1. Включает все компании независимо от статуса обработки.">
                 <div class="number" id="totalCompanies">0</div>
-                <div class="label">Всего компаний</div>
+                <div class="label">Всего компаний 💡</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" title="Количество компаний, для которых найден контактный email. Email может быть найден на Stage 3 (Perplexity) или Stage 3 Retry (DeepSeek).">
                 <div class="number" id="withEmails">0</div>
-                <div class="label">С email</div>
+                <div class="label">С email 💡</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" title="Количество компаний, прошедших Stage 4 - AI валидацию через DeepSeek. Не все компании доходят до Stage 4, поэтому это число меньше общего. Stage 4 проверяет релевантность компании и присваивает validation_score (0-100).">
                 <div class="number" id="validated">0</div>
-                <div class="label">Проверено AI</div>
+                <div class="label">Проверено AI 💡</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" title="Средний validation_score компаний, прошедших Stage 4. Score от 0 до 100 показывает качество и релевантность компании. Высокий score (≥80) = отличная компания.">
                 <div class="number" id="avgScore">0</div>
-                <div class="label">Средний score</div>
+                <div class="label">Средний score 💡</div>
             </div>
-            <div class="stat-card translation-stats" id="translationStatsCard">
+            <div class="stat-card translation-stats" id="translationStatsCard" title="Процент компаний, для которых выполнен перевод названия, описания и тегов на русский язык через DeepSeek API.">
                 <div class="number" id="translationProgress">0%</div>
-                <div class="label">Переведено</div>
+                <div class="label">Переведено 💡</div>
                 <div class="progress-bar">
                     <div id="translationProgressBar" class="progress-fill" style="width: 0%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Информационная панель: Почему цифры различаются -->
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: start; gap: 10px;">
+                <div style="font-size: 24px;">💡</div>
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 10px 0; color: #856404; font-size: 16px;">Почему "Проверено AI" меньше чем "Всего компаний"?</h3>
+                    <div style="color: #856404; font-size: 13px; line-height: 1.6;">
+                        <p style="margin: 0 0 8px 0;">
+                            <strong>Обработка компаний проходит в несколько этапов:</strong>
+                        </p>
+                        <ul style="margin: 0 0 8px 0; padding-left: 20px;">
+                            <li><strong>Stage 1:</strong> Поиск компаний → Всего компаний</li>
+                            <li><strong>Stage 2-3:</strong> Поиск сайтов и email → С email</li>
+                            <li><strong>Stage 4:</strong> AI валидация → Проверено AI</li>
+                        </ul>
+                        <p style="margin: 0;">
+                            <strong>Пример:</strong> Найдено 664 компании → 534 прошли Stage 4 → остальные 130 ещё в обработке или не прошли предыдущие этапы.
+                            <br>Это нормально! Не все компании доходят до финальной стадии сразу.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -683,15 +726,15 @@
         </div>
 
         <div class="filters">
-            <div class="filter-group">
-                <label>Сессия</label>
+            <div class="filter-group" title="Выберите сессию поиска. Каждая сессия = один запуск Stage 1 с определённой темой поиска. Все сессии = показать компании из всех запусков.">
+                <label>Сессия 💡</label>
                 <select id="sessionFilter">
                     <option value="">Загрузка...</option>
                 </select>
             </div>
 
-            <div class="filter-group">
-                <label>Статус</label>
+            <div class="filter-group" title="Фильтр по наличию email. 'С email' = только компании с найденным контактным адресом. 'Без email' = компании, для которых email пока не найден.">
+                <label>Статус 💡</label>
                 <select id="statusFilter">
                     <option value="">Все компании</option>
                     <option value="with-email">С email</option>
@@ -699,8 +742,8 @@
                 </select>
             </div>
 
-            <div class="filter-group">
-                <label>Релевантность (Score)</label>
+            <div class="filter-group" title="Фильтр по validation_score из Stage 4. Высокая (≥80) = отличные компании. Средняя (50-79) = хорошие. Низкая (<50) = сомнительные. Без оценки = не прошли Stage 4.">
+                <label>Релевантность (Score) 💡</label>
                 <select id="relevanceFilter">
                     <option value="">Все</option>
                     <option value="high">Высокая (≥80)</option>
@@ -710,8 +753,8 @@
                 </select>
             </div>
 
-            <div class="filter-group">
-                <label>Поиск</label>
+            <div class="filter-group" title="Поиск по названию компании, email или website. Введите любую часть текста для фильтрации.">
+                <label>Поиск 💡</label>
                 <input type="text" id="searchInput" placeholder="Название компании или email...">
             </div>
 
@@ -767,13 +810,13 @@
                             <th class="checkbox-cell">
                                 <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
                             </th>
-                            <th class="sortable" onclick="sortTable('company_name')">Компания</th>
-                            <th class="sortable" onclick="sortTable('email')">Email</th>
-                            <th class="sortable" onclick="sortTable('website')">Сайт</th>
-                            <th class="sortable" onclick="sortTable('validation_score')">Score</th>
-                            <th class="sortable" onclick="sortTable('stage')">Статус</th>
-                            <th>Теги</th>
-                            <th>Действия</th>
+                            <th class="sortable" onclick="sortTable('company_name')" title="Название компании. Если есть русский перевод - показывается он. Клик для сортировки по алфавиту.">Компания 💡</th>
+                            <th class="sortable" onclick="sortTable('email')" title="Контактный email компании, найденный на Stage 3 (Perplexity) или Stage 3 Retry (DeepSeek). Клик для сортировки.">Email 💡</th>
+                            <th class="sortable" onclick="sortTable('website')" title="Официальный сайт компании, найденный на Stage 1 или Stage 2. Показывается normalized_domain (основной домен без www). Клик для сортировки.">Сайт 💡</th>
+                            <th class="sortable" onclick="sortTable('validation_score')" title="Оценка релевантности от 0 до 100, присвоенная AI на Stage 4. Чем выше - тем лучше компания соответствует запросу. ≥80 = отлично, 50-79 = хорошо, <50 = сомнительно. Клик для сортировки.">Score 💡</th>
+                            <th class="sortable" onclick="sortTable('stage')" title="Текущий статус: 'С email' = найден контактный адрес, 'Без email' = email пока не найден. Клик для сортировки.">Статус 💡</th>
+                            <th title="Теги/категории компании, сгенерированные AI на основе описания услуг. Помогают быстро понять специализацию. Показываются первые 3 тега, полный список в деталях.">Теги 💡</th>
+                            <th title="Действия с записью: просмотр полной информации (👁️) и удаление (🗑️).">Действия 💡</th>
                         </tr>
                     </thead>
                     <tbody id="resultsBody">
