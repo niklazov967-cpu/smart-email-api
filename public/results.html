@@ -238,7 +238,7 @@
 
         th {
             padding: 15px;
-            text-align: center;
+            text-align: left;
             font-weight: 600;
             color: #4a5568;
             font-size: 13px;
@@ -270,7 +270,7 @@
             padding: 15px;
             border-bottom: 1px solid #e2e8f0;
             font-size: 11px;
-            text-align: center;
+            text-align: left;
             vertical-align: middle;
         }
 
@@ -607,6 +607,23 @@
         .label::after {
             content: '';
         }
+
+        /* Кнопки фильтрации по качеству */
+        .quality-filter-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-color: #667eea !important;
+        }
+
+        .quality-filter-btn.active {
+            border-color: #667eea !important;
+            background: #667eea !important;
+        }
+
+        .quality-filter-btn.active span {
+            color: white !important;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -831,26 +848,29 @@
                     <button onclick="changePage(1)" id="nextBtn">След →</button>
                 </div>
 
-                <!-- Легенда качества страниц -->
+                <!-- Легенда качества страниц с фильтрацией -->
                 <div style="padding: 15px 20px; background: #f7fafc; border-radius: 8px; margin-top: 10px; font-size: 11px;">
                     <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap;">
-                        <span style="color: #666; font-weight: 600;">Цветовая индикация страниц:</span>
-                        <div style="display: flex; align-items: center; gap: 5px;">
+                        <span style="color: #666; font-weight: 600;">Фильтр по качеству страниц:</span>
+                        <button class="quality-filter-btn" data-quality="all" onclick="filterByQuality('all')" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border: 2px solid #cbd5e0; background: white; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                            <span style="font-weight: 600; color: #4a5568;">Все</span>
+                        </button>
+                        <button class="quality-filter-btn" data-quality="excellent" onclick="filterByQuality('excellent')" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border: 2px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
                             <div style="width: 30px; height: 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 4px;"></div>
                             <span style="color: #666;">Отличное (≥80)</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 5px;">
+                        </button>
+                        <button class="quality-filter-btn" data-quality="good" onclick="filterByQuality('good')" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border: 2px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
                             <div style="width: 30px; height: 20px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 4px;"></div>
                             <span style="color: #666;">Хорошее (≥65)</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 5px;">
+                        </button>
+                        <button class="quality-filter-btn" data-quality="medium" onclick="filterByQuality('medium')" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border: 2px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
                             <div style="width: 30px; height: 20px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 4px;"></div>
                             <span style="color: #666;">Среднее (≥50)</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 5px;">
+                        </button>
+                        <button class="quality-filter-btn" data-quality="low" onclick="filterByQuality('low')" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border: 2px solid #e2e8f0; background: white; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
                             <div style="width: 30px; height: 20px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 4px;"></div>
                             <span style="color: #666;">Низкое (<50)</span>
-                        </div>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1384,6 +1404,51 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
+        // Глобальная переменная для фильтра качества
+        let activeQualityFilter = 'all';
+
+        // Фильтрация по качеству страниц
+        function filterByQuality(quality) {
+            activeQualityFilter = quality;
+            
+            // Обновить активную кнопку
+            document.querySelectorAll('.quality-filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-quality="${quality}"]`).classList.add('active');
+
+            // Получить все кнопки страниц
+            const pageButtons = document.querySelectorAll('.page-number');
+            
+            // Если фильтр "Все" - показать все страницы
+            if (quality === 'all') {
+                pageButtons.forEach(btn => {
+                    btn.style.display = 'inline-block';
+                });
+                return;
+            }
+
+            // Скрыть страницы, которые не соответствуют выбранному качеству
+            pageButtons.forEach(btn => {
+                const hasQuality = btn.classList.contains(`quality-${quality}`);
+                btn.style.display = hasQuality ? 'inline-block' : 'none';
+            });
+
+            // Если текущая страница скрыта, перейти на первую видимую
+            const visiblePages = Array.from(pageButtons).filter(btn => btn.style.display !== 'none');
+            if (visiblePages.length > 0) {
+                const currentPageVisible = Array.from(pageButtons).find(btn => 
+                    parseInt(btn.textContent) === currentPage && btn.style.display !== 'none'
+                );
+                
+                if (!currentPageVisible) {
+                    // Перейти на первую видимую страницу
+                    const firstVisiblePage = parseInt(visiblePages[0].textContent);
+                    goToPage(firstVisiblePage);
+                }
+            }
+        }
+
         // Вспомогательные функции
         function escapeHtml(text) {
             if (!text) return '';
@@ -1850,6 +1915,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadSessions();
             loadCompanies();
+            
+            // Инициализировать кнопку "Все" как активную
+            setTimeout(() => {
+                document.querySelector('[data-quality="all"]')?.classList.add('active');
+            }, 100);
             
             // Запустить мониторинг переводов
             startTranslationMonitoring();
