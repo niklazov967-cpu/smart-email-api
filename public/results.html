@@ -1330,10 +1330,18 @@
                     
                     button.className = 'page-number' + 
                         (isActive ? ' active' : '') + 
-                        (qualityClass && !isActive ? ' ' + qualityClass : '');
+                        (qualityClass ? ' ' + qualityClass : '');
                     
                     button.textContent = page;
                     button.onclick = () => goToPage(page);
+                    
+                    // Применить фильтр качества
+                    if (activeQualityFilter !== 'all') {
+                        const matchesFilter = qualityClass === `quality-${activeQualityFilter}`;
+                        if (!matchesFilter) {
+                            button.style.display = 'none';
+                        }
+                    }
                     
                     // Tooltip с информацией о качестве
                     if (qualityClass && !isActive) {
@@ -1417,33 +1425,22 @@
             });
             document.querySelector(`[data-quality="${quality}"]`).classList.add('active');
 
-            // Получить все кнопки страниц
-            const pageButtons = document.querySelectorAll('.page-number');
-            
-            // Если фильтр "Все" - показать все страницы
-            if (quality === 'all') {
-                pageButtons.forEach(btn => {
-                    btn.style.display = 'inline-block';
-                });
-                return;
-            }
-
-            // Скрыть страницы, которые не соответствуют выбранному качеству
-            pageButtons.forEach(btn => {
-                const hasQuality = btn.classList.contains(`quality-${quality}`);
-                btn.style.display = hasQuality ? 'inline-block' : 'none';
-            });
+            // Перерисовать пагинацию с учетом фильтра
+            const totalPages = Math.ceil(filteredCompanies.length / itemsPerPage);
+            renderPageNumbers(totalPages);
 
             // Если текущая страница скрыта, перейти на первую видимую
-            const visiblePages = Array.from(pageButtons).filter(btn => btn.style.display !== 'none');
-            if (visiblePages.length > 0) {
-                const currentPageVisible = Array.from(pageButtons).find(btn => 
-                    parseInt(btn.textContent) === currentPage && btn.style.display !== 'none'
+            const visiblePageButtons = Array.from(document.querySelectorAll('.page-number'))
+                .filter(btn => btn.style.display !== 'none' && !isNaN(parseInt(btn.textContent)));
+            
+            if (visiblePageButtons.length > 0) {
+                const currentPageVisible = visiblePageButtons.find(btn => 
+                    parseInt(btn.textContent) === currentPage
                 );
                 
                 if (!currentPageVisible) {
                     // Перейти на первую видимую страницу
-                    const firstVisiblePage = parseInt(visiblePages[0].textContent);
+                    const firstVisiblePage = parseInt(visiblePageButtons[0].textContent);
                     goToPage(firstVisiblePage);
                 }
             }
