@@ -71,6 +71,15 @@ async function restoreCheckpoint(version, skipConfirmation = false) {
   // Загружаем checkpoint
   const checkpoint = JSON.parse(fs.readFileSync(checkpointFile, 'utf8'));
 
+  // Проверяем наличие сохранённого контекста
+  const checkpointDir = path.join(__dirname, '..', 'checkpoints', version);
+  const contextFile = path.join(checkpointDir, 'context.json');
+  let savedContext = null;
+  
+  if (fs.existsSync(contextFile)) {
+    savedContext = JSON.parse(fs.readFileSync(contextFile, 'utf8'));
+  }
+
   console.log('📦 Информация о checkpoint:\n');
   console.log(`   Версия:         ${checkpoint.version}`);
   console.log(`   Создан:         ${new Date(checkpoint.created_at).toLocaleString('ru-RU')}`);
@@ -80,6 +89,17 @@ async function restoreCheckpoint(version, skipConfirmation = false) {
   console.log(`   С email:        ${checkpoint.metadata.with_email}`);
   console.log(`   Проверено AI:   ${checkpoint.metadata.validated}`);
   console.log(`   Средний score:  ${checkpoint.metadata.average_score}`);
+
+  // Показываем сохранённый контекст
+  if (savedContext) {
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('💬 СОХРАНЁННЫЙ КОНТЕКСТ РАЗГОВОРА:');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    console.log(savedContext.context);
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`Сохранён: ${new Date(savedContext.saved_at).toLocaleString('ru-RU')}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  }
 
   // Подтверждение
   if (!skipConfirmation) {

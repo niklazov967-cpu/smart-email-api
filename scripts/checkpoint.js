@@ -129,6 +129,11 @@ function showHelp() {
   console.log('    Восстановить checkpoint (код + база данных)');
   console.log('    Пример: node scripts/checkpoint.js restore v3.0.0\n');
   
+  console.log('  save-context <version> [text]');
+  console.log('    Сохранить контекст разговора для checkpoint');
+  console.log('    Пример: node scripts/checkpoint.js save-context v3.0.0 "Стабильная версия"');
+  console.log('    Без текста - интерактивный ввод\n');
+  
   console.log('  info <version>');
   console.log('    Показать детальную информацию о checkpoint');
   console.log('    Пример: node scripts/checkpoint.js info v3.0.0\n');
@@ -138,6 +143,7 @@ function showHelp() {
   console.log('   ✅ Git коммит (точная версия кода)');
   console.log('   ✅ База данных (все таблицы)');
   console.log('   ✅ Метаданные (статистика, дата)');
+  console.log('   ✅ Контекст разговора (опционально)');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 
@@ -165,6 +171,20 @@ switch (command) {
       process.exit(1);
     }
     execSync(`node scripts/restore-checkpoint.js ${arg}`, { stdio: 'inherit' });
+    break;
+  
+  case 'save-context':
+  case 'context':
+    if (!arg) {
+      console.error('❌ Использование: node scripts/checkpoint.js save-context <version> [text]');
+      process.exit(1);
+    }
+    const contextArgs = process.argv.slice(4).join(' ');
+    if (contextArgs) {
+      execSync(`node scripts/save-context.js ${arg} "${contextArgs}"`, { stdio: 'inherit' });
+    } else {
+      execSync(`node scripts/save-context.js ${arg}`, { stdio: 'inherit' });
+    }
     break;
   
   case 'info':
