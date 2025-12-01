@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup & Restore - Smart Email API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .section h2 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .section p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #e53e3e;
+        }
+
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #4a5568;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            padding: 12px 24px;
+            background: #718096;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .file-label:hover {
+            background: #4a5568;
+        }
+
+        .file-name {
+            margin-left: 15px;
+            color: #4a5568;
+            font-size: 14px;
+        }
+
+        .warning-box {
+            background: #fff5f5;
+            border-left: 4px solid #f56565;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box h3 {
+            color: #c53030;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .warning-box ul {
+            margin-left: 20px;
+            color: #742a2a;
+        }
+
+        .info-box {
+            background: #f0fff4;
+            border-left: 4px solid #48bb78;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .info-box h3 {
+            color: #2f855a;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            color: #22543d;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-item .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-item .label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .log-container {
+            background: #1a202c;
+            color: #68d391;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .log-container.visible {
+            display: block;
+        }
+
+        .log-line {
+            margin-bottom: 5px;
+        }
+
+        .log-line.error {
+            color: #fc8181;
+        }
+
+        .log-line.success {
+            color: #68d391;
+        }
+
+        .log-line.info {
+            color: #90cdf4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="results.html" class="back-link">← Назад к результатам</a>
+
+        <div class="header">
+            <h1>💾 Backup & Restore</h1>
+            <p>Резервное копирование и восстановление базы данных</p>
+        </div>
+
+        <!-- Backup Section -->
+        <div class="section">
+            <h2>📦 Создать резервную копию</h2>
+            <p>Создайте полную резервную копию всех данных из базы данных.</p>
+            
+            <div class="info-box">
+                <h3>✅ Что будет сохранено:</h3>
+                <ul>
+                    <li>Все компании (pending_companies)</li>
+                    <li>Переводы (pending_companies_ru)</li>
+                    <li>Сессии поиска (search_sessions)</li>
+                    <li>Системные настройки (system_settings)</li>
+                </ul>
+            </div>
+
+            <button class="btn btn-primary" onclick="createBackup()" id="backupBtn">
+                💾 Создать Backup
+            </button>
+
+            <div id="backupStats" class="stats-grid" style="display: none;">
+            </div>
+
+            <div id="backupLog" class="log-container">
+            </div>
+        </div>
+
+        <!-- Restore Section -->
+        <div class="section">
+            <h2>🔄 Восстановить из резервной копии</h2>
+            <p>Загрузите файл резервной копии для восстановления данных.</p>
+
+            <div class="warning-box">
+                <h3>⚠️ Внимание!</h3>
+                <ul>
+                    <li>Существующие данные будут обновлены или добавлены</li>
+                    <li>Процесс необратим - создайте backup перед восстановлением</li>
+                    <li>Рекомендуется проводить на тестовом окружении</li>
+                </ul>
+            </div>
+
+            <div class="file-input-wrapper">
+                <input type="file" id="restoreFile" class="file-input" accept=".json" onchange="handleFileSelect(event)">
+                <label for="restoreFile" class="file-label">📁 Выбрать файл</label>
+                <span id="fileName" class="file-name">Файл не выбран</span>
+            </div>
+
+            <br><br>
+
+            <button class="btn btn-danger" onclick="restoreBackup()" id="restoreBtn" disabled>
+                🔄 Восстановить данные
+            </button>
+
+            <div id="restoreStats" class="stats-grid" style="display: none;">
+            </div>
+
+            <div id="restoreLog" class="log-container">
+            </div>
+        </div>
+
+        <!-- History Section -->
+        <div class="section">
+            <h2>📜 Рекомендации</h2>
+            <div class="info-box">
+                <h3>💡 Лучшие практики:</h3>
+                <ul>
+                    <li>Создавайте backup перед каждым значительным изменением</li>
+                    <li>Храните backups в безопасном месте (облачное хранилище, внешний диск)</li>
+                    <li>Периодически проверяйте целостность backup файлов</li>
+                    <li>Используйте понятные имена файлов с датой и временем</li>
+                    <li>Перед восстановлением всегда создавайте текущий backup</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let backupData = null;
+
+        // Создать backup
+        async function createBackup() {
+            const btn = document.getElementById('backupBtn');
+            const logContainer = document.getElementById('backupLog');
+            const statsContainer = document.getElementById('backupStats');
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Создание backup...';
+            logContainer.classList.add('visible');
+            logContainer.innerHTML = '';
+            addLog('backupLog', 'info', '🚀 Начало создания резервной копии...');
+
+            try {
+                const response = await fetch('/api/backup/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog('backupLog', 'success', '✅ Backup создан успешно!');
+                    addLog('backupLog', 'info', `📦 Файл: ${result.filename}`);
+                    addLog('backupLog', 'info', `📊 Статистика:`);
+                    addLog('backupLog', 'info', `   • Компаний: ${result.stats.companies}`);
+                    addLog('backupLog', 'info', `   • Переводов: ${result.stats.translations}`);
+                    addLog('backupLog', 'info', `   • Сессий: ${result.stats.sessions}`);
+                    addLog('backupLog', 'info', `   • Настроек: ${result.stats.settings}`);
+                    addLog('backupLog', 'info', `   • Размер: ${(result.stats.size / 1024).toFixed(2)} KB`);
+                    
+                    // Показать статистику
+                    statsContainer.style.display = 'grid';
+                    statsContainer.innerHTML = `
+                        <div class="stat-item">
+                            <div class="number">${result.stats.companies}</div>
+                            <div class="label">Компаний</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="number">${result.stats.translations}</div>
+                            <div class="label">Переводов</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="number">${result.stats.sessions}</div>
+                            <div class="label">Сессий</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="number">${(result.stats.size / 1024).toFixed(0)}</div>
+                            <div class="label">KB</div>
+                        </div>
+                    `;
+                    
+                    // Скачать файл
+                    addLog('backupLog', 'info', '💾 Скачивание файла...');
+                    const downloadResponse = await fetch(result.downloadUrl);
+                    const blob = await downloadResponse.blob();
+                    
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = result.filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+                    
+                    addLog('backupLog', 'success', '✅ Файл успешно скачан!');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Backup error:', error);
+                addLog('backupLog', 'error', `❌ Ошибка: ${error.message}`);
+                alert(`❌ Ошибка создания backup:\n${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💾 Создать Backup';
+            }
+        }
+
+        // Обработка выбора файла
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            const fileNameSpan = document.getElementById('fileName');
+            const restoreBtn = document.getElementById('restoreBtn');
+            
+            if (file) {
+                fileNameSpan.textContent = file.name;
+                
+                // Прочитать файл
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        backupData = JSON.parse(e.target.result);
+                        
+                        // Проверить структуру
+                        if (!backupData.metadata || !backupData.data) {
+                            throw new Error('Invalid backup file structure');
+                        }
+                        
+                        restoreBtn.disabled = false;
+                        addLog('restoreLog', 'success', '✅ Файл загружен и проверен');
+                        addLog('restoreLog', 'info', `📅 Создан: ${backupData.metadata.created_at}`);
+                        addLog('restoreLog', 'info', `📦 Таблиц: ${backupData.metadata.tables.length}`);
+                    } catch (err) {
+                        alert('❌ Ошибка: файл не является валидным backup');
+                        backupData = null;
+                        restoreBtn.disabled = true;
+                        fileNameSpan.textContent = 'Файл не выбран';
+                    }
+                };
+                reader.readAsText(file);
+            } else {
+                fileNameSpan.textContent = 'Файл не выбран';
+                restoreBtn.disabled = true;
+                backupData = null;
+            }
+        }
+
+        // Восстановить backup
+        async function restoreBackup() {
+            if (!backupData) {
+                alert('Пожалуйста, выберите файл backup');
+                return;
+            }
+
+            if (!confirm('⚠️ ВНИМАНИЕ!\n\nВы уверены что хотите восстановить данные из backup?\n\nЭто обновит существующие записи в базе данных.\n\nРекомендуется создать текущий backup перед продолжением.')) {
+                return;
+            }
+
+            const btn = document.getElementById('restoreBtn');
+            const logContainer = document.getElementById('restoreLog');
+            const statsContainer = document.getElementById('restoreStats');
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Восстановление...';
+            logContainer.classList.add('visible');
+            logContainer.innerHTML = '';
+            addLog('restoreLog', 'info', '🚀 Начало восстановления из резервной копии...');
+
+            try {
+                const response = await fetch('/api/backup/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(backupData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog('restoreLog', 'success', '✅ Восстановление завершено!');
+                    
+                    // Показать результаты по каждой таблице
+                    for (const [table, tableResult] of Object.entries(result.results)) {
+                        if (tableResult.success) {
+                            addLog('restoreLog', 'success', `✅ ${table}: ${tableResult.inserted} записей`);
+                        } else {
+                            addLog('restoreLog', 'error', `❌ ${table}: ${tableResult.error}`);
+                        }
+                    }
+                    
+                    // Показать статистику
+                    const totalInserted = Object.values(result.results).reduce((sum, r) => sum + (r.inserted || 0), 0);
+                    statsContainer.style.display = 'grid';
+                    statsContainer.innerHTML = `
+                        <div class="stat-item">
+                            <div class="number">${totalInserted}</div>
+                            <div class="label">Записей восстановлено</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="number">${Object.keys(result.results).length}</div>
+                            <div class="label">Таблиц</div>
+                        </div>
+                    `;
+                    
+                    alert('✅ Данные успешно восстановлены!\n\nПожалуйста, проверьте результаты на странице результатов.');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Restore error:', error);
+                addLog('restoreLog', 'error', `❌ Ошибка: ${error.message}`);
+                alert(`❌ Ошибка восстановления:\n${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 Восстановить данные';
+            }
+        }
+
+        // Добавить строку в лог
+        function addLog(containerId, type, message) {
+            const container = document.getElementById(containerId);
+            const line = document.createElement('div');
+            line.className = `log-line ${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            container.appendChild(line);
+            container.scrollTop = container.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+

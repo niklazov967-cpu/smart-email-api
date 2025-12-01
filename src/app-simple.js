@@ -404,6 +404,8 @@ try {
   console.log('  ✓ /api/progress');
   app.use('/api/debug', require('./api/debug')); // НОВЫЙ: Показывает ВСЕ данные
   console.log('  ✓ /api/debug');
+  app.use('/api/backup', require('./api/backup')); // НОВЫЙ: Резервное копирование БД
+  console.log('  ✓ /api/backup');
   
   console.log('✅ API routes loaded successfully');
   

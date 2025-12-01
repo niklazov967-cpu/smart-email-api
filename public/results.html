@@ -269,6 +269,7 @@
         td {
             padding: 15px;
             border-bottom: 1px solid #e2e8f0;
+            font-size: 11px;
         }
 
         tr:hover {
@@ -413,8 +414,9 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 10px;
+            gap: 5px;
             padding: 20px;
+            flex-wrap: wrap;
         }
 
         .pagination button {
@@ -423,10 +425,13 @@
             background: white;
             cursor: pointer;
             border-radius: 5px;
+            font-size: 14px;
+            transition: all 0.2s;
         }
 
         .pagination button:hover:not(:disabled) {
             background: #f7fafc;
+            border-color: #cbd5e0;
         }
 
         .pagination button:disabled {
@@ -436,6 +441,70 @@
 
         .pagination .page-info {
             color: #4a5568;
+            font-size: 14px;
+            margin: 0 10px;
+        }
+
+        .pagination .page-number {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 14px;
+            min-width: 40px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .pagination .page-number:hover {
+            background: #f7fafc;
+            border-color: #cbd5e0;
+        }
+
+        .pagination .page-number.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            font-weight: 600;
+        }
+
+        .pagination .page-number.quality-excellent {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border-color: #10b981;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+        }
+
+        .pagination .page-number.quality-good {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border-color: #3b82f6;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+        }
+
+        .pagination .page-number.quality-medium {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border-color: #f59e0b;
+            box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+        }
+
+        .pagination .page-number.quality-low {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border-color: #ef4444;
+            box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+        }
+
+        .pagination .page-number.active {
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+            transform: scale(1.05);
+        }
+
+        .pagination .page-ellipsis {
+            padding: 8px 12px;
+            color: #a0aec0;
             font-size: 14px;
         }
 
@@ -629,6 +698,17 @@
             </div>
 
             <div class="filter-group">
+                <label>Релевантность (Score)</label>
+                <select id="relevanceFilter">
+                    <option value="">Все</option>
+                    <option value="high">Высокая (≥80)</option>
+                    <option value="medium">Средняя (50-79)</option>
+                    <option value="low">Низкая (<50)</option>
+                    <option value="no-score">Без оценки</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
                 <label>Поиск</label>
                 <input type="text" id="searchInput" placeholder="Название компании или email...">
             </div>
@@ -638,8 +718,9 @@
                 <button class="btn btn-primary" onclick="applyFilters()">Применить</button>
             </div>
 
-            <div style="margin-left: auto;">
+            <div style="margin-left: auto; display: flex; gap: 10px;">
                 <button class="btn btn-secondary" onclick="exportToCSV()">📥 Экспорт CSV</button>
+                <button class="btn btn-primary" onclick="backupDatabase()" id="backupBtn">💾 Backup БД</button>
             </div>
         </div>
 
@@ -699,10 +780,33 @@
 
                 <div class="pagination">
                     <button onclick="changePage(-1)" id="prevBtn">← Пред</button>
-                    <span class="page-info">
-                        Страница <span id="currentPage">1</span> из <span id="totalPages">1</span>
-                    </span>
+                    <div id="pageNumbers" style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
+                        <!-- Номера страниц будут добавлены динамически -->
+                    </div>
                     <button onclick="changePage(1)" id="nextBtn">След →</button>
+                </div>
+
+                <!-- Легенда качества страниц -->
+                <div style="padding: 15px 20px; background: #f7fafc; border-radius: 8px; margin-top: 10px; font-size: 11px;">
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap;">
+                        <span style="color: #666; font-weight: 600;">Цветовая индикация страниц:</span>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <div style="width: 30px; height: 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 4px;"></div>
+                            <span style="color: #666;">Отличное (≥80)</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <div style="width: 30px; height: 20px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 4px;"></div>
+                            <span style="color: #666;">Хорошее (≥65)</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <div style="width: 30px; height: 20px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 4px;"></div>
+                            <span style="color: #666;">Среднее (≥50)</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <div style="width: 30px; height: 20px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 4px;"></div>
+                            <span style="color: #666;">Низкое (<50)</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -917,12 +1021,22 @@
         // Применение фильтров
         function applyFilters() {
             const status = document.getElementById('statusFilter').value;
+            const relevance = document.getElementById('relevanceFilter').value;
             const search = document.getElementById('searchInput').value.toLowerCase();
 
             filteredCompanies = allCompanies.filter(company => {
                 // Фильтр по статусу (только с/без email)
                 if (status === 'with-email' && (!company.email || company.email === '')) return false;
                 if (status === 'no-email' && company.email && company.email !== '') return false;
+
+                // Фильтр по релевантности (validation_score)
+                if (relevance) {
+                    const score = company.validation_score || 0;
+                    if (relevance === 'high' && score < 80) return false;
+                    if (relevance === 'medium' && (score < 50 || score >= 80)) return false;
+                    if (relevance === 'low' && (score === 0 || score >= 50)) return false;
+                    if (relevance === 'no-score' && score > 0) return false;
+                }
 
                 // Поиск
                 if (search) {
@@ -1071,13 +1185,158 @@
 
             // Pagination
             const totalPages = Math.ceil(filteredCompanies.length / itemsPerPage);
-            document.getElementById('currentPage').textContent = currentPage;
-            document.getElementById('totalPages').textContent = totalPages;
             document.getElementById('resultsCount').textContent = filteredCompanies.length;
             document.getElementById('prevBtn').disabled = currentPage === 1;
             document.getElementById('nextBtn').disabled = currentPage === totalPages;
 
+            // Обновить номера страниц
+            renderPageNumbers(totalPages);
+
             updateDeleteButton();
+        }
+
+        // Отрисовка номеров страниц
+        function renderPageNumbers(totalPages) {
+            const container = document.getElementById('pageNumbers');
+            container.innerHTML = '';
+
+            if (totalPages <= 1) {
+                container.innerHTML = '<span class="page-info">Страница 1 из 1</span>';
+                return;
+            }
+
+            // Рассчитать качество каждой страницы (по релевантности)
+            const pageQuality = calculatePageQuality(totalPages);
+
+            // Логика отображения страниц
+            // Показываем: первую, последнюю, текущую, и по 2 страницы вокруг текущей
+            const maxVisible = 7; // Максимум видимых кнопок
+            let pages = [];
+
+            if (totalPages <= maxVisible) {
+                // Если страниц мало, показываем все
+                pages = Array.from({length: totalPages}, (_, i) => i + 1);
+            } else {
+                // Сложная логика с многоточиями
+                pages.push(1); // Всегда показываем первую
+
+                let start = Math.max(2, currentPage - 1);
+                let end = Math.min(totalPages - 1, currentPage + 1);
+
+                // Корректируем если близко к началу
+                if (currentPage <= 3) {
+                    end = 4;
+                }
+
+                // Корректируем если близко к концу
+                if (currentPage >= totalPages - 2) {
+                    start = totalPages - 3;
+                }
+
+                // Добавляем многоточие перед средними страницами
+                if (start > 2) {
+                    pages.push('...');
+                }
+
+                // Добавляем средние страницы
+                for (let i = start; i <= end; i++) {
+                    pages.push(i);
+                }
+
+                // Добавляем многоточие после средних страниц
+                if (end < totalPages - 1) {
+                    pages.push('...');
+                }
+
+                pages.push(totalPages); // Всегда показываем последнюю
+            }
+
+            // Отрисовываем кнопки
+            pages.forEach(page => {
+                if (page === '...') {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.className = 'page-ellipsis';
+                    ellipsis.textContent = '...';
+                    container.appendChild(ellipsis);
+                } else {
+                    const button = document.createElement('div');
+                    const qualityClass = pageQuality[page] || '';
+                    const isActive = page === currentPage;
+                    
+                    button.className = 'page-number' + 
+                        (isActive ? ' active' : '') + 
+                        (qualityClass && !isActive ? ' ' + qualityClass : '');
+                    
+                    button.textContent = page;
+                    button.onclick = () => goToPage(page);
+                    
+                    // Tooltip с информацией о качестве
+                    if (qualityClass && !isActive) {
+                        const quality = getQualityLabel(qualityClass);
+                        button.title = `Страница ${page} - ${quality}`;
+                    }
+                    
+                    container.appendChild(button);
+                }
+            });
+        }
+
+        // Рассчитать качество каждой страницы по средней релевантности
+        function calculatePageQuality(totalPages) {
+            const quality = {};
+            
+            for (let page = 1; page <= totalPages; page++) {
+                const start = (page - 1) * itemsPerPage;
+                const end = start + itemsPerPage;
+                const pageItems = filteredCompanies.slice(start, end);
+                
+                // Подсчитать среднюю релевантность на странице
+                const scores = pageItems
+                    .map(c => c.validation_score || 0)
+                    .filter(s => s > 0);
+                
+                if (scores.length === 0) {
+                    quality[page] = ''; // Нет оценок
+                    continue;
+                }
+                
+                const avgScore = scores.reduce((sum, s) => sum + s, 0) / scores.length;
+                const coverage = scores.length / pageItems.length; // Процент компаний с оценкой
+                
+                // Определить класс качества
+                // Учитываем и средний score, и покрытие (сколько компаний имеют оценку)
+                if (avgScore >= 80 && coverage >= 0.5) {
+                    quality[page] = 'quality-excellent'; // Отличное качество
+                } else if (avgScore >= 65 && coverage >= 0.4) {
+                    quality[page] = 'quality-good'; // Хорошее качество
+                } else if (avgScore >= 50 && coverage >= 0.3) {
+                    quality[page] = 'quality-medium'; // Среднее качество
+                } else if (coverage >= 0.2) {
+                    quality[page] = 'quality-low'; // Низкое качество
+                } else {
+                    quality[page] = ''; // Очень мало данных
+                }
+            }
+            
+            return quality;
+        }
+
+        // Получить текстовую метку качества
+        function getQualityLabel(qualityClass) {
+            const labels = {
+                'quality-excellent': '🟢 Отличное качество (средний score ≥80)',
+                'quality-good': '🔵 Хорошее качество (средний score ≥65)',
+                'quality-medium': '🟠 Среднее качество (средний score ≥50)',
+                'quality-low': '🔴 Низкое качество (средний score <50)'
+            };
+            return labels[qualityClass] || 'Качество не определено';
+        }
+
+        // Переход на конкретную страницу
+        function goToPage(page) {
+            currentPage = page;
+            renderTable();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         // Вспомогательные функции
@@ -1489,6 +1748,57 @@
             } catch (error) {
                 console.error('Error pausing translations:', error);
                 alert('❌ Ошибка остановки worker');
+            }
+        }
+
+        // Резервное копирование базы данных
+        async function backupDatabase() {
+            const backupBtn = document.getElementById('backupBtn');
+            const originalText = backupBtn.innerHTML;
+            
+            if (!confirm('Создать резервную копию базы данных?\n\nБудут выгружены все таблицы:\n• pending_companies\n• pending_companies_ru\n• search_sessions\n• settings')) {
+                return;
+            }
+
+            try {
+                backupBtn.disabled = true;
+                backupBtn.innerHTML = '⏳ Создание backup...';
+
+                const response = await fetch('/api/backup/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                // Получаем JSON с информацией
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Скачиваем файл
+                    const downloadResponse = await fetch(result.downloadUrl);
+                    const blob = await downloadResponse.blob();
+                    
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = result.filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+
+                    alert(`✅ Backup создан успешно!\n\nФайл: ${result.filename}\nКомпаний: ${result.stats.companies}\nПереводов: ${result.stats.translations}\nСессий: ${result.stats.sessions}\nРазмер: ${(result.stats.size / 1024).toFixed(2)} KB`);
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Backup error:', error);
+                alert(`❌ Ошибка создания backup:\n${error.message}`);
+            } finally {
+                backupBtn.disabled = false;
+                backupBtn.innerHTML = originalText;
             }
         }
 
