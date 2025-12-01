@@ -3,6 +3,7 @@
  * Находит URL для каждой компании (параллельно с ограничениями)
  */
 const TagExtractor = require('../utils/TagExtractor');
+const domainPriorityManager = require('../utils/DomainPriorityManager');
 
 class Stage2FindWebsites {
   constructor(sonarClient, settingsManager, database, logger) {
@@ -11,6 +12,7 @@ class Stage2FindWebsites {
     this.db = database;
     this.logger = logger;
     this.tagExtractor = new TagExtractor();
+    this.domainPriority = domainPriorityManager;
     this.progressCallback = null; // Callback для обновления прогресса (session-based)
     this.globalProgressCallback = null; // Callback для global прогресса (SSE)
   }
@@ -242,7 +244,7 @@ class Stage2FindWebsites {
     
     let query = this.db.supabase
       .from('pending_companies')
-      .select('company_id, company_name, current_stage, stage2_status, website')
+      .select('company_id, company_name, current_stage, stage2_status, website, normalized_domain')
       .or('website.is.null,website.eq.')
       .is('stage2_status', null) // Только те у кого Stage 2 еще не обработан
       .gte('current_stage', 1); // Минимум Stage 1 завершен
@@ -408,11 +410,66 @@ class Stage2FindWebsites {
         };
 
         // НОВОЕ: Извлечь normalized_domain для дедупликации
-        const normalizedDomain = result.website ? this._extractMainDomain(result.website) : null;
+        let normalizedDomain = result.website ? this._extractMainDomain(result.website) : null;
+        let finalWebsite = result.website;
+        
+        // TLD PRIORITY CHECK: Если у компании уже есть website, сравнить TLD
+        if (result.website && company.website) {
+          const isSameCompany = this.domainPriority.isSameCompany(
+            company.website,
+            result.website
+          );
+          
+          if (isSameCompany) {
+            // Та же компания, но возможно другой TLD
+            const comparison = this.domainPriority.compare(
+              result.website,
+              company.website
+            );
+            
+            if (comparison < 0) {
+              // Новый TLD лучше (например .cn вместо .com)
+              this.logger.info('Stage 2: Better TLD found', {
+                company: company.company_name,
+                oldDomain: company.website,
+                oldTLD: this.domainPriority.extractTld(company.website),
+                oldPriority: this.domainPriority.getTldPriority(company.website),
+                newDomain: result.website,
+                newTLD: this.domainPriority.extractTld(result.website),
+                newPriority: this.domainPriority.getTldPriority(result.website),
+                decision: 'UPDATE to better TLD'
+              });
+              finalWebsite = result.website;
+              normalizedDomain = this._extractMainDomain(result.website);
+            } else {
+              // Старый TLD лучше или равен (оставить старый)
+              this.logger.info('Stage 2: Keeping existing TLD', {
+                company: company.company_name,
+                existingDomain: company.website,
+                existingTLD: this.domainPriority.extractTld(company.website),
+                existingPriority: this.domainPriority.getTldPriority(company.website),
+                foundDomain: result.website,
+                foundTLD: this.domainPriority.extractTld(result.website),
+                foundPriority: this.domainPriority.getTldPriority(result.website),
+                decision: 'KEEP existing TLD'
+              });
+              finalWebsite = company.website; // Оставить старый
+              normalizedDomain = this._extractMainDomain(company.website);
+            }
+          } else {
+            // Разные компании (разный base_domain) → обновить
+            this.logger.info('Stage 2: Different company domain found', {
+              company: company.company_name,
+              oldBaseDomain: this.domainPriority.extractBaseDomain(company.website),
+              newBaseDomain: this.domainPriority.extractBaseDomain(result.website),
+              decision: 'UPDATE to new domain'
+            });
+          }
+        }
         
         // Сохранить найденные данные (включая описание, теги и сервисы)
         const updateData = {
-          website: result.website,
+          website: finalWebsite,
           normalized_domain: normalizedDomain, // ДОБАВЛЕНО: для дедупликации
           email: result.email,
           description: result.description || undefined,

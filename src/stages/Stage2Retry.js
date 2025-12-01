@@ -1,4 +1,5 @@
 const axios = require('axios');
+const domainPriorityManager = require('../utils/DomainPriorityManager');
 
 /**
  * Stage2Retry - Повторный поиск веб-сайтов используя DeepSeek
@@ -12,6 +13,7 @@ class Stage2Retry {
     this.logger = logger;
     this.settings = settings;
     this.deepseek = deepseek;
+    this.domainPriority = domainPriorityManager;
     this.globalProgressCallback = null; // Callback для global прогресса (SSE)
     this.progressOffset = 0; // Начальный offset для прогресса
   }
@@ -257,11 +259,54 @@ class Stage2Retry {
         // Валидировать URL
         if (this._isValidWebsite(result.website)) {
           // НОВОЕ: Извлечь normalized_domain для дедупликации
-          const normalizedDomain = this._extractMainDomain(result.website);
+          let normalizedDomain = this._extractMainDomain(result.website);
+          let finalWebsite = result.website;
+          
+          // TLD PRIORITY CHECK: Если у компании уже есть website, сравнить TLD
+          if (company.website) {
+            const isSameCompany = this.domainPriority.isSameCompany(
+              company.website,
+              result.website
+            );
+            
+            if (isSameCompany) {
+              // Та же компания, но возможно другой TLD
+              const comparison = this.domainPriority.compare(
+                result.website,
+                company.website
+              );
+              
+              if (comparison < 0) {
+                // Новый TLD лучше (например .cn вместо .com)
+                this.logger.info('Stage 2 Retry: Better TLD found', {
+                  company: company.company_name,
+                  oldDomain: company.website,
+                  oldTLD: this.domainPriority.extractTld(company.website),
+                  newDomain: result.website,
+                  newTLD: this.domainPriority.extractTld(result.website),
+                  decision: 'UPDATE to better TLD'
+                });
+                finalWebsite = result.website;
+                normalizedDomain = this._extractMainDomain(result.website);
+              } else {
+                // Старый TLD лучше или равен
+                this.logger.info('Stage 2 Retry: Keeping existing TLD', {
+                  company: company.company_name,
+                  existingDomain: company.website,
+                  existingTLD: this.domainPriority.extractTld(company.website),
+                  foundDomain: result.website,
+                  foundTLD: this.domainPriority.extractTld(result.website),
+                  decision: 'KEEP existing TLD'
+                });
+                finalWebsite = company.website;
+                normalizedDomain = this._extractMainDomain(company.website);
+              }
+            }
+          }
           
           // Подготовить данные для обновления
           const updateData = {
-            website: result.website,
+            website: finalWebsite,
             normalized_domain: normalizedDomain, // ДОБАВЛЕНО: для дедупликации
             stage2_status: 'completed',
             current_stage: 2, // Готов для Stage 3
@@ -292,12 +337,12 @@ class Stage2Retry {
 
           this.logger.info('Stage 2 Retry: Website found!', {
             company: company.company_name,
-            website: result.website,
+            website: finalWebsite,
             email: result.email || 'not found',
             confidence: result.confidence
           });
 
-          return { success: true, website: result.website, email: result.email };
+          return { success: true, website: finalWebsite, email: result.email };
         } else {
           this.logger.warn('Stage 2 Retry: Invalid or marketplace website', {
             company: company.company_name,

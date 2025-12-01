@@ -1,4 +1,5 @@
 const axios = require('axios');
+const domainPriorityManager = require('../utils/DomainPriorityManager');
 
 /**
  * Stage3Retry - Повторный поиск email используя DeepSeek
@@ -12,6 +13,7 @@ class Stage3Retry {
     this.logger = logger;
     this.settings = settings;
     this.deepseek = deepseek;
+    this.domainPriority = domainPriorityManager;
     this.globalProgressCallback = null; // Callback для global прогресса (SSE)
     this.progressOffset = 0; // Начальный offset для прогресса
   }
@@ -332,28 +334,84 @@ ${searchStrategy}
             updated_at: new Date().toISOString()
           };
           
-          // 🎁 BONUS: Если DeepSeek случайно нашел website И у компании его еще нет
+          // 🎁 BONUS: Если DeepSeek случайно нашел website
           let websiteWasAdded = false;
-          if (result.website && !company.website && this._isValidWebsite(result.website)) {
-            updateData.website = result.website;
-            // НОВОЕ: Извлечь normalized_domain для дедупликации
-            updateData.normalized_domain = this._extractMainDomain(result.website);
-            websiteWasAdded = true;
-            this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 3 Retry', {
-              company: company.company_name,
-              website: result.website,
-              normalized_domain: updateData.normalized_domain,
-              source: result.source
-            });
+          if (result.website && this._isValidWebsite(result.website)) {
+            let finalWebsite = result.website;
+            let normalizedDomain = this._extractMainDomain(result.website);
+            let shouldUpdate = false;
             
-            // ВАЖНО: Если нашли website в каталоге, но изначально не было сайта
-            // Нужно пометить для повторного Stage 3 на этом новом сайте
-            updateData.stage3_status = null; // Сбросить статус Stage 3
-            updateData.current_stage = 2;     // Вернуть на Stage 2 (готов для Stage 3)
-            this.logger.info('🔄 Stage 3 Retry: Website added from catalog, will retry Stage 3 on new website', {
-              company: company.company_name,
-              newWebsite: result.website
-            });
+            if (!company.website) {
+              // У компании нет website → добавить
+              shouldUpdate = true;
+              this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 3 Retry', {
+                company: company.company_name,
+                website: result.website,
+                normalized_domain: normalizedDomain,
+                source: result.source
+              });
+            } else {
+              // У компании уже есть website → проверить TLD
+              const isSameCompany = this.domainPriority.isSameCompany(
+                company.website,
+                result.website
+              );
+              
+              if (isSameCompany) {
+                // Та же компания → сравнить TLD
+                const comparison = this.domainPriority.compare(
+                  result.website,
+                  company.website
+                );
+                
+                if (comparison < 0) {
+                  // Новый TLD лучше
+                  shouldUpdate = true;
+                  finalWebsite = result.website;
+                  normalizedDomain = this._extractMainDomain(result.website);
+                  this.logger.info('Stage 3 Retry: Better TLD found opportunistically', {
+                    company: company.company_name,
+                    oldDomain: company.website,
+                    oldTLD: this.domainPriority.extractTld(company.website),
+                    newDomain: result.website,
+                    newTLD: this.domainPriority.extractTld(result.website),
+                    decision: 'UPDATE to better TLD'
+                  });
+                } else {
+                  // Старый TLD лучше или равен
+                  this.logger.debug('Stage 3 Retry: Keeping existing TLD', {
+                    company: company.company_name,
+                    existingDomain: company.website,
+                    foundDomain: result.website,
+                    decision: 'KEEP existing TLD'
+                  });
+                }
+              } else {
+                // Разные компании → обновить
+                shouldUpdate = true;
+                this.logger.info('Stage 3 Retry: Different domain found opportunistically', {
+                  company: company.company_name,
+                  oldBaseDomain: this.domainPriority.extractBaseDomain(company.website),
+                  newBaseDomain: this.domainPriority.extractBaseDomain(result.website),
+                  decision: 'UPDATE to new domain'
+                });
+              }
+            }
+            
+            if (shouldUpdate) {
+              updateData.website = finalWebsite;
+              updateData.normalized_domain = normalizedDomain;
+              websiteWasAdded = true;
+              
+              // ВАЖНО: Если нашли website в каталоге, но изначально не было сайта
+              // Нужно пометить для повторного Stage 3 на этом новом сайте
+              updateData.stage3_status = null; // Сбросить статус Stage 3
+              updateData.current_stage = 2;     // Вернуть на Stage 2 (готов для Stage 3)
+              this.logger.info('🔄 Stage 3 Retry: Website added from catalog, will retry Stage 3 on new website', {
+                company: company.company_name,
+                newWebsite: finalWebsite
+              });
+            }
           }
           
           // Сохранить найденный email (и возможно website)

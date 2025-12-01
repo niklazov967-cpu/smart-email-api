@@ -3,6 +3,7 @@
  * Извлекает email адреса со страниц контактов
  */
 const TagExtractor = require('../utils/TagExtractor');
+const domainPriorityManager = require('../utils/DomainPriorityManager');
 
 class Stage3AnalyzeContacts {
   constructor(sonarClient, settingsManager, database, logger) {
@@ -11,6 +12,7 @@ class Stage3AnalyzeContacts {
     this.db = database;
     this.logger = logger;
     this.tagExtractor = new TagExtractor();
+    this.domainPriority = domainPriorityManager;
     this.globalProgressCallback = null; // Callback для global прогресса (SSE)
   }
 
@@ -393,29 +395,85 @@ class Stage3AnalyzeContacts {
           updated_at: new Date().toISOString()
         };
         
-        // 🎁 BONUS: Если Perplexity случайно нашел правильный website И у компании его еще нет
+        // 🎁 BONUS: Если Perplexity случайно нашел правильный website
         let websiteWasAdded = false;
-        if (result.website && !company.website) {
-          updateData.website = result.website;
-          // НОВОЕ: Извлечь normalized_domain для дедупликации
-          updateData.normalized_domain = this._extractMainDomain(result.website);
-          websiteWasAdded = true;
-          this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 3', {
-            company: company.company_name,
-            website: result.website,
-            normalized_domain: updateData.normalized_domain,
-            source: result.source || 'perplexity search'
-          });
+        if (result.website) {
+          let finalWebsite = result.website;
+          let normalizedDomain = this._extractMainDomain(result.website);
+          let shouldUpdate = false;
           
-          // ВАЖНО: Если нашли website, но изначально не было email
-          // Нужно пометить для повторного Stage 3 на этом новом сайте
-          if (!company.email) {
-            updateData.stage3_status = null; // Сбросить статус Stage 3
-            updateData.current_stage = 2;     // Вернуть на Stage 2 (готов для Stage 3)
-            this.logger.info('🔄 Stage 3: Website added without original website, will retry Stage 3', {
+          if (!company.website) {
+            // У компании нет website → добавить
+            shouldUpdate = true;
+            this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 3', {
               company: company.company_name,
-              newWebsite: result.website
+              website: result.website,
+              normalized_domain: normalizedDomain,
+              source: result.source || 'perplexity search'
             });
+          } else {
+            // У компании уже есть website → проверить TLD
+            const isSameCompany = this.domainPriority.isSameCompany(
+              company.website,
+              result.website
+            );
+            
+            if (isSameCompany) {
+              // Та же компания → сравнить TLD
+              const comparison = this.domainPriority.compare(
+                result.website,
+                company.website
+              );
+              
+              if (comparison < 0) {
+                // Новый TLD лучше
+                shouldUpdate = true;
+                finalWebsite = result.website;
+                normalizedDomain = this._extractMainDomain(result.website);
+                this.logger.info('Stage 3: Better TLD found opportunistically', {
+                  company: company.company_name,
+                  oldDomain: company.website,
+                  oldTLD: this.domainPriority.extractTld(company.website),
+                  newDomain: result.website,
+                  newTLD: this.domainPriority.extractTld(result.website),
+                  decision: 'UPDATE to better TLD'
+                });
+              } else {
+                // Старый TLD лучше или равен → не обновлять
+                this.logger.debug('Stage 3: Keeping existing TLD', {
+                  company: company.company_name,
+                  existingDomain: company.website,
+                  foundDomain: result.website,
+                  decision: 'KEEP existing TLD'
+                });
+              }
+            } else {
+              // Разные компании → обновить
+              shouldUpdate = true;
+              this.logger.info('Stage 3: Different domain found opportunistically', {
+                company: company.company_name,
+                oldBaseDomain: this.domainPriority.extractBaseDomain(company.website),
+                newBaseDomain: this.domainPriority.extractBaseDomain(result.website),
+                decision: 'UPDATE to new domain'
+              });
+            }
+          }
+          
+          if (shouldUpdate) {
+            updateData.website = finalWebsite;
+            updateData.normalized_domain = normalizedDomain;
+            websiteWasAdded = true;
+            
+            // ВАЖНО: Если нашли website, но изначально не было email
+            // Нужно пометить для повторного Stage 3 на этом новом сайте
+            if (!company.email) {
+              updateData.stage3_status = null; // Сбросить статус Stage 3
+              updateData.current_stage = 2;     // Вернуть на Stage 2 (готов для Stage 3)
+              this.logger.info('🔄 Stage 3: Website added without original website, will retry Stage 3', {
+                company: company.company_name,
+                newWebsite: finalWebsite
+              });
+            }
           }
         }
         

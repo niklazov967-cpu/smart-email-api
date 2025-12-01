@@ -6,12 +6,15 @@
  * 3. Улучшения тегов
  * 4. Оценки уверенности в данных
  */
+const domainPriorityManager = require('../utils/DomainPriorityManager');
+
 class Stage4AnalyzeServices {
   constructor(deepseekClient, settingsManager, database, logger) {
     this.deepseek = deepseekClient; // DeepSeek (reasoner для сложного анализа)
     this.settings = settingsManager;
     this.db = database;
     this.logger = logger;
+    this.domainPriority = domainPriorityManager;
     this.globalProgressCallback = null; // Callback для global прогресса (SSE)
   }
 
@@ -155,18 +158,74 @@ class Stage4AnalyzeServices {
             }
           }
           
-          // 🎁 BONUS: Если DeepSeek нашел website в raw_data И у компании его еще нет
+          // 🎁 BONUS: Если DeepSeek нашел website в raw_data
           let websiteWasAdded = false;
-          if (result.website && !company.website) {
-            updateData.website = result.website;
-            // НОВОЕ: Извлечь normalized_domain для дедупликации
-            updateData.normalized_domain = this._extractMainDomain(result.website);
-            websiteWasAdded = true;
-            this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 4', {
-              company: company.company_name,
-              website: result.website,
-              normalized_domain: updateData.normalized_domain
-            });
+          if (result.website) {
+            let finalWebsite = result.website;
+            let normalizedDomain = this._extractMainDomain(result.website);
+            let shouldUpdate = false;
+            
+            if (!company.website) {
+              // У компании нет website → добавить
+              shouldUpdate = true;
+              this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 4', {
+                company: company.company_name,
+                website: result.website,
+                normalized_domain: normalizedDomain
+              });
+            } else {
+              // У компании уже есть website → проверить TLD
+              const isSameCompany = this.domainPriority.isSameCompany(
+                company.website,
+                result.website
+              );
+              
+              if (isSameCompany) {
+                // Та же компания → сравнить TLD
+                const comparison = this.domainPriority.compare(
+                  result.website,
+                  company.website
+                );
+                
+                if (comparison < 0) {
+                  // Новый TLD лучше
+                  shouldUpdate = true;
+                  finalWebsite = result.website;
+                  normalizedDomain = this._extractMainDomain(result.website);
+                  this.logger.info('Stage 4: Better TLD found opportunistically', {
+                    company: company.company_name,
+                    oldDomain: company.website,
+                    oldTLD: this.domainPriority.extractTld(company.website),
+                    newDomain: result.website,
+                    newTLD: this.domainPriority.extractTld(result.website),
+                    decision: 'UPDATE to better TLD'
+                  });
+                } else {
+                  // Старый TLD лучше или равен
+                  this.logger.debug('Stage 4: Keeping existing TLD', {
+                    company: company.company_name,
+                    existingDomain: company.website,
+                    foundDomain: result.website,
+                    decision: 'KEEP existing TLD'
+                  });
+                }
+              } else {
+                // Разные компании → обновить
+                shouldUpdate = true;
+                this.logger.info('Stage 4: Different domain found opportunistically', {
+                  company: company.company_name,
+                  oldBaseDomain: this.domainPriority.extractBaseDomain(company.website),
+                  newBaseDomain: this.domainPriority.extractBaseDomain(result.website),
+                  decision: 'UPDATE to new domain'
+                });
+              }
+            }
+            
+            if (shouldUpdate) {
+              updateData.website = finalWebsite;
+              updateData.normalized_domain = normalizedDomain;
+              websiteWasAdded = true;
+            }
           }
           
           // 🎁 BONUS: Если DeepSeek нашел email в raw_data И у компании его еще нет
