@@ -824,6 +824,7 @@
                 <table>
                     <thead>
                         <tr>
+                            <th style="width: 50px; text-align: center;">#</th>
                             <th class="checkbox-cell">
                                 <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
                             </th>
@@ -1181,8 +1182,11 @@
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('resultsTable').style.display = 'block';
 
-            tbody.innerHTML = pageItems.map(company => `
+            tbody.innerHTML = pageItems.map((company, index) => {
+                const rowNumber = (currentPage - 1) * itemsPerPage + index + 1;
+                return `
                 <tr>
+                    <td style="text-align: center; color: #718096; font-weight: 600;">${rowNumber}</td>
                     <td class="checkbox-cell">
                         <input type="checkbox" 
                                class="row-checkbox" 
@@ -1246,7 +1250,8 @@
                         </div>
                     </td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
 
             // Pagination
             const totalPages = Math.ceil(filteredCompanies.length / itemsPerPage);
@@ -1273,47 +1278,57 @@
             // Рассчитать качество каждой страницы (по релевантности)
             const pageQuality = calculatePageQuality(totalPages);
 
-            // Логика отображения страниц
-            // Показываем: первую, последнюю, текущую, и по 2 страницы вокруг текущей
-            const maxVisible = 7; // Максимум видимых кнопок
             let pages = [];
 
-            if (totalPages <= maxVisible) {
-                // Если страниц мало, показываем все
-                pages = Array.from({length: totalPages}, (_, i) => i + 1);
+            // Если фильтр активен - показываем ВСЕ страницы с нужным качеством
+            if (activeQualityFilter !== 'all') {
+                // Собрать все страницы с нужным качеством
+                for (let i = 1; i <= totalPages; i++) {
+                    const qualityClass = pageQuality[i] || '';
+                    if (qualityClass === `quality-${activeQualityFilter}`) {
+                        pages.push(i);
+                    }
+                }
+                
+                // Если нет страниц с таким качеством, показать сообщение
+                if (pages.length === 0) {
+                    container.innerHTML = '<span class="page-info" style="color: #e53e3e;">Нет страниц с выбранным качеством</span>';
+                    return;
+                }
             } else {
-                // Сложная логика с многоточиями
-                pages.push(1); // Всегда показываем первую
+                // Обычная логика с многоточиями
+                const maxVisible = 7;
+                
+                if (totalPages <= maxVisible) {
+                    pages = Array.from({length: totalPages}, (_, i) => i + 1);
+                } else {
+                    pages.push(1);
 
-                let start = Math.max(2, currentPage - 1);
-                let end = Math.min(totalPages - 1, currentPage + 1);
+                    let start = Math.max(2, currentPage - 1);
+                    let end = Math.min(totalPages - 1, currentPage + 1);
 
-                // Корректируем если близко к началу
-                if (currentPage <= 3) {
-                    end = 4;
+                    if (currentPage <= 3) {
+                        end = 4;
+                    }
+
+                    if (currentPage >= totalPages - 2) {
+                        start = totalPages - 3;
+                    }
+
+                    if (start > 2) {
+                        pages.push('...');
+                    }
+
+                    for (let i = start; i <= end; i++) {
+                        pages.push(i);
+                    }
+
+                    if (end < totalPages - 1) {
+                        pages.push('...');
+                    }
+
+                    pages.push(totalPages);
                 }
-
-                // Корректируем если близко к концу
-                if (currentPage >= totalPages - 2) {
-                    start = totalPages - 3;
-                }
-
-                // Добавляем многоточие перед средними страницами
-                if (start > 2) {
-                    pages.push('...');
-                }
-
-                // Добавляем средние страницы
-                for (let i = start; i <= end; i++) {
-                    pages.push(i);
-                }
-
-                // Добавляем многоточие после средних страниц
-                if (end < totalPages - 1) {
-                    pages.push('...');
-                }
-
-                pages.push(totalPages); // Всегда показываем последнюю
             }
 
             // Отрисовываем кнопки
@@ -1334,14 +1349,6 @@
                     
                     button.textContent = page;
                     button.onclick = () => goToPage(page);
-                    
-                    // Применить фильтр качества
-                    if (activeQualityFilter !== 'all') {
-                        const matchesFilter = qualityClass === `quality-${activeQualityFilter}`;
-                        if (!matchesFilter) {
-                            button.style.display = 'none';
-                        }
-                    }
                     
                     // Tooltip с информацией о качестве
                     if (qualityClass && !isActive) {
