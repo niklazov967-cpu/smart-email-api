@@ -411,6 +411,7 @@ class Stage2FindWebsites {
 
         // НОВОЕ: Извлечь normalized_domain для дедупликации
         let normalizedDomain = result.website ? this._extractMainDomain(result.website) : null;
+        let baseDomain = result.website ? this.domainPriority.extractBaseDomain(result.website) : null;
         let finalWebsite = result.website;
         
         // TLD PRIORITY CHECK: Если у компании уже есть website, сравнить TLD
@@ -441,6 +442,7 @@ class Stage2FindWebsites {
               });
               finalWebsite = result.website;
               normalizedDomain = this._extractMainDomain(result.website);
+              baseDomain = this.domainPriority.extractBaseDomain(result.website);
             } else {
               // Старый TLD лучше или равен (оставить старый)
               this.logger.info('Stage 2: Keeping existing TLD', {
@@ -455,6 +457,7 @@ class Stage2FindWebsites {
               });
               finalWebsite = company.website; // Оставить старый
               normalizedDomain = this._extractMainDomain(company.website);
+              baseDomain = this.domainPriority.extractBaseDomain(company.website);
             }
           } else {
             // Разные компании (разный base_domain) → обновить
