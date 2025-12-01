@@ -256,9 +256,13 @@ class Stage2Retry {
       if (result.website) {
         // Валидировать URL
         if (this._isValidWebsite(result.website)) {
+          // НОВОЕ: Извлечь normalized_domain для дедупликации
+          const normalizedDomain = this._extractMainDomain(result.website);
+          
           // Подготовить данные для обновления
           const updateData = {
             website: result.website,
+            normalized_domain: normalizedDomain, // ДОБАВЛЕНО: для дедупликации
             stage2_status: 'completed',
             current_stage: 2, // Готов для Stage 3
             stage2_raw_data: {
@@ -388,6 +392,33 @@ class Stage2Retry {
     }
     
     return true;
+  }
+
+  /**
+   * Извлечь главный домен из URL для дедупликации
+   * https://www.example.com/path → example.com
+   */
+  _extractMainDomain(url) {
+    if (!url) return null;
+    
+    try {
+      // Добавить протокол если его нет
+      let fullUrl = url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        fullUrl = 'https://' + url;
+      }
+      
+      const urlObj = new URL(fullUrl);
+      let hostname = urlObj.hostname.toLowerCase();
+      
+      // Убрать www
+      hostname = hostname.replace(/^www\./, '');
+      
+      return hostname;
+    } catch (error) {
+      this.logger.warn('Stage 2 Retry: Failed to extract domain', { url, error: error.message });
+      return null;
+    }
   }
 
   _isValidEmail(email) {

@@ -159,10 +159,13 @@ class Stage4AnalyzeServices {
           let websiteWasAdded = false;
           if (result.website && !company.website) {
             updateData.website = result.website;
+            // НОВОЕ: Извлечь normalized_domain для дедупликации
+            updateData.normalized_domain = this._extractMainDomain(result.website);
             websiteWasAdded = true;
             this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 4', {
               company: company.company_name,
-              website: result.website
+              website: result.website,
+              normalized_domain: updateData.normalized_domain
             });
           }
           
@@ -568,6 +571,33 @@ Return JSON:
       email: null,
       tags
     };
+  }
+
+  /**
+   * Извлечь главный домен из URL для дедупликации
+   * https://www.example.com/path → example.com
+   */
+  _extractMainDomain(url) {
+    if (!url) return null;
+    
+    try {
+      // Добавить протокол если его нет
+      let fullUrl = url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        fullUrl = 'https://' + url;
+      }
+      
+      const urlObj = new URL(fullUrl);
+      let hostname = urlObj.hostname.toLowerCase();
+      
+      // Убрать www
+      hostname = hostname.replace(/^www\./, '');
+      
+      return hostname;
+    } catch (error) {
+      this.logger.warn('Stage 4: Failed to extract domain', { url, error: error.message });
+      return null;
+    }
   }
 
   _sleep(ms) {

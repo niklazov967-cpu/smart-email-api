@@ -407,9 +407,13 @@ class Stage2FindWebsites {
           source: 'perplexity_sonar_pro'
         };
 
+        // НОВОЕ: Извлечь normalized_domain для дедупликации
+        const normalizedDomain = result.website ? this._extractMainDomain(result.website) : null;
+        
         // Сохранить найденные данные (включая описание, теги и сервисы)
         const updateData = {
           website: result.website,
+          normalized_domain: normalizedDomain, // ДОБАВЛЕНО: для дедупликации
           email: result.email,
           description: result.description || undefined,
           services: services || undefined,
@@ -508,6 +512,33 @@ class Stage2FindWebsites {
         company: company.company_name,
         error: error.message 
       };
+    }
+  }
+
+  /**
+   * Извлечь главный домен из URL для дедупликации
+   * https://www.example.com/path → example.com
+   */
+  _extractMainDomain(url) {
+    if (!url) return null;
+    
+    try {
+      // Добавить протокол если его нет
+      let fullUrl = url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        fullUrl = 'https://' + url;
+      }
+      
+      const urlObj = new URL(fullUrl);
+      let hostname = urlObj.hostname.toLowerCase();
+      
+      // Убрать www
+      hostname = hostname.replace(/^www\./, '');
+      
+      return hostname;
+    } catch (error) {
+      this.logger.warn('Stage 2: Failed to extract domain', { url, error: error.message });
+      return null;
     }
   }
 

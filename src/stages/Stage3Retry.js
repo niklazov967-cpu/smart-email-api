@@ -336,10 +336,13 @@ ${searchStrategy}
           let websiteWasAdded = false;
           if (result.website && !company.website && this._isValidWebsite(result.website)) {
             updateData.website = result.website;
+            // НОВОЕ: Извлечь normalized_domain для дедупликации
+            updateData.normalized_domain = this._extractMainDomain(result.website);
             websiteWasAdded = true;
             this.logger.warn('🎁 BONUS: Website found opportunistically in Stage 3 Retry', {
               company: company.company_name,
               website: result.website,
+              normalized_domain: updateData.normalized_domain,
               source: result.source
             });
             
@@ -434,6 +437,33 @@ ${searchStrategy}
     if (email.includes('+86')) return false;
     
     return true;
+  }
+  
+  /**
+   * Извлечь главный домен из URL для дедупликации
+   * https://www.example.com/path → example.com
+   */
+  _extractMainDomain(url) {
+    if (!url) return null;
+    
+    try {
+      // Добавить протокол если его нет
+      let fullUrl = url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        fullUrl = 'https://' + url;
+      }
+      
+      const urlObj = new URL(fullUrl);
+      let hostname = urlObj.hostname.toLowerCase();
+      
+      // Убрать www
+      hostname = hostname.replace(/^www\./, '');
+      
+      return hostname;
+    } catch (error) {
+      this.logger.warn('Stage 3 Retry: Failed to extract domain', { url, error: error.message });
+      return null;
+    }
   }
   
   _isValidWebsite(url) {
