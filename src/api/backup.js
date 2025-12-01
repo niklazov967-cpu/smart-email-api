@@ -5,6 +5,9 @@
 const express = require('express');
 const router = express.Router();
 
+// Временное хранилище для backup данных (в памяти)
+const backupStorage = new Map();
+
 /**
  * POST /api/backup/create
  * Создать резервную копию всех таблиц БД
@@ -76,12 +79,28 @@ router.post('/create', async (req, res) => {
 
     logger.info('Database backup created successfully', stats);
 
-    // 5. Вернуть данные для скачивания
+    // 5. Сохранить во временное хранилище
+    const backupId = `backup_${Date.now()}`;
+    backupStorage.set(backupId, {
+      content: jsonContent,
+      filename: filename,
+      createdAt: Date.now()
+    });
+
+    // Очистить старые backup (старше 10 минут)
+    for (const [id, backup] of backupStorage.entries()) {
+      if (Date.now() - backup.createdAt > 10 * 60 * 1000) {
+        backupStorage.delete(id);
+      }
+    }
+
+    // 6. Вернуть данные для скачивания
     res.json({
       success: true,
       filename: filename,
       stats: stats,
-      downloadUrl: `/api/backup/download?data=${encodeURIComponent(jsonContent)}`
+      backupId: backupId,
+      downloadUrl: `/api/backup/download/${backupId}`
     });
 
   } catch (error) {
@@ -94,22 +113,29 @@ router.post('/create', async (req, res) => {
 });
 
 /**
- * GET /api/backup/download
+ * GET /api/backup/download/:backupId
  * Скачать backup файл
  */
-router.get('/download', async (req, res) => {
+router.get('/download/:backupId', async (req, res) => {
   try {
-    const data = req.query.data;
+    const backupId = req.params.backupId;
     
-    if (!data) {
-      return res.status(400).json({ error: 'No data provided' });
+    if (!backupId) {
+      return res.status(400).json({ error: 'No backup ID provided' });
     }
 
-    const filename = `backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    const backup = backupStorage.get(backupId);
+    
+    if (!backup) {
+      return res.status(404).json({ error: 'Backup not found or expired' });
+    }
     
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(decodeURIComponent(data));
+    res.setHeader('Content-Disposition', `attachment; filename="${backup.filename}"`);
+    res.send(backup.content);
+    
+    // Удалить после скачивания
+    backupStorage.delete(backupId);
     
   } catch (error) {
     req.logger?.error('Error downloading backup:', error);
