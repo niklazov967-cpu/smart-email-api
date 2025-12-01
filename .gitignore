@@ -39,6 +39,9 @@ build/
 *.sql.gz
 dumps/
 
+# Checkpoints (могут быть большими - 3-5 MB каждый)
+checkpoints/*/checkpoint.json
+
 # Temporary files
 tmp/
 temp/
