@@ -3,6 +3,7 @@
  * Находит 8-12 названий компаний по поисковому запросу
  */
 const TagExtractor = require('../utils/TagExtractor');
+const domainPriorityManager = require('../utils/DomainPriorityManager');
 
 class Stage1FindCompanies {
   constructor(sonarClient, settingsManager, database, logger) {
@@ -11,6 +12,7 @@ class Stage1FindCompanies {
     this.db = database;
     this.logger = logger;
     this.tagExtractor = new TagExtractor();
+    this.domainPriority = domainPriorityManager;
     this.progressCallback = null; // Callback для обновления прогресса
   }
 
@@ -513,14 +515,14 @@ STRICT JSON OUTPUT ONLY.`;
 
   /**
    * Удаляет дубликаты компаний внутри одного набора результатов
-   * Проверяет по нормализованному названию и домену
+   * Проверяет по нормализованному названию и base_domain (с учетом TLD приоритетов)
    * 
    * @param {Array} companies - Массив компаний для дедупликации
    * @returns {Array} - Массив уникальных компаний
    */
   _removeDuplicates(companies) {
     const seenNames = new Set();
-    const seenDomains = new Set();
+    const baseDomainMap = new Map(); // base_domain → лучшая компания
     
     return companies.filter(company => {
       // Защита от undefined/null company или name
@@ -547,24 +549,74 @@ STRICT JSON OUTPUT ONLY.`;
         return false;
       }
       
-      // Проверка по домену (если есть website)
+      // Проверка по base_domain (с учетом TLD приоритетов)
       if (company.website) {
-        const domain = this._extractMainDomain(company.website);
-        if (domain && seenDomains.has(domain)) {
-          this.logger.debug('Stage 1: Duplicate domain filtered', { 
-            name: company.name, 
-            website: company.website,
-            domain: domain 
-          });
-          return false;
-        }
-        if (domain) {
-          seenDomains.add(domain);
+        const baseDomain = this.domainPriority.extractBaseDomain(company.website);
+        
+        if (baseDomain) {
+          // Проверить, есть ли уже компания с этим base_domain
+          if (baseDomainMap.has(baseDomain)) {
+            const existingCompany = baseDomainMap.get(baseDomain);
+            
+            // Сравнить TLD приоритеты
+            const comparison = this.domainPriority.compare(
+              company.website,
+              existingCompany.website
+            );
+            
+            if (comparison < 0) {
+              // Новая компания имеет лучший TLD (например .cn vs .com)
+              this.logger.info('Stage 1: Better TLD found, replacing', {
+                baseDomain,
+                oldName: existingCompany.name,
+                oldDomain: existingCompany.website,
+                oldTLD: this.domainPriority.extractTld(existingCompany.website),
+                newName: company.name,
+                newDomain: company.website,
+                newTLD: this.domainPriority.extractTld(company.website)
+              });
+              
+              // Заменить старую компанию на новую
+              baseDomainMap.set(baseDomain, company);
+              
+              // Убрать старое название из seenNames
+              const oldNormalizedName = this._normalizeCompanyName(existingCompany.name);
+              seenNames.delete(oldNormalizedName);
+              
+              // Добавить новое название
+              seenNames.add(normalizedName);
+              
+              return true; // Добавить новую
+            } else {
+              // Старая компания имеет лучший или равный TLD
+              this.logger.debug('Stage 1: Duplicate base_domain filtered (worse TLD)', {
+                baseDomain,
+                keptDomain: existingCompany.website,
+                keptTLD: this.domainPriority.extractTld(existingCompany.website),
+                filteredDomain: company.website,
+                filteredTLD: this.domainPriority.extractTld(company.website)
+              });
+              return false; // Пропустить новую
+            }
+          } else {
+            // Первая компания с этим base_domain
+            baseDomainMap.set(baseDomain, company);
+          }
         }
       }
       
       seenNames.add(normalizedName);
       return true;
+    }).filter(company => {
+      // Финальная фильтрация: оставить только компании, которые есть в baseDomainMap
+      // (или без website)
+      if (!company.website) return true;
+      
+      const baseDomain = this.domainPriority.extractBaseDomain(company.website);
+      if (!baseDomain) return true;
+      
+      const bestCompany = baseDomainMap.get(baseDomain);
+      return bestCompany === company; // Оставить только лучшую для каждого base_domain
     });
   }
 
@@ -572,21 +624,22 @@ STRICT JSON OUTPUT ONLY.`;
    * Проверяет существующие компании в БД по домену (между всеми сессиями)
    * Фильтрует компании, которые уже есть в базе данных
    */
+  /**
+   * Проверяет существующие компании в БД по base_domain (между всеми сессиями)
+   * Фильтрует компании, которые уже есть в базе данных
+   * С учетом TLD приоритетов: если в БД есть wayken.com, а найден wayken.cn → оставить .cn
+   */
   async _checkExistingCompanies(companies, sessionId) {
-    const domains = companies
-      .filter(c => c.website)
-      .map(c => this._extractMainDomain(c.website))
-      .filter(d => d);
+    const companiesWithWebsite = companies.filter(c => c.website);
     
-    if (domains.length === 0) {
+    if (companiesWithWebsite.length === 0) {
       return companies; // Нет сайтов для проверки
     }
     
-    // Проверить в БД по доменам (во всех сессиях)
     // Получаем все компании с website из БД
     const { data: existing, error } = await this.db.supabase
       .from('pending_companies')
-      .select('website, company_name')
+      .select('company_id, company_name, website, normalized_domain, email, validation_score, created_at')
       .not('website', 'is', null);
     
     if (error) {
@@ -594,32 +647,93 @@ STRICT JSON OUTPUT ONLY.`;
       return companies; // В случае ошибки пропускаем проверку
     }
     
-    // Извлечь домены из существующих компаний
-    const existingDomains = new Set(
-      (existing || [])
-        .filter(e => e.website)
-        .map(e => this._extractMainDomain(e.website))
-        .filter(d => d)
-    );
+    // Создать карту: base_domain → существующая компания в БД
+    const existingBaseDomainMap = new Map();
+    for (const existingCompany of (existing || [])) {
+      if (!existingCompany.website) continue;
+      
+      const baseDomain = this.domainPriority.extractBaseDomain(existingCompany.website);
+      if (baseDomain) {
+        // Если уже есть запись с этим base_domain, выбрать лучшую по TLD
+        if (existingBaseDomainMap.has(baseDomain)) {
+          const currentBest = existingBaseDomainMap.get(baseDomain);
+          const comparison = this.domainPriority.compare(
+            existingCompany.website,
+            currentBest.website
+          );
+          if (comparison < 0) {
+            existingBaseDomainMap.set(baseDomain, existingCompany);
+          }
+        } else {
+          existingBaseDomainMap.set(baseDomain, existingCompany);
+        }
+      }
+    }
     
-    // Фильтровать компании с существующими доменами
-    const filtered = companies.filter(company => {
-      if (!company.website) return true; // Без сайта - пропускаем
-      
-      const domain = this._extractMainDomain(company.website);
-      if (!domain) return true;
-      
-      if (existingDomains.has(domain)) {
-        this.logger.info('Stage 1: Company already exists in DB', {
-          name: company.name,
-          website: company.website,
-          domain: domain
-        });
-        return false; // Уже есть в БД
+    // Фильтровать компании
+    const filtered = [];
+    
+    for (const company of companies) {
+      if (!company.website) {
+        filtered.push(company);
+        continue;
       }
       
-      return true;
-    });
+      const baseDomain = this.domainPriority.extractBaseDomain(company.website);
+      if (!baseDomain) {
+        filtered.push(company);
+        continue;
+      }
+      
+      // Проверить, есть ли в БД компания с этим base_domain
+      const existingCompany = existingBaseDomainMap.get(baseDomain);
+      
+      if (existingCompany) {
+        // Сравнить TLD приоритеты
+        const comparison = this.domainPriority.compare(
+          company.website,
+          existingCompany.website
+        );
+        
+        if (comparison < 0) {
+          // Новая компания имеет лучший TLD → обновить существующую запись
+          this.logger.warn('Stage 1: Found better TLD for existing company, updating', {
+            baseDomain,
+            existingId: existingCompany.company_id,
+            existingName: existingCompany.company_name,
+            existingDomain: existingCompany.website,
+            existingTLD: this.domainPriority.extractTld(existingCompany.website),
+            newName: company.name,
+            newDomain: company.website,
+            newTLD: this.domainPriority.extractTld(company.website)
+          });
+          
+          // Обновить существующую запись на лучший TLD
+          const normalizedDomain = this._extractMainDomain(company.website);
+          await this.db.update('pending_companies', existingCompany.company_id, {
+            website: company.website,
+            normalized_domain: normalizedDomain,
+            updated_at: new Date().toISOString()
+          });
+          
+          // Не добавлять как новую компанию
+          continue;
+        } else {
+          // Существующая компания имеет лучший или равный TLD
+          this.logger.info('Stage 1: Company already exists in DB', {
+            name: company.name,
+            website: company.website,
+            baseDomain: baseDomain,
+            existingDomain: existingCompany.website,
+            reason: 'better_or_equal_tld'
+          });
+          continue; // Пропустить
+        }
+      }
+      
+      // Компании нет в БД → добавить
+      filtered.push(company);
+    }
     
     this.logger.info('Stage 1: Filtered existing companies', {
       total: companies.length,
