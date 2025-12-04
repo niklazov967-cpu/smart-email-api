@@ -303,10 +303,11 @@ try {
     }
   })();
   
-  // Подключить creditsTracker к обоим Sonar клиентам для автоматического логирования
+  // Подключить creditsTracker к API клиентам для автоматического логирования
+  deepseekClient.setCreditsTracker(creditsTracker);
   sonarBasicClient.setCreditsTracker(creditsTracker);
   sonarProClient.setCreditsTracker(creditsTracker);
-  console.log('✓ [INIT] CreditsTracker attached to Sonar clients');
+  console.log('✓ [INIT] CreditsTracker attached to DeepSeek + Sonar clients');
   
   // Добавить waitForInit к req для использования в роутах
   app.use((req, res, next) => {

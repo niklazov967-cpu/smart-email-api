@@ -17,6 +17,7 @@ class DeepSeekClient {
     this.apiKey = apiKey;
     this.baseUrl = 'https://api.deepseek.com/v1';
     this.logger = logger;
+    this.creditsTracker = null; // Будет установлен через setCreditsTracker
     
     // Выбор модели в зависимости от типа задачи
     this.models = {
@@ -28,6 +29,14 @@ class DeepSeekClient {
     this.maxRetries = 3;
     this.retryDelay = 2000;
     this.timeout = 120000; // 2 минуты для reasoner (он может думать дольше)
+  }
+
+  /**
+   * Установить CreditsTracker для логирования расходов
+   */
+  setCreditsTracker(creditsTracker) {
+    this.creditsTracker = creditsTracker;
+    this.logger.info('CreditsTracker attached to DeepSeekClient');
   }
 
   /**
@@ -147,6 +156,23 @@ class DeepSeekClient {
           totalTokens: usage.total_tokens,
           costEstimate: this._estimateCost(usage.prompt_tokens, usage.completion_tokens)
         });
+
+        // Логируем в CreditsTracker для статистики
+        if (this.creditsTracker) {
+          try {
+            await this.creditsTracker.logDeepSeekCall(
+              null, // sessionId - пока не передаём
+              stage,
+              usage.prompt_tokens,
+              usage.completion_tokens,
+              this.model
+            );
+          } catch (trackError) {
+            this.logger.warn('DeepSeekClient: Failed to log to CreditsTracker', {
+              error: trackError.message
+            });
+          }
+        }
 
         return finalContent;
 

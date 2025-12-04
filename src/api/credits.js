@@ -2,59 +2,34 @@ const express = require('express');
 const router = express.Router();
 
 /**
- * GET /api/credits/stats/total
- * Получить общую статистику по всем сессиям
+ * GET /api/credits/summary
+ * Получить сводку расходов по всем API (DeepSeek, Perplexity)
+ * Поддерживает фильтрацию по датам для получения статистики из БД
  */
-router.get('/stats/total', async (req, res) => {
+router.get('/summary', async (req, res) => {
   try {
-    const stats = await req.creditsTracker.getTotalStats();
+    const { dateFrom, dateTo } = req.query;
+    
+    let stats;
+    if (dateFrom || dateTo) {
+      // Получить статистику из БД за период
+      stats = await req.creditsTracker.getStatsFromDb({ dateFrom, dateTo });
+    } else {
+      // Получить глобальную статистику (in-memory + loaded from DB)
+      stats = req.creditsTracker.getGlobalStats();
+    }
+    
+    const summary = req.creditsTracker.getSummary();
 
     res.json({
       success: true,
-      data: stats
+      stats,
+      summary_text: summary,
+      source: (dateFrom || dateTo) ? 'database' : 'memory'
     });
 
   } catch (error) {
-    req.logger.error('Credits API: Failed to get total stats', { 
-      error: error.message 
-    });
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-/**
- * GET /api/credits/history
- * Получить историю расходов за период
- */
-router.get('/history', async (req, res) => {
-  try {
-    const {
-      start_date = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      end_date = new Date().toISOString(),
-      group_by = 'day'
-    } = req.query;
-
-    const history = await req.creditsTracker.getCostsHistory(
-      start_date,
-      end_date,
-      group_by
-    );
-
-    res.json({
-      success: true,
-      period: {
-        start: start_date,
-        end: end_date,
-        group_by
-      },
-      data: history
-    });
-
-  } catch (error) {
-    req.logger.error('Credits API: Failed to get costs history', { 
+    req.logger.error('Credits API: Failed to get summary', { 
       error: error.message 
     });
     res.status(500).json({
@@ -66,27 +41,29 @@ router.get('/history', async (req, res) => {
 
 /**
  * GET /api/credits/logs
- * Получить все логи API запросов для статистики
+ * Получить детальную историю вызовов API из БД
  */
 router.get('/logs', async (req, res) => {
   try {
-    const { limit = 1000, offset = 0 } = req.query;
-
-    // Получить логи из таблицы api_credits_log
-    const { data: logs, error } = await req.db.supabase
-      .from('api_credits_log')
-      .select('*')
-      .order('timestamp', { ascending: false })
-      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
-
-    if (error) {
-      throw new Error(`Supabase SELECT error: ${error.message}`);
-    }
+    const { limit, offset, stage, model, service, dateFrom, dateTo } = req.query;
+    
+    const result = await req.creditsTracker.getCallHistory({
+      limit: parseInt(limit) || 1000,
+      offset: parseInt(offset) || 0,
+      stage,
+      model,
+      service,
+      dateFrom,
+      dateTo
+    });
 
     res.json({
       success: true,
-      logs: logs || [],
-      count: logs?.length || 0
+      logs: result.logs,
+      total: result.total,
+      offset: result.offset,
+      limit: result.limit,
+      source: 'database'
     });
 
   } catch (error) {
@@ -102,23 +79,125 @@ router.get('/logs', async (req, res) => {
 });
 
 /**
- * GET /api/credits/:sessionId
- * Получить текущие расходы для сессии
+ * GET /api/credits/stats/total
+ * Получить общую статистику по всем сервисам
  */
-router.get('/:sessionId', async (req, res) => {
+router.get('/stats/total', async (req, res) => {
+  try {
+    const { dateFrom, dateTo } = req.query;
+    
+    let stats;
+    if (dateFrom || dateTo) {
+      stats = await req.creditsTracker.getStatsFromDb({ dateFrom, dateTo });
+    } else {
+      stats = req.creditsTracker.getGlobalStats();
+    }
+
+    res.json({
+      success: true,
+      data: stats,
+      source: (dateFrom || dateTo) ? 'database' : 'memory'
+    });
+
+  } catch (error) {
+    req.logger.error('Credits API: Failed to get total stats', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/credits/pricing
+ * Получить таблицу цен всех API
+ */
+router.get('/pricing', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      pricing: {
+        deepseek: {
+          'deepseek-chat': {
+            input: '$0.14 / 1M tokens',
+            output: '$0.28 / 1M tokens',
+            note: 'Очень дешёвый!'
+          },
+          'deepseek-reasoner': {
+            input: '$0.55 / 1M tokens',
+            output: '$2.19 / 1M tokens',
+            note: 'Для сложных задач'
+          }
+        },
+        perplexity: {
+          'sonar': {
+            input: '$1.00 / 1M tokens',
+            output: '$1.00 / 1M tokens'
+          },
+          'sonar-pro': {
+            input: '$3.00 / 1M tokens',
+            output: '$15.00 / 1M tokens'
+          },
+          'llama-3.1-sonar-large-128k-online': {
+            input: '$1.00 / 1M tokens',
+            output: '$1.00 / 1M tokens',
+            note: 'Legacy model'
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/credits/reset
+ * Сбросить статистику (только in-memory, БД не трогаем)
+ */
+router.post('/reset', async (req, res) => {
+  try {
+    req.creditsTracker.reset();
+
+    res.json({
+      success: true,
+      message: 'In-memory statistics reset successfully. Database records preserved.'
+    });
+
+  } catch (error) {
+    req.logger.error('Credits API: Failed to reset stats', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/credits/session/:sessionId
+ * Получить расходы для конкретной сессии
+ */
+router.get('/session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-
-    const costs = await req.creditsTracker.getSessionCosts(sessionId);
+    const stats = req.creditsTracker.getSessionStats(sessionId);
 
     res.json({
       success: true,
       session_id: sessionId,
-      data: costs
+      data: stats
     });
 
   } catch (error) {
-    req.logger.error('Credits API: Failed to get session costs', { 
+    req.logger.error('Credits API: Failed to get session stats', { 
       error: error.message 
     });
     res.status(500).json({
@@ -134,19 +213,20 @@ router.get('/:sessionId', async (req, res) => {
  */
 router.post('/estimate', async (req, res) => {
   try {
-    const {
-      model_name,
-      estimated_tokens
-    } = req.body;
+    const { service, model, estimated_tokens } = req.body;
 
-    if (!model_name || !estimated_tokens) {
+    if (!service || !model) {
       return res.status(400).json({
         success: false,
-        error: 'model_name and estimated_tokens are required'
+        error: 'service and model are required'
       });
     }
 
-    const estimate = req.creditsTracker.estimateCost(model_name, estimated_tokens);
+    const estimate = req.creditsTracker.estimateCost(
+      service, 
+      model, 
+      estimated_tokens || 1000
+    );
 
     res.json({
       success: true,
@@ -165,9 +245,34 @@ router.post('/estimate', async (req, res) => {
 });
 
 /**
+ * GET /api/credits/:sessionId (legacy)
+ * Получить текущие расходы для сессии
+ */
+router.get('/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const stats = req.creditsTracker.getSessionStats(sessionId);
+
+    res.json({
+      success: true,
+      session_id: sessionId,
+      data: stats
+    });
+
+  } catch (error) {
+    req.logger.error('Credits API: Failed to get session costs', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/credits/:sessionId/realtime
- * WebSocket-like endpoint для получения расходов в реальном времени
- * (Server-Sent Events)
+ * WebSocket-like endpoint для получения расходов в реальном времени (SSE)
  */
 router.get('/:sessionId/realtime', async (req, res) => {
   try {
@@ -179,14 +284,14 @@ router.get('/:sessionId/realtime', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
 
     // Отправить начальные данные
-    const initialCosts = await req.creditsTracker.getSessionCosts(sessionId);
-    res.write(`data: ${JSON.stringify(initialCosts)}\n\n`);
+    const initialStats = req.creditsTracker.getSessionStats(sessionId);
+    res.write(`data: ${JSON.stringify(initialStats)}\n\n`);
 
     // Обновлять каждые 2 секунды
-    const intervalId = setInterval(async () => {
+    const intervalId = setInterval(() => {
       try {
-        const costs = await req.creditsTracker.getSessionCosts(sessionId);
-        res.write(`data: ${JSON.stringify(costs)}\n\n`);
+        const stats = req.creditsTracker.getSessionStats(sessionId);
+        res.write(`data: ${JSON.stringify(stats)}\n\n`);
       } catch (error) {
         req.logger.error('Credits API: SSE update failed', { 
           error: error.message 
@@ -212,4 +317,3 @@ router.get('/:sessionId/realtime', async (req, res) => {
 });
 
 module.exports = router;
-
