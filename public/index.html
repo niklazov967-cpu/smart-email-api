@@ -684,12 +684,12 @@
         const versionResponse = await fetch('/api/version');
         if (versionResponse.ok) {
           const versionData = await versionResponse.json();
-          const versionTag = versionData.tag || versionData.packageVersion || '2.2.2';
+          const versionTag = versionData.tag || versionData.packageVersion || '3.0.0';
           document.getElementById('appVersion').textContent = 
             `${versionTag} | DeepSeek + Perplexity Integration`;
           
-          // Show commit info
-          if (versionData.commitDate) {
+          // Show commit info (if git available)
+          if (versionData.commitShort && versionData.commitDate && !versionData.error) {
             const commitDate = new Date(versionData.commitDate).toLocaleString('ru-RU', {
               year: 'numeric',
               month: 'short',
@@ -704,14 +704,27 @@
               `| 🌿 ${versionData.branch} ` +
               `| 📅 ${commitDate}` +
               `</span>`;
+          } else {
+            // Git not available (Railway deployment)
+            const buildDate = versionData.buildDate ? 
+              new Date(versionData.buildDate).toLocaleString('ru-RU', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }) : 'Production';
+            
+            document.getElementById('commitInfo').innerHTML = 
+              `<span>🚀 Railway Deployment | 📅 ${buildDate}</span>`;
           }
         } else {
           // Fallback if API fails
-          document.getElementById('appVersion').textContent = 'v2.2.2 | DeepSeek + Perplexity Integration';
+          document.getElementById('appVersion').textContent = 'v3.0.0 | DeepSeek + Perplexity Integration';
         }
       } catch (error) {
         console.error('Failed to load version info:', error);
-        document.getElementById('appVersion').textContent = 'v2.2.2 | DeepSeek + Perplexity Integration';
+        document.getElementById('appVersion').textContent = 'v3.0.0 | DeepSeek + Perplexity Integration';
       }
     }
 
